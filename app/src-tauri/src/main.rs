@@ -3,7 +3,7 @@
 // - Le Core n'est pas embarqué : l'application utilise celui installé par le script d'installation (`jarvis2`).
 //   S'il ne tourne pas, elle le lance (sans fenêtre de console) et l'arrête en quittant.
 // - L'interface est une page web distante pour l'application : elle n'a AUCUN accès aux API natives de Tauri.
-// - Icône de notification (Ouvrir, Quitter) ; fermer la fenêtre la cache ; Ctrl+Maj+J la ramène.
+// - Icône de notification (Ouvrir, Quitter) ; fermer la fenêtre la cache ; Ctrl+Maj+J (ou Ctrl+Alt+J) la ramène.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::net::{SocketAddr, TcpStream};
@@ -65,13 +65,18 @@ fn montrer(app: &AppHandle) {
 }
 
 fn main() {
-    let raccourci = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyJ);
+    // Ctrl+Maj+J, sinon Ctrl+Alt+J si une autre application le tient déjà ; sans raccourci libre, l'application
+    // démarre quand même (l'icône de notification suffit).
+    let raccourcis = [
+        Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyJ),
+        Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyJ),
+    ];
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _dossier| montrer(app)))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, sc, ev| {
-                    if sc == &raccourci && ev.state() == ShortcutState::Pressed {
+                    if raccourcis.contains(sc) && ev.state() == ShortcutState::Pressed {
                         montrer(app);
                     }
                 })
@@ -86,7 +91,7 @@ fn main() {
             }
             // Page d'attente locale, puis l'interface du Core dès qu'il répond (60 s au plus)
             let fenetre = WebviewWindowBuilder::new(app, "principale", WebviewUrl::App("index.html".into()))
-                .title("JARVIS")
+                .title("JARVIS 2")
                 .inner_size(1280.0, 820.0)
                 .min_inner_size(380.0, 560.0)
                 .build()?;
@@ -105,10 +110,10 @@ fn main() {
                 let _ = fenetre.eval("document.body.dataset.etat = 'echec'");
             });
 
-            let ouvrir = MenuItem::with_id(app, "ouvrir", "Ouvrir JARVIS", true, None::<&str>)?;
+            let ouvrir = MenuItem::with_id(app, "ouvrir", "Ouvrir JARVIS 2", true, None::<&str>)?;
             let quitter = MenuItem::with_id(app, "quitter", "Quitter", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&ouvrir, &quitter])?;
-            let mut icone = TrayIconBuilder::new().menu(&menu).tooltip("JARVIS").on_menu_event(|app, ev| {
+            let mut icone = TrayIconBuilder::new().menu(&menu).tooltip("JARVIS 2").on_menu_event(|app, ev| {
                 match ev.id().as_ref() {
                     "ouvrir" => montrer(app),
                     "quitter" => app.exit(0),
@@ -119,7 +124,11 @@ fn main() {
                 icone = icone.icon(image.clone());
             }
             icone.build(app)?;
-            app.global_shortcut().register(raccourci)?;
+            for raccourci in raccourcis {
+                if app.global_shortcut().register(raccourci).is_ok() {
+                    break; // le premier raccourci libre suffit
+                }
+            }
             Ok(())
         })
         .on_window_event(|fenetre, ev| {

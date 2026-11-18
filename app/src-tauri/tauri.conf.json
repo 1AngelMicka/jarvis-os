@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "JARVIS",
+  "productName": "JARVIS 2",
   "version": "0.8.0",
   "identifier": "org.jarvis-os.jarvis",
   "build": {
