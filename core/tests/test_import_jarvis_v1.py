@@ -1,4 +1,4 @@
-"""Import de l'héritage : base d'attente factice au schéma de l'ancien JARVIS -> base de test de JARVIS 2."""
+"""Import « jarvis_v1 » : base d'attente factice au schéma de JARVIS v1 -> base de test de JARVIS 2."""
 
 from __future__ import annotations
 
@@ -9,11 +9,12 @@ import asyncpg
 import pytest
 
 from jarvis2.config import Parametres
-from jarvis2.heritage import importer
+from jarvis2.config_locale import analyser
+from jarvis2.importeurs.jarvis_v1 import importer
 
 pytestmark = pytest.mark.base
 
-ATTENTE_TEST = "ancien_jarvis_test"
+ATTENTE_TEST = "import_jarvis_v1_test"
 SCHEMA = Path(__file__).with_name("donnees") / "ancien_schema.sql"
 VECTEUR = "[" + ",".join(["0.5", "-0.25"] + ["0"] * 382) + "]"
 
@@ -101,6 +102,10 @@ async def test_import_complet_et_fidele(url_attente: str, pool: asyncpg.Pool, pa
     assert m["tags"] == ["noyau", "gouts"] and m["confidentialite"] == "local_uniquement"
     assert m["v"].startswith("[0.5,-0.25,0,") and m["tsv"] == "'caf':2 'thé':1"
     assert await pool.fetchval("SELECT embedding IS NULL FROM memoires WHERE origine = 'utilisateur'") is True
+    # Colonnes de la mémoire v2 : modèle du vecteur ligne par ligne, validité depuis la création
+    v2 = await pool.fetch("SELECT embedding_model, valid_from = cree_le AS ok, valid_to FROM memoires ORDER BY id")
+    assert [r["embedding_model"] for r in v2] == ["sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", None]
+    assert all(r["ok"] and r["valid_to"] is None for r in v2)
     # Messages dans l'ordre, identifiant d'origine conservé, méta JSON intacte
     msgs = await pool.fetch("SELECT ancien_id, role, meta FROM messages ORDER BY id")
     assert [(r["ancien_id"], r["role"]) for r in msgs] == [(41, "utilisateur"), (42, "jarvis")]
@@ -108,7 +113,32 @@ async def test_import_complet_et_fidele(url_attente: str, pool: asyncpg.Pool, pa
     assert await pool.fetchval("SELECT reponse FROM profil_reponses") == "thé"
     assert await pool.fetchval("SELECT titre FROM chantiers") == "Ranger le garage"
     journal_import = await pool.fetchrow("SELECT source, comptes FROM imports")
-    assert journal_import is not None and journal_import["source"] == "essai.dump"
+    assert journal_import is not None and journal_import["source"] == "jarvis_v1:essai.dump"
+
+
+async def test_exclusions_de_la_configuration_locale(
+    url_attente: str, pool: asyncpg.Pool, parametres: Parametres
+) -> None:
+    """Données de tiers écartées : par source et par contenu, références nettoyées, rapport toujours complet."""
+    config = analyser(
+        {"import": {"jarvis_v1": {"exclure_sources": ["^interface$"], "exclure_contenus": ["thé"]}}}
+    ).import_("jarvis_v1")
+    rapport = await importer(url_attente, parametres.url_base("app", "jarvis2_test"), "x", "-", config.exclusions)
+    assert rapport.complet
+    assert rapport.comptes["memoires"] == {"source": 2, "presents": 0, "exclus": 2, "nouveaux": 0, "mis_a_jour": 0}
+    assert rapport.comptes["messages"]["exclus"] == 1  # « Je préfère le thé »
+    assert await pool.fetchval("SELECT count(*) FROM memoires") == 0
+    assert [r["contenu"] for r in await pool.fetch("SELECT contenu FROM messages")] == ["Noté, Monsieur."]
+    # La réponse de profil reste, sans lien vers le souvenir écarté
+    assert await pool.fetchval("SELECT souvenir_id FROM profil_reponses") is None
+
+
+def test_configuration_locale_invalide() -> None:
+    with pytest.raises(ValueError, match="expression invalide"):
+        analyser({"confidentialite": {"sujets_exclus": ["("]}})
+    with pytest.raises(ValueError, match="liste"):
+        analyser({"import": {"jarvis_v1": {"exclure_sources": "pas une liste"}}})
+    assert analyser({}).import_("jarvis_v1").exclusions.exclut("doc:x", "y") is False
 
 
 async def test_import_rejouable_et_rattrapage(url_attente: str, pool: asyncpg.Pool, parametres: Parametres) -> None:
@@ -119,7 +149,7 @@ async def test_import_rejouable_et_rattrapage(url_attente: str, pool: asyncpg.Po
     assert second.complet
     assert all(c["nouveaux"] == 0 and c["mis_a_jour"] == 0 for c in second.comptes.values())
     assert await pool.fetchval("SELECT count(*) FROM messages") == 2
-    # L'ancien JARVIS continue de vivre : nouveau message, chantier modifié -> rattrapés sans doublon
+    # JARVIS v1 continue de vivre : nouveau message, chantier modifié -> rattrapés sans doublon
     conn = await asyncpg.connect(url_attente)
     try:
         await conn.execute(

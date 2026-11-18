@@ -1,4 +1,4 @@
--- Schéma des tables héritées de l'ancien JARVIS (extrait de sa sauvegarde du 18 nov. 2026, structure seule).
+-- Schéma des tables héritées de JARVIS v1 (extrait de sa sauvegarde du 18 nov. 2026, structure seule).
 -- Sert de base d'attente factice dans les tests d'import.
 
 CREATE TABLE public.conversations (

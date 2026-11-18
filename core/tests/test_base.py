@@ -1,4 +1,4 @@
-"""Socle : migrations, schéma mémoire compatible avec l'ancien JARVIS, séparation des rôles."""
+"""Socle : migrations, schéma mémoire compatible avec JARVIS v1, séparation des rôles."""
 
 from __future__ import annotations
 
@@ -37,6 +37,17 @@ async def test_schema_memoires_compatible(pool: asyncpg.Pool) -> None:
         "canal_detail": "text",
         "cree_le": "timestamptz",
         "maj_le": "timestamptz",
+        # Mémoire v2 (migration 003) : modèle par ligne, validité, oubli et consolidation
+        "embedding_model": "text",
+        "valid_from": "timestamptz",
+        "valid_to": "timestamptz",
+        "superseded_by": "uuid",
+        "observed_at": "timestamptz",
+        "importance": "float4",
+        "last_accessed_at": "timestamptz",
+        "access_count": "int4",
+        "archived": "bool",
+        "derived_from": "_uuid",
     }
     dimension = await pool.fetchval(
         "SELECT atttypmod FROM pg_attribute WHERE attrelid = 'memoires'::regclass AND attname = 'embedding'"
@@ -49,8 +60,8 @@ async def test_schema_memoires_compatible(pool: asyncpg.Pool) -> None:
 async def test_memoire_vecteur_et_texte_francais(pool: asyncpg.Pool) -> None:
     vecteur = [1.0] + [0.0] * 383
     await pool.execute(
-        "INSERT INTO memoires (contenu, type, tags, confidentialite, embedding, tsv, origine)"
-        " VALUES ($1, 'fait', $2, 'local_uniquement', $3, to_tsvector('french', $1), 'utilisateur')",
+        "INSERT INTO memoires (contenu, type, tags, confidentialite, embedding, embedding_model, tsv, origine)"
+        " VALUES ($1, 'fait', $2, 'local_uniquement', $3, 'essai', to_tsvector('french', $1), 'utilisateur')",
         "Les chevaux mangent du foin",
         ["test"],
         vecteur,

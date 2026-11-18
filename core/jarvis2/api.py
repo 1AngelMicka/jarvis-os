@@ -29,10 +29,12 @@ from pydantic import BaseModel, Field
 
 from . import __version__, memoire
 from .config import Parametres
+from .config_locale import charger as charger_config_locale
 from .conversations import DepotConversations
 from .db import creer_pool, version_schema
 from .dialogue import ServiceDialogue, SourceMemoire
 from .embeddings import EncodeurFastEmbed
+from .memoire import Expurgateur, ReglagesRecherche
 from .moteurs import construire_moteurs
 from .moteurs.base import ErreurMoteur, Options
 from .moteurs.telemetrie import EnregistreurPostgres, MoteurInstrumente
@@ -78,7 +80,9 @@ async def construire_contexte(p: Parametres) -> Contexte:
     pool = await creer_pool(p.url_base("app"))
     depot = DepotConversations(pool)
     moteurs = construire_moteurs(p, EnregistreurPostgres(pool))
-    memoire = SourceMemoire(pool, EncodeurFastEmbed(p.dossier_modeles))
+    locale = charger_config_locale()
+    reglages = ReglagesRecherche(expurgateur=Expurgateur(locale.sujets_exclus))
+    memoire = SourceMemoire(pool, EncodeurFastEmbed(p.dossier_modeles, p.modele_embeddings), reglages)
     service = ServiceDialogue(depot, moteurs, p.moteur_defaut, memoire)
     return Contexte(pool, depot, moteurs, service, p.moteur_defaut, memoire)
 

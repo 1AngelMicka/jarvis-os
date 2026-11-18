@@ -1,6 +1,6 @@
 # Système de design de l'interface JARVIS 2
 
-> Reprend le système de l'ancien JARVIS (`<ancien JARVIS>\core\jarvis_core\static\DESIGN.md`), qui reste la référence détaillée. Ce document dit ce qui est repris, ce qui change et les règles à tenir.
+> Reprend le système de design de JARVIS v1 (son `static/DESIGN.md` reste la référence détaillée). Ce document dit ce qui est repris, ce qui change et les règles à tenir.
 
 ## Intention
 
@@ -27,9 +27,9 @@ Toute valeur visuelle passe par un token ; un besoin nouveau = un token ajouté 
 | ≥ 1280 px | Trois colonnes : noyau + État (264 px) · Dialogue (`minmax(0, 1fr)`) · Conversations (300 px) |
 | ≥ 1800 / 2300 px | Même grille, `--k` 1,08 puis 1,18 |
 
-Toutes les colonnes centrales sont en `minmax(0, 1fr)` et les panneaux en `min-width: 0` : c'est ce qui évite le débordement constaté à 1280 px dans l'ancien JARVIS. Vérifié à 375, 1280 et 1920 px.
+Toutes les colonnes centrales sont en `minmax(0, 1fr)` et les panneaux en `min-width: 0` : c'est ce qui évite le débordement constaté à 1280 px dans JARVIS v1. Vérifié à 375, 1280 et 1920 px.
 
-## Corrections reprises de l'audit d'ergonomie (`AUDIT_UX.md` de l'ancien JARVIS)
+## Corrections reprises de l'audit d'ergonomie (`AUDIT_UX.md` de JARVIS v1)
 
 - Pendant une réponse, le bouton d'envoi devient **Arrêter** (Échap) ; la requête est annulée côté Core et la CLI tuée (n° 7).
 - Erreurs : un message par cas, qui dit quoi faire ; « Réessayer » si le Core est injoignable (n° 9).

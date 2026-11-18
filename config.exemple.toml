@@ -1,0 +1,24 @@
+# Configuration locale de JARVIS 2 — exemple.
+# Copier vers %APPDATA%\JARVIS2\config.toml (Windows) ou ~/.config/jarvis2/config.toml (Linux, macOS),
+# ou indiquer un chemin avec la variable JARVIS2_CONFIG. Ce fichier n'est JAMAIS versionné : il contient ce qui
+# vous est personnel (sujets exclus, données de tiers à écarter, requêtes de vérification).
+
+[confidentialite]
+# Sujets que JARVIS ne doit jamais aborder : toute phrase qui les nomme est retirée de la mémoire injectée au modèle.
+# Expressions régulières, insensibles à la casse.
+sujets_exclus = [
+  # 'projet[\s_-]*secret',
+]
+
+# Une section par source d'import (ici : l'ancien JARVIS, « JARVIS v1 »).
+[import.jarvis_v1]
+# Souvenirs dont la SOURCE correspond : jamais importés (ex. données de tiers).
+exclure_sources = [
+  # '^doc:export-messagerie',
+]
+# Souvenirs ou messages dont le CONTENU correspond : jamais importés.
+exclure_contenus = []
+# Requêtes témoins de `jarvis2 verifier-import jarvis_v1` (sinon, une liste générique est utilisée).
+requetes_temoins = [
+  # "Quels sont mes objectifs ?",
+]

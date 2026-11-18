@@ -1,11 +1,11 @@
--- 001 — Socle de JARVIS 2 : mémoire (compatible avec l'ancien JARVIS), conversations, télémétrie.
+-- 001 — Socle de JARVIS 2 : mémoire (compatible avec JARVIS v1), conversations, télémétrie.
 -- Appliquée par le propriétaire (jarvis2_proprio). Le Core se connecte en jarvis2_app, qui n'a que des droits
 -- sur les DONNÉES (aucun CREATE, ALTER, DROP, TRUNCATE) : il ne peut pas réécrire la structure.
 
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- Mémoire sémantique. Mêmes colonnes et mêmes valeurs que l'ancien JARVIS (migrations 001, 011, 012) :
+-- Mémoire sémantique. Mêmes colonnes et mêmes valeurs que JARVIS v1 (migrations 001, 011, 012) :
 -- les souvenirs et leurs vecteurs (fastembed paraphrase-multilingual-MiniLM-L12-v2, 384 dimensions)
 -- s'importent tels quels en phase 3. `tsv` est calculé par le Core (to_tsvector('french', …)), comme avant.
 CREATE TABLE memoires (
@@ -30,7 +30,7 @@ CREATE INDEX memoires_tags_idx ON memoires USING gin (tags);
 CREATE INDEX memoires_cree_le_idx ON memoires (cree_le DESC);
 CREATE INDEX memoires_origine_idx ON memoires (origine, cree_le DESC);
 
--- Conversations (colonnes de l'ancien JARVIS, migrations 001, 009 et 015, pour l'import de la phase 3)
+-- Conversations (colonnes de JARVIS v1, migrations 001, 009 et 015, pour l'import de la phase 3)
 CREATE TABLE conversations (
     id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     titre              text NOT NULL,

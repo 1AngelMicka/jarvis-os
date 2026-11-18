@@ -1,4 +1,4 @@
-"""Journalisation : console + fichier tournant sur le disque de données, avec masquage des secrets."""
+"""Journalisation : console + fichier tournant dans le dossier des données, avec masquage des secrets."""
 
 from __future__ import annotations
 

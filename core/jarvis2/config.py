@@ -5,6 +5,8 @@ Aucun secret n'a de valeur par défaut : sans `.env`, la connexion à la base é
 
 from __future__ import annotations
 
+import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
@@ -13,7 +15,15 @@ from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 RACINE_DEPOT = Path(__file__).resolve().parents[2]
-DIMENSION_EMBEDDINGS = 384
+
+
+def dossier_donnees_defaut() -> Path:
+    """Dossier des données lourdes (journaux, modèles, imports) ; déplaçable par JARVIS2_DOSSIER_DONNEES."""
+    if sys.platform == "win32" and os.environ.get("LOCALAPPDATA"):
+        return Path(os.environ["LOCALAPPDATA"]) / "JARVIS2"
+    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "jarvis2"
+
+
 MODELE_EMBEDDINGS = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
@@ -34,7 +44,7 @@ class Parametres(BaseSettings):
     # Core
     hote: str = Field("127.0.0.1", alias="JARVIS2_HOTE")
     port: int = Field(8765, alias="JARVIS2_PORT")
-    dossier_donnees: Path = Field(Path("<dossier-des-donnees>"), alias="JARVIS2_DOSSIER_DONNEES")
+    dossier_donnees: Path = Field(default_factory=lambda: dossier_donnees_defaut(), alias="JARVIS2_DOSSIER_DONNEES")
     niveau_journal: str = Field("INFO", alias="JARVIS2_NIVEAU_JOURNAL")
 
     # Moteurs
@@ -43,6 +53,9 @@ class Parametres(BaseSettings):
     claude_modele: str = Field("claude-sonnet-5-5", alias="JARVIS2_CLAUDE_MODELE")
     claude_effort: str = Field("medium", alias="JARVIS2_CLAUDE_EFFORT")
     ollama_url: str = Field("http://127.0.0.1:11434", alias="JARVIS2_OLLAMA_URL")
+
+    # Mémoire
+    modele_embeddings: str = Field(MODELE_EMBEDDINGS, alias="JARVIS2_MODELE_EMBEDDINGS")
 
     def url_base(self, role: str = "app", base: str | None = None) -> str:
         """URL de connexion : `role` = « app » (Core) ou « proprio » (migrations uniquement)."""
@@ -65,7 +78,7 @@ class Parametres(BaseSettings):
 
     @property
     def dossier_modeles(self) -> Path:
-        """Cache des modèles d'embeddings (fastembed) : sur le disque de données."""
+        """Cache des modèles d'embeddings (fastembed), dans le dossier des données."""
         return self.dossier_donnees / "modeles"
 
     @property

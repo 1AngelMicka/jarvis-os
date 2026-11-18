@@ -1,6 +1,6 @@
 """Moteur `claude_code` : la CLI `claude -p` de l'abonnement Claude. **Jamais de clé API.**
 
-Repris de `FournisseurClaudeCode` (ancien JARVIS, `llm.py`) et amélioré :
+Repris de `FournisseurClaudeCode` (JARVIS v1, `llm.py`) et amélioré :
 - le prompt passe par l'entrée standard (Windows limite la ligne de commande à 32 767 caractères) ;
 - la sortie est toujours lue en `stream-json` : l'événement `system/init` donne la source d'authentification,
   et toute réponse qui ne vient pas de l'abonnement (`apiKeySource` ≠ « none ») est refusée ;

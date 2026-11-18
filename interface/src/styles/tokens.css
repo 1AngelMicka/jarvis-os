@@ -1,4 +1,4 @@
-/* Tokens du HUD JARVIS : repris tels quels de l'ancien JARVIS (static/css/hud.css, section 1) ;
+/* Tokens du HUD JARVIS : repris tels quels de JARVIS v1 (static/css/hud.css, section 1) ;
    documentés dans interface/DESIGN.md. Toute valeur visuelle passe par un token. */
 :root {
   /* Échelle globale (agrandie sur les très grands écrans) */

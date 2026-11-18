@@ -15,11 +15,10 @@ from jarvis2.dialogue import ServiceDialogue, SourceMemoire
 from jarvis2.embeddings import vecteur_sql
 from jarvis2.memoire import (
     ContexteMemoire,
+    Expurgateur,
     Resultat,
     Souvenir,
     decouper_requetes,
-    expurger,
-    expurger_souvenir,
     fusionner,
     limiter_noyau,
     lire_noyau,
@@ -34,12 +33,15 @@ from jarvis2.moteurs.telemetrie import EnregistreurMemoire, MoteurInstrumente
 from .test_registre_telemetrie import FauxMoteur
 
 MAINTENANT = datetime(2026, 11, 18, tzinfo=UTC)
-NOM_EXCLU = "Projet" + "Secret"  # sujet exclu de l'utilisateur, assemblé pour ne pas figurer en clair ici
+NOM_EXCLU = "Projet Zéphyr"  # sujet exclu fictif : les vrais vivent dans la configuration locale
+EXPURGATEUR = Expurgateur((re.compile(r"projet\s+z[ée]phyr", re.IGNORECASE),))
+MODELE = "factice"
 
 
 class EncodeurFactice:
     """Sac de mots haché et normalisé : déterministe, sans modèle."""
 
+    nom_modele = MODELE
     dimension = 384
 
     async def encoder(self, texte: str) -> list[float]:
@@ -79,11 +81,14 @@ def test_orientation() -> None:
 
 def test_expurger_retire_le_sujet_exclu() -> None:
     texte = f"Le projet {NOM_EXCLU} avance. JARVIS tourne sur le PC.\n| {NOM_EXCLU} | ligne |\nAutre ligne."
-    assert expurger(texte) == "JARVIS tourne sur le PC.\nAutre ligne."
-    assert expurger_souvenir(souvenir("a", f"Note sur {NOM_EXCLU}.")) is None
+    assert EXPURGATEUR.texte(texte) == "JARVIS tourne sur le PC.\nAutre ligne."
+    assert EXPURGATEUR.souvenir(souvenir("a", f"Note sur le {NOM_EXCLU}.")) is None
     intact = souvenir("b", "Rien à signaler ici, texte ordinaire et assez long pour rester.")
-    assert expurger_souvenir(intact) is intact
-    assert NOM_EXCLU not in ContexteMemoire(noyau=[souvenir("c", f"Ne parle pas de {NOM_EXCLU}. Sois bref.")]).bloc()
+    assert EXPURGATEUR.souvenir(intact) is intact
+    noyau = [souvenir("c", f"Ne parle pas du {NOM_EXCLU}. Sois bref et précis, toujours.")]
+    bloc = ContexteMemoire(noyau=noyau, expurgateur=EXPURGATEUR).bloc()
+    assert NOM_EXCLU not in bloc and "Sois bref" in bloc
+    assert Expurgateur().texte(texte) == texte  # sans configuration locale, rien n'est retiré
 
 
 def test_fusion_et_selection() -> None:
@@ -117,14 +122,33 @@ async def inserer(
 ) -> str:
     v = vecteur_sql(await (encodeur or EncodeurFactice()).encoder(contenu))
     ident = await pool.fetchval(
-        "INSERT INTO memoires (contenu, type, tags, confidentialite, embedding, tsv, origine)"
-        " VALUES ($1, 'fait', $2, $3, $4::text::vector, to_tsvector('french', $1), 'utilisateur') RETURNING id",
+        "INSERT INTO memoires (contenu, type, tags, confidentialite, embedding, embedding_model, tsv, origine)"
+        " VALUES ($1, 'fait', $2, $3, $4::text::vector, $5, to_tsvector('french', $1), 'utilisateur') RETURNING id",
         contenu,
         tags or [],
         "local_uniquement" if prive else "normal",
         v,
+        MODELE,
     )
     return str(ident)
+
+
+@pytest.mark.base
+async def test_souvenirs_depasses_archives_ou_autre_modele_ignores(pool: asyncpg.Pool) -> None:
+    actuel = await inserer(pool, "Le chat s'appelle Moka")
+    ancien = await inserer(pool, "Le chat s'appelle Pixel")
+    archive = await inserer(pool, "Le chat aime le saumon")
+    autre_modele = await inserer(pool, "Le chat dort sur le canapé")
+    await pool.execute(
+        "UPDATE memoires SET valid_to = now(), superseded_by = $1 WHERE id = $2", actuel, ancien
+    )  # remplacé, jamais effacé
+    await pool.execute("UPDATE memoires SET archived = true WHERE id = $1", archive)
+    await pool.execute("UPDATE memoires SET embedding_model = 'autre-modele' WHERE id = $1", autre_modele)
+    resultats = {r.souvenir.id: r.score for r in await rechercher(pool, EncodeurFactice(), "chat", limite=10)}
+    assert actuel in resultats and ancien not in resultats and archive not in resultats
+    # Vecteur d'un autre modèle : jamais comparé (cosinus nul), seul le plein texte compte
+    assert resultats[autre_modele] < resultats[actuel]
+    assert await pool.fetchval("SELECT count(*) FROM memoires") == 4
 
 
 @pytest.mark.base

@@ -1,4 +1,4 @@
--- 002 — Héritage de l'ancien JARVIS : profil, missions, créations, chantiers, journal des imports.
+-- 002 — Données héritées de JARVIS v1 : profil, missions, créations, chantiers, journal des imports.
 -- Mêmes colonnes et mêmes contraintes que l'ancien Core (lu le 18 nov. 2026 dans sa sauvegarde) : les lignes
 -- s'importent telles quelles, identifiants compris. Les modules qui s'en serviront arrivent en phases 5 à 7.
 
@@ -71,7 +71,7 @@ CREATE TABLE creation_donnees (
 );
 CREATE INDEX creation_donnees_idx ON creation_donnees (creation_id, collection, cree_le);
 
--- Chantiers (table « taches » de l'ancien JARVIS). `session_id` désignait une session d'atelier de l'ancien
+-- Chantiers (table « taches » de JARVIS v1). `session_id` désignait une session d'atelier de l'ancien
 -- JARVIS : gardé tel quel, sans clé étrangère (les ateliers sont refaits en phase 6).
 CREATE TABLE chantiers (
     id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),

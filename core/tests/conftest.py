@@ -35,8 +35,9 @@ async def pool(url_proprio: str, parametres: Parametres) -> AsyncIterator[asyncp
     conn = await asyncpg.connect(url_proprio)
     try:
         await conn.execute(
-            "TRUNCATE telemetrie, imports, chantiers, creation_donnees, creation_versions, creations, missions,"
-            " profil_reponses, messages, conversations, memoires RESTART IDENTITY CASCADE"
+            "TRUNCATE memory_block_versions, memory_blocks, telemetrie, imports, chantiers, creation_donnees,"
+            " creation_versions, creations, missions, profil_reponses, messages, conversations, memoires"
+            " RESTART IDENTITY CASCADE"
         )
     finally:
         await conn.close()

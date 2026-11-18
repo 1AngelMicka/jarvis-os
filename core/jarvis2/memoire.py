@@ -1,4 +1,4 @@
-"""Mémoire : recherche hybride et noyau, portés de l'ancien JARVIS (`memoire.py`) à l'identique.
+"""Mémoire : recherche hybride et noyau, portés de JARVIS v1 (`memoire.py`) à l'identique.
 
 Recherche d'un texte :
 1. découpage du message en sous-questions (le message entier d'abord) ;
@@ -47,9 +47,6 @@ _SEPARATEURS = re.compile(
     r"[?;\n]+|,\s*et\s+|,\s*(?=" + _INTERROGATIFS + r"\b)|\s+et\s+(?=" + _INTERROGATIFS + r"\b)", re.IGNORECASE
 )
 
-# Sujet que JARVIS ne doit jamais aborder (consigne de l'utilisateur, reprise de l'ancien JARVIS) : toute phrase
-# qui le nomme est retirée des textes de mémoire injectés au modèle. Les garde-fous d'action sont ailleurs.
-_SUJET_EXCLU = re.compile(r"app[\s_.-]*b[\s_.-]*(?:\+|plus(?![a-z]))|(?<![\w+])b\+(?![\w+])", re.IGNORECASE)
 _FIN_DE_PHRASE = re.compile(r"(?<=[.!?;])\s+")
 
 
@@ -102,37 +99,41 @@ def _souvenir(ligne: asyncpg.Record) -> Souvenir:
     )
 
 
-# --- Sujet exclu -----------------------------------------------------------------------------------------
+# --- Sujets exclus (configuration locale de l'utilisateur, jamais dans le code) ----------------------------
 
 
-def mentionne_sujet_exclu(texte: str | None) -> bool:
-    return bool(texte) and bool(_SUJET_EXCLU.search(texte or ""))
+@dataclass(frozen=True)
+class Expurgateur:
+    """Retire de la mémoire injectée au modèle toute phrase qui nomme un sujet exclu par l'utilisateur."""
 
+    motifs: tuple[re.Pattern[str], ...] = ()
 
-def expurger(texte: str) -> str:
-    """Retire toute phrase (ou ligne de tableau) qui nomme le sujet exclu ; le reste est conservé."""
-    if not mentionne_sujet_exclu(texte):
-        return texte
-    lignes = []
-    for ligne in texte.split("\n"):
-        if not _SUJET_EXCLU.search(ligne):
-            lignes.append(ligne)
-        elif not ligne.lstrip().startswith("|"):  # ligne de tableau : retirée entière
-            gardees = [p for p in _FIN_DE_PHRASE.split(ligne) if not _SUJET_EXCLU.search(p)]
-            if gardees:
-                lignes.append(" ".join(gardees))
-    return "\n".join(lignes)
+    def mentionne(self, texte: str | None) -> bool:
+        return bool(texte) and any(m.search(texte or "") for m in self.motifs)
 
+    def texte(self, texte: str) -> str:
+        """Retire toute phrase (ou ligne de tableau) qui nomme un sujet exclu ; le reste est conservé."""
+        if not self.mentionne(texte):
+            return texte
+        lignes = []
+        for ligne in texte.split("\n"):
+            if not self.mentionne(ligne):
+                lignes.append(ligne)
+            elif not ligne.lstrip().startswith("|"):  # ligne de tableau : retirée entière
+                gardees = [p for p in _FIN_DE_PHRASE.split(ligne) if not self.mentionne(p)]
+                if gardees:
+                    lignes.append(" ".join(gardees))
+        return "\n".join(lignes)
 
-def expurger_souvenir(s: Souvenir) -> Souvenir | None:
-    """Souvenir expurgé ; None s'il ne reste rien d'utile."""
-    if not mentionne_sujet_exclu(s.contenu):
-        return s
-    contenu = expurger(s.contenu).strip()
-    premiere = contenu.split("\n", 1)[0]
-    if len(contenu) - (len(premiere) if premiere.startswith("[") else 0) < 40:
-        return None
-    return replace(s, contenu=contenu)
+    def souvenir(self, s: Souvenir) -> Souvenir | None:
+        """Souvenir expurgé ; None s'il ne reste rien d'utile."""
+        if not self.mentionne(s.contenu):
+            return s
+        contenu = self.texte(s.contenu).strip()
+        premiere = contenu.split("\n", 1)[0]
+        if len(contenu) - (len(premiere) if premiere.startswith("[") else 0) < 40:
+            return None
+        return replace(s, contenu=contenu)
 
 
 # --- Recherche hybride -----------------------------------------------------------------------------------
@@ -160,14 +161,16 @@ async def rechercher(
                    ARRAY(SELECT DISTINCT unnest(tsvector_to_array(to_tsvector('french', $2)))) AS mots
         ), scores AS (
             SELECT m.*,
-                   COALESCE(1 - (m.embedding <=> req.v), 0) AS similarite,
+                   CASE WHEN m.embedding_model = $8 THEN COALESCE(1 - (m.embedding <=> req.v), 0)
+                        ELSE 0 END AS similarite,
                    CASE WHEN m.tsv @@ req.tsq THEN 0.5 + 0.5 * ts_rank_cd(m.tsv, req.tsq, 32)
                         WHEN cardinality(req.mots) = 0 THEN 0
                         ELSE 0.45 * (SELECT count(*) FROM unnest(req.mots) AS mot
                                      WHERE m.tsv @@ quote_literal(mot)::tsquery)::float / cardinality(req.mots)
                    END AS texte
             FROM memoires m CROSS JOIN req
-            WHERE (NOT $3 OR m.confidentialite <> 'local_uniquement')
+            WHERE m.valid_to IS NULL AND NOT m.archived
+              AND (NOT $3 OR m.confidentialite <> 'local_uniquement')
               AND ($4::text[] IS NULL OR m.origine = ANY($4::text[]))
         )
         SELECT {COLONNES}, $5 * similarite + $6 * texte AS score
@@ -182,6 +185,7 @@ async def rechercher(
         POIDS_VECTEUR,
         POIDS_TEXTE,
         limite,
+        encodeur.nom_modele,
     )
     return [Resultat(_souvenir(r), round(float(r["score"]), 4)) for r in lignes]
 
@@ -348,6 +352,7 @@ class ReglagesRecherche:
     budget: int = 7000
     max_par_source: int = 3
     budget_noyau: int = 4000
+    expurgateur: Expurgateur = field(default_factory=Expurgateur)
 
 
 async def rechercher_multi(
@@ -381,7 +386,7 @@ async def rechercher_multi(
         par_requete.extend(list(groupes.values())[:MAX_SOURCES_ORIENTEES])
     candidats: list[Resultat] = []
     for c in fusionner(par_requete, seuil=reglages.seuil, o=o):
-        s = expurger_souvenir(c.souvenir)
+        s = reglages.expurgateur.souvenir(c.souvenir)
         if s is not None:
             candidats.append(c if s is c.souvenir else Resultat(s, c.score))
     return selectionner(
@@ -412,16 +417,23 @@ def limiter_noyau(souvenirs: list[Souvenir], budget: int) -> list[Souvenir]:
 
 
 async def lire_noyau(
-    conn: asyncpg.Pool | asyncpg.Connection, *, exclure_local: bool, budget: int = 4000, limite: int = 100
+    conn: asyncpg.Pool | asyncpg.Connection,
+    *,
+    exclure_local: bool,
+    budget: int = 4000,
+    limite: int = 100,
+    expurgateur: Expurgateur | None = None,
 ) -> list[Souvenir]:
+    expurgateur = expurgateur or Expurgateur()
     lignes = await conn.fetch(
         f"SELECT {COLONNES} FROM memoires WHERE tags @> ARRAY[$1]::text[]"  # noqa: S608 — constante
+        " AND valid_to IS NULL AND NOT archived"
         " AND (NOT $2 OR confidentialite <> 'local_uniquement') ORDER BY cree_le DESC, id LIMIT $3",
         TAG_NOYAU,
         exclure_local,
         limite,
     )
-    noyau = [s for s in (expurger_souvenir(_souvenir(r)) for r in lignes) if s is not None]
+    noyau = [s for s in (expurgateur.souvenir(_souvenir(r)) for r in lignes) if s is not None]
     return limiter_noyau(noyau, budget)
 
 
@@ -429,6 +441,7 @@ async def compter(conn: asyncpg.Pool | asyncpg.Connection) -> dict[str, int]:
     ligne = await conn.fetchrow(
         "SELECT count(*) AS total, count(*) FILTER (WHERE tags @> ARRAY['noyau']) AS noyau,"
         " count(*) FILTER (WHERE confidentialite = 'local_uniquement') AS local FROM memoires"
+        " WHERE valid_to IS NULL AND NOT archived"
     )
     assert ligne is not None
     return {"total": ligne["total"], "noyau": ligne["noyau"], "local_uniquement": ligne["local"]}
@@ -462,6 +475,7 @@ class ContexteMemoire:
     noyau: list[Souvenir] = field(default_factory=list)
     souvenirs: list[Resultat] = field(default_factory=list)
     consultee: bool = True
+    expurgateur: Expurgateur = field(default_factory=Expurgateur)
 
     def bloc(self) -> str:
         """Section mémoire des consignes système (noyau puis souvenirs), toujours expurgée."""
@@ -473,4 +487,4 @@ class ContexteMemoire:
         texte += (
             f"\nSouvenirs pertinents (du plus pertinent au moins pertinent) :\n{formater_souvenirs(self.souvenirs)}"
         )
-        return expurger(texte)
+        return self.expurgateur.texte(texte)

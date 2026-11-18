@@ -1,4 +1,7 @@
-# Secrets : jamais dans git (seul .env.example est versionné)
+# Secrets et configuration personnelle : jamais dans git (seuls .env.example et config.exemple.toml sont versionnés)
+config.toml
+CLAUDE.local.md
+*.dump
 .env
 .env.*
 !.env.example

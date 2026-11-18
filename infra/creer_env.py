@@ -1,6 +1,6 @@
 """Crée `.env` à partir de `.env.example` avec des mots de passe aléatoires, sans rien afficher.
 
-Usage : C:\\Python313\\python.exe infra\\creer_env.py
+Usage : uv run --python 3.13 infra/creer_env.py
 Ne remplace jamais un `.env` existant.
 """
 

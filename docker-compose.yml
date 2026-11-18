@@ -1,8 +1,8 @@
 # PostgreSQL 16 + pgvector pour JARVIS 2.
 # Variables lues dans .env (voir .env.example). Port publié sur 127.0.0.1 uniquement.
 #
-# Données : volume Docker nommé « jarvis2_pg ». Un dossier monté depuis un disque en exFAT est impossible tant qu'il est en
-# exFAT (PostgreSQL exige des droits Unix 0700 sur son dossier de données) : voir docs/DECISIONS.md.
+# Données : volume Docker nommé « jarvis2_pg » (PostgreSQL exige des droits Unix 0700 qu'un dossier monté depuis
+# Windows ou exFAT ne fournit pas) : voir docs/DECISIONS.md.
 name: jarvis2
 
 services:
