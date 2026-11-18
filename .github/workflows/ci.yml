@@ -37,8 +37,8 @@ jobs:
       JARVIS2_PG_HOTE: 127.0.0.1
       JARVIS2_PG_PORT: "5432"
       JARVIS2_APP_MOT_DE_PASSE: ci-app
-      JARVIS2_DOSSIER_DONNEES: ${{ runner.temp }}/jarvis2-donnees
-      JARVIS2_CONFIG: ${{ runner.temp }}/jarvis2-config/config.toml
+      JARVIS2_DOSSIER_DONNEES: /tmp/jarvis2-donnees
+      JARVIS2_CONFIG: /tmp/jarvis2-config/config.toml
     defaults:
       run:
         working-directory: core
