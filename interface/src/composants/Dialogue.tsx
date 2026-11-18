@@ -190,7 +190,9 @@ export function Console(p: ConsoleProps) {
     const el = champ.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    // box-sizing: border-box : la hauteur comprend les bordures, que scrollHeight ne compte pas
+    const bordures = el.offsetHeight - el.clientHeight;
+    el.style.height = `${String(Math.min(el.scrollHeight + bordures, 160))}px`;
   }, [texte]);
 
   useEffect(() => {

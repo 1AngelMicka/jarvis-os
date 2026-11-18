@@ -11,6 +11,7 @@ import { EcranJumelage } from "./composants/Jumelage";
 import { Panneau } from "./composants/Panneau";
 import { type EtatNoyau, Reacteur } from "./composants/Reacteur";
 import { PanneauSecurite } from "./composants/Securite";
+import { SelecteurTheme } from "./composants/SelecteurTheme";
 import { ecrirePreferences, lirePreferences } from "./preferences";
 import type { AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
 
@@ -372,6 +373,7 @@ function Hud() {
         >
           Connecteurs
         </button>
+        <SelecteurTheme className="selecteur-theme--barre" />
         {!urgence && etat && (
           <button type="button" className="btn btn-rouge btn-mini btn-urgence" onClick={declencherUrgence} title="Tout arrêter tout de suite">
             <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">

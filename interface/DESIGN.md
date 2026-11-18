@@ -1,18 +1,33 @@
 # Système de design de l'interface JARVIS 2
 
-> Reprend le système de design de JARVIS v1 (son `static/DESIGN.md` reste la référence détaillée). Ce document dit ce qui est repris, ce qui change et les règles à tenir.
+> Né du système de JARVIS v1 (mêmes jetons, mêmes règles d'ergonomie), mais avec sa propre identité et quatre thèmes.
 
 ## Intention
 
-Un **poste de commandement holographique** : fond spatial quasi noir, lignes et lueurs cyan, typographie technique condensée. Une seule pièce spectaculaire, le **noyau** (réacteur) ; tout le reste est sobre, lisible et dense. Création originale, aucun élément de marque tiers.
+Thème par défaut **JARVIS** : un poste de commandement en **verre dépoli**. Fond quasi noir éclairé par une **aurore** cyan et violette, matrice de points discrète, panneaux arrondis à **arête lumineuse** (cyan → violet), dégradé d'accent sur les titres, les bulles de l'utilisateur et l'action principale. Une seule pièce spectaculaire, le **noyau** (réacteur) ; tout le reste est sobre, lisible et dense. Création originale, aucun élément de marque tiers.
+
+Ce qui distingue JARVIS 2 de JARVIS v1 : plus de coins en équerre ni de tracé du contour, plus de grille de lignes en dérive (points + aurore), rayons de 8 à 14 px au lieu de 2 à 3, verre dépoli (`backdrop-filter`), second accent violet (`--c-aurore`), bulles de dialogue arrondies.
+
+## Thèmes (`src/styles/themes.css`, `src/theme.ts`)
+
+| Thème | Identité |
+|---|---|
+| **JARVIS** (défaut) | Verre dépoli, aurore cyan-violet, typographie condensée en capitales |
+| **Studio nocturne** | Graphite, accent indigo-violet, cartes arrondies, typographie système, aucune lueur |
+| **Atelier clair** | Papier chaud, encre, titres en sérif, accent terre cuite (`color-scheme: light`) |
+| **Console épurée** | Noir et blanc, traits fins, tout en mono et en minuscules, accent lime, angles vifs |
+
+Un thème ne redéfinit **que des jetons** sous `html[data-theme="…"]` : couleurs (canaux RVB), polices, rayons et interrupteurs de décor (`--lueur-k`, `--grille-k`, `--aurore-k`, `--arete-k`, `--flou`, `--casse`). Le choix est gardé par appareil (`jarvis2.theme`, stockage local), appliqué avant le premier rendu, et met à jour `theme-color` et `color-scheme`. Sélecteur : barre du haut (≥ 700 px) et onglet Sécurité, section Apparence. L'arrêt d'urgence passe l'accent au rouge dans tous les thèmes (rouge foncé dans le thème clair).
+
+Contrastes mesurés dans les quatre thèmes : texte ≥ 15:1, texte secondaire ≥ 5,5:1 sur le fond et les panneaux, accent ≥ 5:1 sur le fond.
 
 ## Tokens (`src/styles/tokens.css`)
 
-Copiés **tels quels** de l'ancien `css/hud.css` (section 1) :
-- couleurs en **canaux RVB** (`--c-cyan: 107 230 255`, utilisés en `rgb(var(--c-cyan) / .16)`) : un thème ne redéfinit que ces canaux ;
+Hérités de l'ancien `css/hud.css`, puis étendus :
+- couleurs en **canaux RVB** (`--c-cyan: 107 230 255`, utilisés en `rgb(var(--c-cyan) / .16)`) : un thème ne redéfinit que ces canaux ; `--c-aurore` (second accent) et `--c-neutre` (traits des thèmes sobres) ;
 - polices système : `--f-affiche` DIN Condensed / Bahnschrift Condensed, `--f-ui` DIN Alternate / Bahnschrift, `--f-texte`, `--f-mono` ;
 - échelle `--t-micro` 11 → `--t-geant` 52 px (× `--k`, agrandie à 1800 et 2300 px) ;
-- grille de 4 px `--e-1` 2 → `--e-10` 56 px ; rayons `--r-*` ; traits `--l-*` ; cible tactile `--cible` 44 px ;
+- grille de 4 px `--e-1` 2 → `--e-10` 56 px ; rayons `--r-1` 4, `--r-2` 8, `--r-3` 14 px, `--r-saisie`, `--r-rond`, `--r-pilule` ; traits `--l-*` ; cible tactile `--cible` 44 px ;
 - mouvement `--d-instant` 90 · `--d-rapide` 160 · `--d-moyen` 280 · `--d-lent` 520 · `--d-cine` 900 ms ; courbes `--e-sortie`, `--e-holo`, `--e-entree` ;
 - profondeur `--z-*`.
 

@@ -1,0 +1,163 @@
+/* =====================================================================
+   Thèmes de JARVIS 2. « JARVIS » (défaut) est défini dans tokens.css ; chaque thème ci-dessous ne
+   redéfinit QUE des tokens (couleurs en canaux RVB, polices, rayons, interrupteurs de décor).
+   Choix de l'utilisateur : html[data-theme], gardé par appareil (src/theme.ts).
+   Contrastes : texte ≥ 7:1, texte secondaire ≥ 4,5:1 sur le fond et sur les panneaux (AA).
+   ===================================================================== */
+
+/* ---------- Studio nocturne : graphite, accent indigo-violet, cartes arrondies, sans lueur ---------- */
+html[data-theme="studio"] {
+  --c-vide: 19 19 26;
+  --c-creux: 13 13 19;
+  --c-verre: 33 33 44;
+  --c-verre-bas: 26 26 35;
+  --c-voile-fond: 6 6 10;
+  --c-cyan: 145 132 250;       /* accent principal : indigo-violet */
+  --c-cyan-vif: 205 198 255;
+  --c-bleu: 99 102 241;
+  --c-aurore: 214 120 214;
+  --c-ambre: 245 170 60;
+  --c-rouge: 244 80 92;
+  --c-vert: 64 214 160;
+  --vide-2: #1a1a23;
+  --vide-3: #22222d;
+  --texte: #e8e8ef;
+  --texte-2: #b6b6c6;
+  --texte-3: #9090a4;
+  --texte-fort: #ffffff;
+  --ligne: rgb(var(--c-neutre) / .09);
+  --ligne-faible: rgb(var(--c-neutre) / .06);
+  --ligne-forte: rgb(var(--c-cyan) / .5);
+  --voile: rgb(var(--c-neutre) / .025);
+  --voile-2: rgb(var(--c-neutre) / .04);
+  --voile-3: rgb(var(--c-cyan) / .14);
+  --verre: rgb(var(--c-verre) / .92);
+  --verre-bas: rgb(var(--c-verre-bas) / .96);
+  --lueur-k: 0;
+  --grille-k: 0;
+  --aurore-k: 0;
+  --arete-k: 0;
+  --flou: 0px;
+  --casse: none;
+  --chasse-k: .25;
+  --g-affiche: 600;
+  --chasse-titre: .02em;
+  --f-affiche: "Segoe UI Variable Display", "SF Pro Display", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --f-ui: var(--f-texte);
+  --f-donnees: var(--f-texte);
+  --r-1: 6px;
+  --r-2: 10px;
+  --r-3: 16px;
+  --ombre-panneau: 0 1px 2px rgb(var(--c-ombre) / .3), 0 8px 24px rgb(var(--c-ombre) / .22);
+  --i-jarvis: var(--cyan);
+}
+
+/* ---------- Atelier clair : papier chaud, encre, titres en sérif, accent terre cuite ---------- */
+html[data-theme="atelier"] {
+  color-scheme: light;
+  --c-vide: 250 247 242;
+  --c-creux: 255 255 255;
+  --c-verre: 255 254 251;
+  --c-verre-bas: 248 244 237;
+  --c-voile-fond: 40 32 24;
+  --c-ombre: 70 52 34;
+  --c-cyan: 176 70 44;         /* accent principal : terre cuite (≥ 4,5:1 sur le papier) */
+  --c-cyan-vif: 128 46 26;     /* titres, valeurs, état actif */
+  --c-bleu: 64 92 138;
+  --c-aurore: 170 110 50;
+  --c-ambre: 166 98 0;
+  --c-rouge: 178 34 34;
+  --c-vert: 28 120 72;
+  --c-lilas: 110 80 170;
+  --c-neutre: 60 45 30;
+  --vide-2: #fffdf9;
+  --vide-3: #ffffff;
+  --texte: #24201b;
+  --texte-2: #4d463e;
+  --texte-3: #665d53;
+  --texte-fort: #15110d;
+  --ambre-clair: #5a3a00;
+  --ambre-texte: #74470a;
+  --sur-ambre: #ffffff;
+  --rouge-pale: #b02a2a;
+  --rouge-clair: #7a1616;
+  --mix-clair: #000;
+  --ligne: rgb(var(--c-neutre) / .14);
+  --ligne-faible: rgb(var(--c-neutre) / .08);
+  --ligne-forte: rgb(var(--c-cyan) / .55);
+  --voile: rgb(var(--c-neutre) / .03);
+  --voile-2: rgb(var(--c-neutre) / .045);
+  --voile-3: rgb(var(--c-cyan) / .1);
+  --verre: rgb(var(--c-verre));
+  --verre-bas: rgb(var(--c-verre-bas));
+  --lueur-k: 0;
+  --grille-k: 0;
+  --aurore-k: 0;
+  --arete-k: 0;
+  --flou: 0px;
+  --casse: none;
+  --chasse-k: .2;
+  --g-affiche: 600;
+  --chasse-titre: .01em;
+  --f-affiche: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --f-ui: var(--f-texte);
+  --f-donnees: var(--f-texte);
+  --r-2: 8px;
+  --r-3: 14px;
+  --ombre-panneau: 0 1px 2px rgb(var(--c-ombre) / .08), 0 6px 20px rgb(var(--c-ombre) / .07);
+  --i-jarvis: var(--cyan);
+  --i-local: #6b4fb0;
+  --i-claude: #a0552a;
+}
+
+/* ---------- Console épurée : noir et blanc, traits fins, mono, accent vert lime ---------- */
+html[data-theme="console"] {
+  --c-vide: 10 10 10;
+  --c-creux: 0 0 0;
+  --c-verre: 17 17 17;
+  --c-verre-bas: 12 12 12;
+  --c-voile-fond: 0 0 0;
+  --c-cyan: 198 244 50;        /* accent principal : lime */
+  --c-cyan-vif: 244 244 244;   /* titres et valeurs : blanc */
+  --c-bleu: 150 150 150;
+  --c-aurore: 198 244 50;
+  --c-ambre: 255 196 0;
+  --c-rouge: 255 77 77;
+  --c-vert: 198 244 50;
+  --vide-2: #111111;
+  --vide-3: #171717;
+  --texte: #f2f2f2;
+  --texte-2: #bdbdbd;
+  --texte-3: #9b9b9b;
+  --texte-fort: #ffffff;
+  --ligne: rgb(var(--c-neutre) / .16);
+  --ligne-faible: rgb(var(--c-neutre) / .09);
+  --ligne-forte: rgb(var(--c-cyan) / .7);
+  --voile: rgb(var(--c-neutre) / .02);
+  --voile-2: rgb(var(--c-neutre) / .035);
+  --voile-3: rgb(var(--c-cyan) / .12);
+  --verre: rgb(var(--c-verre));
+  --verre-bas: rgb(var(--c-verre-bas));
+  --lueur-k: 0;
+  --grille-k: 0;
+  --aurore-k: 0;
+  --arete-k: 0;
+  --flou: 0px;
+  --casse: lowercase;
+  --chasse-k: .4;
+  --g-affiche: 600;
+  --chasse-titre: .04em;
+  --f-affiche: var(--f-mono);
+  --f-ui: var(--f-mono);
+  --f-donnees: var(--f-mono);
+  --r-1: 0px;
+  --r-2: 2px;
+  --r-3: 2px;
+  --r-pilule: 2px;
+  --r-saisie: 2px;
+  --r-rond: 2px;
+  --i-local: #9ee0ff;
+  --ombre-panneau: none;
+  --i-jarvis: var(--cyan);
+  --degrade-accent: linear-gradient(135deg, var(--cyan-vif), var(--cyan-vif));
+}

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { creerJumelage, enregistrerCle, lireAudit, listerAppareils, optionsCle, revoquerAppareil } from "../api";
 import type { Appareil, EntreeAudit, Jumelage } from "../types";
 import { clesDisponibles, creerCle } from "../webauthn";
+import { SelecteurTheme } from "./SelecteurTheme";
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const NIVEAU = { vert: "🟢", jaune: "🟡", rouge: "🔴" } as const;
@@ -61,6 +62,14 @@ export function PanneauSecurite({ nbCles, surChangement }: Props) {
           {erreur}
         </p>
       )}
+
+      <section className="sec-bloc" aria-labelledby="sec-apparence">
+        <h3 className="sec-titre" id="sec-apparence">
+          Apparence
+        </h3>
+        <p className="sec-texte">Thème de cet appareil : JARVIS, Studio nocturne, Atelier clair ou Console épurée.</p>
+        <SelecteurTheme />
+      </section>
 
       <section className="sec-bloc" aria-labelledby="sec-cles">
         <h3 className="sec-titre" id="sec-cles">

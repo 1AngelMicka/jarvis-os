@@ -1,10 +1,10 @@
-/* Tokens du HUD JARVIS : repris tels quels de JARVIS v1 (static/css/hud.css, section 1) ;
-   documentés dans interface/DESIGN.md. Toute valeur visuelle passe par un token. */
+/* Tokens de l'interface JARVIS 2 (thème « JARVIS » par défaut) ; documentés dans interface/DESIGN.md.
+   Toute valeur visuelle passe par un token ; les autres thèmes (themes.css) ne redéfinissent que des tokens. */
 :root {
   /* Échelle globale (agrandie sur les très grands écrans) */
   --k: 1;
 
-  /* Thème actif (html[data-theme] : « original » ici, « realiste » dans css/theme-realiste.css).
+  /* Thème actif : html[data-theme] (« jarvis » ici ; « studio », « atelier », « console » dans themes.css).
      Les couleurs vivent en CANAUX RVB (--c-*) : rgb(var(--c-cyan) / .16) donne une variante translucide
      sans jamais écrire une couleur en dur dans un composant ; un thème ne redéfinit que ces jetons. */
   --c-vide: 2 7 12;           /* fond spatial */
@@ -20,6 +20,8 @@
   --c-rouge: 255 61 79;
   --c-vert: 75 232 180;
   --c-lilas: 196 166 255;
+  --c-aurore: 139 124 255;    /* second accent de JARVIS 2 (aurore cyan → violet) */
+  --c-neutre: 255 255 255;    /* traits neutres des thèmes sobres */
 
   /* Couleurs de base */
   --vide: rgb(var(--c-vide));
@@ -41,12 +43,18 @@
   --rouge-clair: #ffd6da;   /* texte sur fond rougi */
   --vert: rgb(var(--c-vert));          /* succès */
   --mix-clair: #fff;        /* sens des éclaircissements (color-mix) : vers le blanc sur fond sombre */
+  --aurore: rgb(var(--c-aurore));
+  --degrade-accent: linear-gradient(135deg, var(--cyan), var(--aurore));
 
   /* Interrupteurs de style (thèmes) : multiplicateurs et valeurs qu'un thème peut neutraliser */
   --lueur-k: 1;             /* intensité des lueurs colorées (0 = aucune) */
   --chasse-k: 1;            /* multiplicateur de l'espacement des lettres */
   --casse: uppercase;       /* capitales des titres techniques */
   --g-affiche: 400;         /* graisse de la police d'affiche */
+  --grille-k: 1;            /* matrice de points du fond (0 = aucune) */
+  --aurore-k: 1;            /* lueurs d'aurore du fond (0 = fond uni) */
+  --flou: 16px;             /* verre dépoli des panneaux (0 = opaque) */
+  --arete-k: 1;             /* arête lumineuse en haut des panneaux */
 
   /* Accents des interlocuteurs (le cyan reste dominant) */
   --i-jarvis: var(--cyan);
@@ -63,7 +71,6 @@
   --ligne: rgb(var(--c-cyan) / .16);
   --ligne-faible: rgb(var(--c-cyan) / .09);
   --ligne-forte: rgb(var(--c-cyan) / .42);
-  --coin: var(--cyan);
   --verre: rgb(var(--c-verre) / .42);
   --verre-bas: rgb(var(--c-verre-bas) / .55);
   --voile: rgb(var(--c-cyan) / .035);
@@ -103,21 +110,24 @@
 
   /* Rayons */
   --r-0: 0;
-  --r-1: 2px;                /* puces, étiquettes */
-  --r-2: 3px;                /* boutons, champs */
+  --r-1: 4px;                /* puces, étiquettes */
+  --r-2: 8px;                /* boutons, champs */
+  --r-3: 14px;               /* panneaux, cartes, bulles */
   --r-pilule: 999px;         /* sélecteurs segmentés, saisie */
+  --r-saisie: 24px;          /* zone de saisie du dialogue */
+  --r-rond: 50%;             /* boutons ronds (envoyer, icônes) */
 
   /* Épaisseurs de trait */
   --l-fin: 1px;
   --l-moyen: 1.5px;
   --l-fort: 2px;
-  --l-coin: 2px;
 
   /* Lueurs */
   --lueur-1: 0 0 8px rgb(var(--c-cyan) / calc(.35 * var(--lueur-k)));
   --lueur-2: 0 0 18px rgb(var(--c-cyan) / calc(.22 * var(--lueur-k)));
   --lueur-3: 0 0 32px rgb(var(--c-cyan) / calc(.3 * var(--lueur-k)));
   --lueur-texte: 0 0 14px rgb(var(--c-cyan) / calc(.4 * var(--lueur-k)));
+  --ombre-panneau: 0 12px 32px rgb(var(--c-ombre) / .34), inset 0 1px 0 rgb(var(--c-cyan-vif) / .05);
 
   /* Profondeur (z-index) */
   --z-fond: 0;
