@@ -199,3 +199,14 @@ async def test_export_markdown(pool: Base, tmp_path: Path) -> None:
     assert "tomates anciennes" in (tmp_path / "md" / "MEMORY.md").read_text(encoding="utf-8")
     assert "humour" in (tmp_path / "md" / "SOUL.md").read_text(encoding="utf-8")
     assert "Vouvoiement" in (tmp_path / "md" / "USER.md").read_text(encoding="utf-8")
+
+
+def test_bge_m3_propose_par_jarvis() -> None:
+    """BAAI/bge-m3 (cité par la documentation) est connu de fastembed une fois JARVIS chargé, sans téléchargement."""
+    from fastembed import TextEmbedding
+
+    from jarvis2.embeddings import _ajouter_modeles
+
+    _ajouter_modeles(TextEmbedding)
+    modele = next(m for m in TextEmbedding.list_supported_models() if m["model"] == "BAAI/bge-m3")
+    assert modele["dim"] == 1024

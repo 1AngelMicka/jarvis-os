@@ -4,7 +4,7 @@ Assistant personnel local d'abord : mémoire à long terme, conversation en flux
 
 Plan : [docs/PLAN.md](docs/PLAN.md) · décisions : [docs/DECISIONS.md](docs/DECISIONS.md) · design : [interface/DESIGN.md](interface/DESIGN.md).
 
-> **Statut : en développement.** Les phases 1 à 6 du plan sont faites (socle, dialogue, mémoire, sécurité, connecteurs d'IA, installation) ; les installeurs (.exe, .dmg…) arrivent en phase 11. Captures d'écran à venir.
+> **Statut : en développement (0.8.0).** Les phases 1 à 10 du plan sont faites (socle, dialogue, mémoire, sécurité, connecteurs d'IA, installation, agents, mémoire v2, ateliers Claude Code, voix et vision). L'application de bureau et ses installeurs sont construits par GitHub Actions, pas encore signés ; la sauvegarde chiffrée est prête. Captures d'écran à venir.
 
 ## Installer (sans Docker ni Node)
 

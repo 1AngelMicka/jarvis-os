@@ -27,6 +27,33 @@ class Encodeur(Protocol):
     async def encoder(self, texte: str) -> list[float]: ...
 
 
+_MODELES_AJOUTES = False
+
+
+def _ajouter_modeles(text_embedding: Any) -> None:
+    """Modèles absents du catalogue de fastembed mais proposés par JARVIS (export ONNX officiel du modèle)."""
+    global _MODELES_AJOUTES
+    if _MODELES_AJOUTES:
+        return
+    from fastembed.common.model_description import ModelSource, PoolingType
+
+    connus = {m["model"] for m in text_embedding.list_supported_models()}
+    if "BAAI/bge-m3" not in connus:
+        text_embedding.add_custom_model(
+            model="BAAI/bge-m3",
+            pooling=PoolingType.CLS,
+            normalization=True,
+            sources=ModelSource(hf="BAAI/bge-m3"),
+            dim=1024,
+            model_file="onnx/model.onnx",
+            additional_files=["onnx/model.onnx_data"],
+            description="Multilingue, 1024 dimensions (8192 jetons)",
+            license="mit",
+            size_in_gb=2.27,
+        )
+    _MODELES_AJOUTES = True
+
+
 class EncodeurFastEmbed:
     def __init__(self, dossier_cache: Path, nom_modele: str = MODELE_EMBEDDINGS) -> None:
         self.dossier_cache = dossier_cache
@@ -41,6 +68,7 @@ class EncodeurFastEmbed:
                 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
                 from fastembed import TextEmbedding
 
+                _ajouter_modeles(TextEmbedding)
                 self.dossier_cache.mkdir(parents=True, exist_ok=True)
                 journal.info("Chargement du modèle d'embeddings %s…", self.nom_modele)
                 self._modele = TextEmbedding(self.nom_modele, cache_dir=str(self.dossier_cache))
