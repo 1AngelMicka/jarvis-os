@@ -24,6 +24,7 @@ from typing import Any
 import asyncpg
 
 from ..config_locale import ExclusionsImport
+from ..db_postgres import ConnexionPostgres
 from ..embeddings import Encodeur, vecteur_sql
 from ..memoire import rechercher_multi
 
@@ -335,8 +336,8 @@ async def verifier(
             await src.execute("UPDATE memoires SET embedding_model = $1 WHERE embedding IS NOT NULL", MODELE_V1)
             for q in requetes or REQUETES_TEMOINS:
                 for local in (False, True):
-                    a = await rechercher_multi(src, encodeur, q, exclure_local=not local)
-                    b = await rechercher_multi(dst, encodeur, q, exclure_local=not local)
+                    a = await rechercher_multi(ConnexionPostgres(src), encodeur, q, exclure_local=not local)
+                    b = await rechercher_multi(ConnexionPostgres(dst), encodeur, q, exclure_local=not local)
                     ids_a = [r.souvenir.id for r in a[:5]]
                     ids_b = [r.souvenir.id for r in b[:5]]
                     resultats.append(

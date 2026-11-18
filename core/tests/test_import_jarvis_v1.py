@@ -10,9 +10,17 @@ import pytest
 
 from jarvis2.config import Parametres
 from jarvis2.config_locale import analyser
+from jarvis2.db_postgres import BasePostgres
 from jarvis2.importeurs.jarvis_v1 import importer
 
 pytestmark = pytest.mark.base
+
+
+@pytest.fixture
+def pool(pool_pg: BasePostgres) -> BasePostgres:
+    """Tests propres à PostgreSQL (rôles, droits, types, import) : jamais sur SQLite."""
+    return pool_pg
+
 
 ATTENTE_TEST = "import_jarvis_v1_test"
 SCHEMA = Path(__file__).with_name("donnees") / "ancien_schema.sql"
@@ -76,7 +84,7 @@ async def url_attente(url_proprio: str, parametres: Parametres) -> AsyncIterator
     yield url
 
 
-async def test_import_complet_et_fidele(url_attente: str, pool: asyncpg.Pool, parametres: Parametres) -> None:
+async def test_import_complet_et_fidele(url_attente: str, pool: BasePostgres, parametres: Parametres) -> None:
     url_app = parametres.url_base("app", "jarvis2_test")
     rapport = await importer(url_attente, url_app, "essai.dump", "abc")
     assert rapport.complet
@@ -117,7 +125,7 @@ async def test_import_complet_et_fidele(url_attente: str, pool: asyncpg.Pool, pa
 
 
 async def test_exclusions_de_la_configuration_locale(
-    url_attente: str, pool: asyncpg.Pool, parametres: Parametres
+    url_attente: str, pool: BasePostgres, parametres: Parametres
 ) -> None:
     """Données de tiers écartées : par source et par contenu, références nettoyées, rapport toujours complet."""
     config = analyser(
@@ -141,7 +149,7 @@ def test_configuration_locale_invalide() -> None:
     assert analyser({}).import_("jarvis_v1").exclusions.exclut("doc:x", "y") is False
 
 
-async def test_import_rejouable_et_rattrapage(url_attente: str, pool: asyncpg.Pool, parametres: Parametres) -> None:
+async def test_import_rejouable_et_rattrapage(url_attente: str, pool: BasePostgres, parametres: Parametres) -> None:
     url_app = parametres.url_base("app", "jarvis2_test")
     await importer(url_attente, url_app, "1", "-")
     # Rien n'a changé : aucun doublon, aucune mise à jour
@@ -166,7 +174,7 @@ async def test_import_rejouable_et_rattrapage(url_attente: str, pool: asyncpg.Po
     assert await pool.fetchval("SELECT count(*) FROM messages") == 3
 
 
-async def test_import_tout_ou_rien(url_attente: str, pool: asyncpg.Pool, parametres: Parametres) -> None:
+async def test_import_tout_ou_rien(url_attente: str, pool: BasePostgres, parametres: Parametres) -> None:
     conn = await asyncpg.connect(url_attente)
     try:  # une colonne inconnue de JARVIS 2 : l'import doit refuser sans rien écrire
         await conn.execute("ALTER TABLE taches ADD COLUMN inconnue text")

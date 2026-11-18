@@ -16,10 +16,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-import asyncpg
-
 from .config import Parametres
 from .config_locale import ConfigLocale
+from .db import Base, Ligne
 from .moteurs import anthropic_api, antigravity, claude_code, codex, compatible_openai, ollama
 from .moteurs.base import EtatSante, InfoModele
 from .moteurs.telemetrie import Enregistreur, MoteurInstrumente
@@ -189,11 +188,11 @@ def choisir(etats: list[EtatConnecteur], prefere: str | None = None) -> str | No
 
 @dataclass
 class Connecteurs:
-    pool: asyncpg.Pool
+    pool: Base
     definitions: dict[str, Definition]
     coffre: Coffre
     prefere: str | None = None
-    _reglages: dict[str, asyncpg.Record] = field(default_factory=dict)
+    _reglages: dict[str, Ligne] = field(default_factory=dict)
 
     @property
     def moteurs(self) -> dict[str, MoteurInstrumente]:

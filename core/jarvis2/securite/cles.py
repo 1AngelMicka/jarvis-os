@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import ipaddress
 import json
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-import asyncpg
 from webauthn import (
     generate_authentication_options,
     generate_registration_options,
@@ -30,7 +29,7 @@ from webauthn.helpers.structs import (
     UserVerificationRequirement,
 )
 
-from ..db import Executant
+from ..db import Executant, Ligne
 
 DUREE_DEFI = timedelta(minutes=5)
 NOM_PARTIE = "JARVIS 2"
@@ -53,13 +52,12 @@ def partie(hote: str) -> str:
 async def _garder_defi(conn: Executant, defi: bytes, type_: str, appareil: UUID, demande: UUID | None) -> None:
     await conn.execute("DELETE FROM defis_webauthn WHERE expire_le < now()")
     await conn.execute(
-        "INSERT INTO defis_webauthn (defi, type, appareil_id, demande_id, expire_le)"
-        " VALUES ($1, $2, $3, $4, now() + $5)",
+        "INSERT INTO defis_webauthn (defi, type, appareil_id, demande_id, expire_le) VALUES ($1, $2, $3, $4, $5)",
         bytes_to_base64url(defi),
         type_,
         appareil,
         demande,
-        DUREE_DEFI,
+        datetime.now(UTC) + DUREE_DEFI,
     )
 
 
@@ -132,7 +130,7 @@ async def enregistrer(
     return ident
 
 
-async def cles_utilisables(conn: Executant) -> list[asyncpg.Record]:
+async def cles_utilisables(conn: Executant) -> list[Ligne]:
     """Clés d'accès des appareils non révoqués."""
     return await conn.fetch(
         "SELECT c.id, c.nom, c.cle_publique, c.compteur, c.appareil_id FROM cles_acces c"

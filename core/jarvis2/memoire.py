@@ -16,13 +16,14 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any
 
-import asyncpg
-
+from .db import Executant, Ligne
+from .db_sqlite import vecteur_octets
 from .embeddings import Encodeur, vecteur_sql
 
 POIDS_VECTEUR = 0.75
@@ -84,7 +85,7 @@ class Resultat:
     score: float
 
 
-def _souvenir(ligne: asyncpg.Record) -> Souvenir:
+def _souvenir(ligne: Ligne) -> Souvenir:
     return Souvenir(
         id=str(ligne["id"]),
         contenu=ligne["contenu"],
@@ -140,7 +141,7 @@ class Expurgateur:
 
 
 async def rechercher(
-    conn: asyncpg.Pool | asyncpg.Connection,
+    conn: Executant,
     encodeur: Encodeur,
     q: str,
     *,
@@ -153,7 +154,10 @@ async def rechercher(
     Texte : 0,5 + 0,5 × ts_rank_cd si TOUS les mots de la requête sont présents ; sinon 0,45 × proportion des
     mots présents (une longue question ne correspond presque jamais en entier).
     """
-    vecteur = vecteur_sql(await encodeur.encoder(q))
+    v = await encodeur.encoder(q)
+    if conn.dialecte == "sqlite":
+        return await _rechercher_sqlite(conn, encodeur.nom_modele, v, q, limite, exclure_local, origines)
+    vecteur = vecteur_sql(v)
     lignes = await conn.fetch(
         f"""
         WITH req AS (
@@ -188,6 +192,187 @@ async def rechercher(
         encodeur.nom_modele,
     )
     return [Resultat(_souvenir(r), round(float(r["score"]), 4)) for r in lignes]
+
+
+# Mots vides (équivalent approché du dictionnaire « french » de PostgreSQL, qui en retire davantage)
+MOTS_VIDES = frozenset(
+    [
+        "a",
+        "au",
+        "aux",
+        "avec",
+        "ce",
+        "ces",
+        "cet",
+        "cette",
+        "d",
+        "dans",
+        "de",
+        "des",
+        "du",
+        "elle",
+        "elles",
+        "en",
+        "est",
+        "et",
+        "etre",
+        "il",
+        "ils",
+        "j",
+        "je",
+        "l",
+        "la",
+        "le",
+        "les",
+        "leur",
+        "leurs",
+        "lui",
+        "m",
+        "ma",
+        "mais",
+        "me",
+        "mes",
+        "moi",
+        "mon",
+        "n",
+        "ne",
+        "nos",
+        "notre",
+        "nous",
+        "on",
+        "ou",
+        "par",
+        "pas",
+        "pour",
+        "qu",
+        "que",
+        "qui",
+        "s",
+        "sa",
+        "se",
+        "ses",
+        "son",
+        "sont",
+        "sur",
+        "t",
+        "ta",
+        "te",
+        "tes",
+        "toi",
+        "ton",
+        "tu",
+        "un",
+        "une",
+        "vos",
+        "votre",
+        "vous",
+        "y",
+    ]
+)
+
+
+def mots(texte: str) -> list[str]:
+    """Mots comparables : minuscules, sans accents (comme le tokeniseur FTS5 `unicode61 remove_diacritics 2`)."""
+    sans_accents = "".join(c for c in unicodedata.normalize("NFKD", texte.lower()) if not unicodedata.combining(c))
+    return re.findall(r"[^\W_]+", sans_accents)
+
+
+def mots_requete(texte: str) -> list[str]:
+    return list(dict.fromkeys(m for m in mots(texte) if m not in MOTS_VIDES))
+
+
+async def _rechercher_sqlite(
+    conn: Executant,
+    modele: str,
+    vecteur: list[float],
+    q: str,
+    limite: int,
+    exclure_local: bool,
+    origines: Sequence[str] | None,
+) -> list[Resultat]:
+    """Même score qu'avec PostgreSQL : 0,75 × cosinus (sqlite-vec) + 0,25 × plein texte (FTS5, BM25).
+
+    Texte : 0,5 + 0,5 × r / (r + 1) (r = pertinence BM25) si TOUS les mots de la requête sont présents ; sinon
+    0,45 × proportion des mots présents. Seuls les souvenirs actifs du modèle de l'encodeur sont comparés.
+    """
+    filtre = (
+        " FROM memoires WHERE valid_to IS NULL AND NOT archived AND (NOT $1 OR confidentialite <> 'local_uniquement')"
+        " AND ($2 IS NULL OR origine IN (SELECT value FROM json_each($2)))"
+    )
+    filtres = (exclure_local, list(origines) if origines else None)
+    similarites = {
+        str(r["id"]): float(r["s"] or 0.0)
+        for r in await conn.fetch(
+            "SELECT id, CASE WHEN embedding_model = $3 AND embedding IS NOT NULL"
+            " THEN 1 - vec_distance_cosine(embedding, $4) END AS s" + filtre,
+            *filtres,
+            modele,
+            vecteur_octets(vecteur),
+        )
+    }
+    termes = mots_requete(q)
+    pertinence: dict[str, float] = {}
+    if termes:
+        for r in await conn.fetch(
+            "SELECT id, -bm25(memoires_fts) AS r FROM memoires_fts WHERE memoires_fts MATCH $1"
+            " ORDER BY bm25(memoires_fts) LIMIT 500",
+            " OR ".join(f'"{t}"' for t in termes),  # lettres et chiffres seulement : aucun guillemet possible
+        ):
+            if str(r["id"]) in similarites:
+                pertinence[str(r["id"])] = max(float(r["r"]), 0.0)
+    meilleurs = sorted(similarites, key=lambda i: -similarites[i])[: max(limite * 3, 30)]
+    candidats = list(dict.fromkeys([*pertinence, *meilleurs]))
+    if not candidats:
+        return []
+    lignes = await conn.fetch(
+        f"SELECT {COLONNES} FROM memoires WHERE id IN (SELECT value FROM json_each($1))",  # noqa: S608 — constante
+        candidats,
+    )
+    resultats = []
+    for ligne in lignes:
+        ident = str(ligne["id"])
+        texte = 0.0
+        if ident in pertinence:
+            presents = set(mots(ligne["contenu"]))
+            nb = sum(1 for t in termes if t in presents)
+            r = pertinence[ident]
+            texte = 0.5 + 0.5 * r / (r + 1) if nb == len(termes) else 0.45 * nb / len(termes)
+        score = POIDS_VECTEUR * similarites[ident] + POIDS_TEXTE * texte
+        resultats.append(Resultat(_souvenir(ligne), round(score, 4)))
+    resultats.sort(key=lambda x: (-x.score, -x.souvenir.cree_le.timestamp()))
+    return resultats[:limite]
+
+
+async def ajouter(
+    conn: Executant,
+    contenu: str,
+    *,
+    type_: str = "note",
+    tags: Sequence[str] = (),
+    source: str | None = None,
+    confidentialite: str = "normal",
+    origine: str = "autre",
+    vecteur: list[float] | None = None,
+    modele: str | None = None,
+) -> str:
+    """Nouveau souvenir (plein texte indexé par le moteur : tsvector français ou FTS5)."""
+    if conn.dialecte == "sqlite":
+        requete = (
+            "INSERT INTO memoires (contenu, type, tags, source, confidentialite, origine, embedding, embedding_model,"
+            " valid_from, observed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now()) RETURNING id"
+        )
+        valeur: Any = vecteur_octets(vecteur) if vecteur is not None else None
+    else:
+        requete = (
+            "INSERT INTO memoires (contenu, type, tags, source, confidentialite, origine, embedding, embedding_model,"
+            " valid_from, observed_at, tsv) VALUES ($1, $2, $3, $4, $5, $6, $7::text::vector, $8, now(), now(),"
+            " to_tsvector('french', $1)) RETURNING id"
+        )
+        valeur = vecteur_sql(vecteur) if vecteur is not None else None
+    ident = await conn.fetchval(
+        requete, contenu, type_, list(tags), source, confidentialite, origine, valeur, modele if vecteur else None
+    )
+    return str(ident)
 
 
 def decouper_requetes(texte: str, maximum: int = MAX_SOUS_REQUETES) -> list[str]:
@@ -356,7 +541,7 @@ class ReglagesRecherche:
 
 
 async def rechercher_multi(
-    conn: asyncpg.Pool | asyncpg.Connection,
+    conn: Executant,
     encodeur: Encodeur,
     texte: str,
     *,
@@ -401,6 +586,13 @@ async def rechercher_multi(
 # --- Noyau -----------------------------------------------------------------------------------------------
 
 
+def _avec_tag(conn: Executant, parametre: str) -> str:
+    """Condition « le souvenir porte ce tag » (tableau PostgreSQL ou tableau JSON SQLite)."""
+    if conn.dialecte == "sqlite":
+        return f"EXISTS (SELECT 1 FROM json_each(tags) WHERE value = {parametre})"  # noqa: S608 — « $n » constant
+    return f"tags @> ARRAY[{parametre}]::text[]"
+
+
 def limiter_noyau(souvenirs: list[Souvenir], budget: int) -> list[Souvenir]:
     """Plus récents d'abord tant que le budget le permet ; le premier est tronqué s'il dépasse seul."""
     choisis: list[Souvenir] = []
@@ -417,7 +609,7 @@ def limiter_noyau(souvenirs: list[Souvenir], budget: int) -> list[Souvenir]:
 
 
 async def lire_noyau(
-    conn: asyncpg.Pool | asyncpg.Connection,
+    conn: Executant,
     *,
     exclure_local: bool,
     budget: int = 4000,
@@ -426,7 +618,7 @@ async def lire_noyau(
 ) -> list[Souvenir]:
     expurgateur = expurgateur or Expurgateur()
     lignes = await conn.fetch(
-        f"SELECT {COLONNES} FROM memoires WHERE tags @> ARRAY[$1]::text[]"  # noqa: S608 — constante
+        f"SELECT {COLONNES} FROM memoires WHERE {_avec_tag(conn, '$1')}"  # noqa: S608 — constantes
         " AND valid_to IS NULL AND NOT archived"
         " AND (NOT $2 OR confidentialite <> 'local_uniquement') ORDER BY cree_le DESC, id LIMIT $3",
         TAG_NOYAU,
@@ -437,11 +629,12 @@ async def lire_noyau(
     return limiter_noyau(noyau, budget)
 
 
-async def compter(conn: asyncpg.Pool | asyncpg.Connection) -> dict[str, int]:
+async def compter(conn: Executant) -> dict[str, int]:
     ligne = await conn.fetchrow(
-        "SELECT count(*) AS total, count(*) FILTER (WHERE tags @> ARRAY['noyau']) AS noyau,"
+        f"SELECT count(*) AS total, count(*) FILTER (WHERE {_avec_tag(conn, '$1')}) AS noyau,"  # noqa: S608 — constante
         " count(*) FILTER (WHERE confidentialite = 'local_uniquement') AS local FROM memoires"
-        " WHERE valid_to IS NULL AND NOT archived"
+        " WHERE valid_to IS NULL AND NOT archived",
+        TAG_NOYAU,
     )
     assert ligne is not None
     return {"total": ligne["total"], "noyau": ligne["noyau"], "local_uniquement": ligne["local"]}

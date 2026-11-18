@@ -9,7 +9,6 @@ from collections.abc import AsyncGenerator, Sequence
 from pathlib import Path
 from typing import Any
 
-import asyncpg
 import httpx
 import pytest
 
@@ -18,6 +17,7 @@ from jarvis2.config import Parametres
 from jarvis2.connecteurs import CONDITIONS, Connecteurs, Definition, EtatConnecteur, choisir
 from jarvis2.conseil import ServiceConseil
 from jarvis2.conversations import DepotConversations
+from jarvis2.db import Base
 from jarvis2.dialogue import TEXTE_MASQUE, ServiceDialogue
 from jarvis2.materiel import Materiel, recommander
 from jarvis2.moteurs.anthropic_api import MoteurAnthropic, preparer
@@ -218,7 +218,7 @@ class Faux(Moteur):
 
 
 @pytest.fixture
-async def systeme(pool: asyncpg.Pool, tmp_path: Path) -> dict[str, Any]:
+async def systeme(pool: Base, tmp_path: Path) -> dict[str, Any]:
     moteurs = {
         "compte": Faux("compte", "cli", texte="avis du compte"),
         "local": Faux("local", "local", externe=False, texte="avis local"),
@@ -255,7 +255,7 @@ async def test_cartes_et_antigravity_desactive_par_defaut(systeme: dict[str, Any
     assert cartes["cle"]["cle"] == {"requise": True, "enregistree": False, "apercu": None, "url": None}
 
 
-async def test_activation_antigravity_exige_la_case_cochee(systeme: dict[str, Any], pool: asyncpg.Pool) -> None:
+async def test_activation_antigravity_exige_la_case_cochee(systeme: dict[str, Any], pool: Base) -> None:
     client, c = systeme["client"], systeme["connecteurs"]
     version = CONDITIONS["antigravity"]["version"]
     assert (await client.post("/v1/connecteurs/antigravity/activer", json={})).status_code == 422
@@ -289,7 +289,7 @@ async def test_connecteur_desactive_refuse(systeme: dict[str, Any]) -> None:
 
 
 async def test_cle_jamais_renvoyee_journalisee_ni_stockee(
-    systeme: dict[str, Any], pool: asyncpg.Pool, caplog: pytest.LogCaptureFixture
+    systeme: dict[str, Any], pool: Base, caplog: pytest.LogCaptureFixture
 ) -> None:
     client = systeme["client"]
     caplog.set_level(logging.DEBUG)
@@ -300,7 +300,7 @@ async def test_cle_jamais_renvoyee_journalisee_ni_stockee(
     assert carte["cle"]["enregistree"] and carte["cle"]["apercu"] == "••••" + CLE[-4:]
     assert CLE not in caplog.text
     for table in ("audit", "telemetrie", "connecteurs", "demandes", "messages"):
-        assert await pool.fetchval(f"SELECT count(*) FROM {table} t WHERE t::text LIKE '%' || $1 || '%'", CLE) == 0
+        assert not [r for r in await pool.fetch(f"SELECT * FROM {table}") if CLE in str(dict(r))]
     assert systeme["connecteurs"].coffre.lire("cle") == CLE
     assert (await client.delete("/v1/connecteurs/cle/cle")).status_code == 200
     assert systeme["connecteurs"].coffre.lire("cle") is None

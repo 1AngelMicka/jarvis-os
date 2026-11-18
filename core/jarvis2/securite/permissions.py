@@ -13,13 +13,11 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
-import asyncpg
-
-from ..db import Connexion
+from ..db import Base, Connexion, Ligne
 from . import audit
 from .appareils import Appareil
 
@@ -81,7 +79,7 @@ class Demande:
 COLONNES = "id, action, niveau, resume, parametres, statut, demandeur, cree_le, expire_le, resultat"
 
 
-def _demande(r: asyncpg.Record) -> Demande:
+def _demande(r: Ligne) -> Demande:
     return Demande(
         r["id"],
         r["action"],
@@ -97,7 +95,7 @@ def _demande(r: asyncpg.Record) -> Demande:
 
 
 class Approbations:
-    def __init__(self, pool: asyncpg.Pool, registre: Registre) -> None:
+    def __init__(self, pool: Base, registre: Registre) -> None:
         self.pool = pool
         self.registre = registre
 
@@ -141,13 +139,13 @@ class Approbations:
             resume = action.resumer(params)
             ligne = await conn.fetchrow(
                 f"INSERT INTO demandes (action, niveau, resume, parametres, demandeur, expire_le)"
-                f" VALUES ($1, $2, $3, $4::text::jsonb, $5, now() + $6) RETURNING {COLONNES}",
+                f" VALUES ($1, $2, $3, $4::text::jsonb, $5, $6) RETURNING {COLONNES}",
                 action.nom,
                 action.niveau,
                 resume,
                 json.dumps(params),
                 appareil.acteur,
-                DUREE_DEMANDE,
+                datetime.now(UTC) + DUREE_DEMANDE,
             )
             assert ligne is not None
             demande = _demande(ligne)

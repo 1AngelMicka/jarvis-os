@@ -24,7 +24,6 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 from uuid import UUID
 
-import asyncpg
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,7 +38,7 @@ from .config_locale import chemin_config
 from .connecteurs import Connecteurs, construire_catalogue
 from .conseil import ServiceConseil
 from .conversations import DepotConversations
-from .db import creer_pool, version_schema
+from .db import Base, ErreurBaseOuReseau, ouvrir_base, version_schema
 from .dialogue import ServiceDialogue, SourceMemoire
 from .embeddings import EncodeurFastEmbed
 from .memoire import Expurgateur, ReglagesRecherche
@@ -62,7 +61,7 @@ CSP = (
 
 @dataclass
 class Contexte:
-    pool: asyncpg.Pool
+    pool: Base
     depot: DepotConversations
     moteurs: dict[str, MoteurInstrumente]
     service: ServiceDialogue
@@ -103,7 +102,7 @@ def sse(evenement: str, donnees: dict[str, Any]) -> bytes:
 
 
 async def construire_contexte(p: Parametres) -> Contexte:
-    pool = await creer_pool(p.url_base("app"))
+    pool = await ouvrir_base(p)
     depot = DepotConversations(pool)
     locale = charger_config_locale()
     coffre = Coffre(chemin_config().parent / "coffre.json")
@@ -202,7 +201,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         try:
             schema = await version_schema(ctx(request).pool)
             base = True
-        except (asyncpg.PostgresError, OSError):
+        except ErreurBaseOuReseau:
             schema, base = None, False
         return {"ok": base, "version": __version__, "base": base, "schema": schema}
 

@@ -7,12 +7,12 @@ import math
 import re
 from datetime import UTC, datetime, timedelta
 
-import asyncpg
 import pytest
 
+from jarvis2 import memoire
 from jarvis2.conversations import DepotConversations
+from jarvis2.db import Base
 from jarvis2.dialogue import ServiceDialogue, SourceMemoire
-from jarvis2.embeddings import vecteur_sql
 from jarvis2.memoire import (
     ContexteMemoire,
     Expurgateur,
@@ -113,28 +113,27 @@ def test_limiter_noyau() -> None:
 
 
 async def inserer(
-    pool: asyncpg.Pool,
+    pool: Base,
     contenu: str,
     *,
     tags: list[str] | None = None,
     prive: bool = False,
     encodeur: EncodeurFactice | None = None,
 ) -> str:
-    v = vecteur_sql(await (encodeur or EncodeurFactice()).encoder(contenu))
-    ident = await pool.fetchval(
-        "INSERT INTO memoires (contenu, type, tags, confidentialite, embedding, embedding_model, tsv, origine)"
-        " VALUES ($1, 'fait', $2, $3, $4::text::vector, $5, to_tsvector('french', $1), 'utilisateur') RETURNING id",
+    return await memoire.ajouter(
+        pool,
         contenu,
-        tags or [],
-        "local_uniquement" if prive else "normal",
-        v,
-        MODELE,
+        type_="fait",
+        tags=tags or [],
+        confidentialite="local_uniquement" if prive else "normal",
+        origine="utilisateur",
+        vecteur=await (encodeur or EncodeurFactice()).encoder(contenu),
+        modele=MODELE,
     )
-    return str(ident)
 
 
 @pytest.mark.base
-async def test_souvenirs_depasses_archives_ou_autre_modele_ignores(pool: asyncpg.Pool) -> None:
+async def test_souvenirs_depasses_archives_ou_autre_modele_ignores(pool: Base) -> None:
     actuel = await inserer(pool, "Le chat s'appelle Moka")
     ancien = await inserer(pool, "Le chat s'appelle Pixel")
     archive = await inserer(pool, "Le chat aime le saumon")
@@ -152,7 +151,7 @@ async def test_souvenirs_depasses_archives_ou_autre_modele_ignores(pool: asyncpg
 
 
 @pytest.mark.base
-async def test_recherche_hybride(pool: asyncpg.Pool) -> None:
+async def test_recherche_hybride(pool: Base) -> None:
     jardin = await inserer(pool, "Le jardin potager produit des tomates en été")
     await inserer(pool, "La voiture est au garage pour la vidange")
     secret = await inserer(pool, "Mes tomates préférées sont les cœurs de bœuf du jardin", prive=True)
@@ -166,7 +165,7 @@ async def test_recherche_hybride(pool: asyncpg.Pool) -> None:
 
 
 @pytest.mark.base
-async def test_noyau_prive_jamais_vers_externe(pool: asyncpg.Pool) -> None:
+async def test_noyau_prive_jamais_vers_externe(pool: Base) -> None:
     await inserer(pool, "Je m'appelle Tony et je vis à Malibu", tags=["noyau"], prive=True)
     await inserer(pool, "JARVIS répond en français et vouvoie", tags=["noyau"])
     externe = await lire_noyau(pool, exclure_local=True)
@@ -188,9 +187,7 @@ class MoteurCapteur(FauxMoteur):
 
 @pytest.mark.base
 @pytest.mark.parametrize("externe", [True, False])
-async def test_dialogue_injecte_noyau_et_souvenirs(
-    pool: asyncpg.Pool, externe: bool, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_dialogue_injecte_noyau_et_souvenirs(pool: Base, externe: bool, monkeypatch: pytest.MonkeyPatch) -> None:
     await inserer(pool, "L'utilisateur boit son café sans sucre", tags=["noyau"])
     prive = await inserer(pool, "Code de la porte du garage : 4512", prive=True)
     visible = await inserer(pool, "Le garage a été repeint en bleu au printemps")

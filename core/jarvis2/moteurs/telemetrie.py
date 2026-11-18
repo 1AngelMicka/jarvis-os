@@ -14,8 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 from uuid import UUID
 
-import asyncpg
-
+from ..db import Base, ErreurBaseOuReseau
 from .base import Delta, ErreurMoteur, EtatSante, Evenement, Fin, InfoModele, Message, Moteur, Options, Reponse
 
 journal = logging.getLogger("jarvis2.telemetrie")
@@ -52,7 +51,7 @@ class EnregistreurMemoire:
 
 
 class EnregistreurPostgres:
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: Base) -> None:
         self.pool = pool
 
     async def enregistrer(self, mesure: Mesure) -> None:
@@ -74,7 +73,7 @@ class EnregistreurPostgres:
                 mesure.conversation_id,
                 mesure.meta,
             )
-        except (asyncpg.PostgresError, OSError):  # la télémétrie ne doit jamais casser une réponse
+        except ErreurBaseOuReseau:  # la télémétrie ne doit jamais casser une réponse
             journal.exception("Télémétrie non enregistrée")
 
 

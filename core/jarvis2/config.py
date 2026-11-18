@@ -9,6 +9,7 @@ import os
 import sys
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 from urllib.parse import quote
 
 from pydantic import Field, SecretStr
@@ -31,6 +32,11 @@ class Parametres(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=RACINE_DEPOT / ".env", env_file_encoding="utf-8", extra="ignore", populate_by_name=True
     )
+
+    # Stockage : « sqlite » (défaut, aucune installation) ou « postgres ». Vide : PostgreSQL si son mot de passe
+    # applicatif est configuré (installation existante), sinon SQLite.
+    stockage: str = Field("", alias="JARVIS2_STOCKAGE")
+    sqlite: Path | None = Field(None, alias="JARVIS2_SQLITE")  # défaut : <dossier des données>/jarvis2.db
 
     # PostgreSQL
     postgres_user: str = Field("jarvis2_proprio", alias="POSTGRES_USER")
@@ -75,6 +81,21 @@ class Parametres(BaseSettings):
             f"postgresql://{quote(utilisateur)}:{quote(mdp, safe='')}@{self.pg_hote}:{self.pg_port}/"
             f"{base or self.postgres_db}"
         )
+
+    @property
+    def stockage_effectif(self) -> Literal["postgres", "sqlite"]:
+        choix = self.stockage.strip().lower()
+        if choix in ("postgres", "postgresql"):
+            return "postgres"
+        if choix == "sqlite":
+            return "sqlite"
+        if choix:
+            raise ValueError(f"JARVIS2_STOCKAGE inconnu : {self.stockage!r} (sqlite ou postgres)")
+        return "postgres" if self.app_mot_de_passe.get_secret_value() else "sqlite"
+
+    @property
+    def chemin_sqlite(self) -> Path:
+        return self.sqlite or self.dossier_donnees / "jarvis2.db"
 
     @property
     def dossier_journaux(self) -> Path:

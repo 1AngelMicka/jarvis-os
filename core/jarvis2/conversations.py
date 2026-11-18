@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-import asyncpg
+from .db import Base, Ligne
 
 LONGUEUR_TITRE = 60
 
@@ -71,7 +71,7 @@ COLONNES = "c.id, c.titre, c.titre_source, c.epinglee, c.archivee, c.cree_le, c.
 NB_MESSAGES = "(SELECT count(*) FROM messages m WHERE m.conversation_id = c.id)::int AS nb_messages"
 
 
-def _conversation(ligne: asyncpg.Record) -> Conversation:
+def _conversation(ligne: Ligne) -> Conversation:
     return Conversation(
         id=ligne["id"],
         titre=ligne["titre"],
@@ -87,11 +87,12 @@ def _conversation(ligne: asyncpg.Record) -> Conversation:
 
 
 class DepotConversations:
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: Base) -> None:
         self.pool = pool
 
     async def creer(self, titre: str = "Nouvelle conversation") -> Conversation:
-        requete = f"INSERT INTO conversations AS c (titre) VALUES ($1) RETURNING {COLONNES}"  # noqa: S608 — constante
+        # RETURNING sans préfixe de table (SQLite ne l'accepte pas)
+        requete = f"INSERT INTO conversations (titre) VALUES ($1) RETURNING {COLONNES.replace('c.', '')}"  # noqa: S608
         ligne = await self.pool.fetchrow(requete, titre)
         assert ligne is not None
         return _conversation(ligne)

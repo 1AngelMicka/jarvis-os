@@ -1,76 +1,92 @@
-"""Accès à PostgreSQL : pool asyncpg (avec le type `vector`) et migrations versionnées.
+"""Stockage : une seule interface (le sous-ensemble d'asyncpg dont le Core se sert), deux moteurs.
 
-asyncpg plutôt que psycopg : il fonctionne avec la boucle Proactor de Windows, indispensable pour lancer la
-CLI claude en sous-processus depuis le même serveur.
+- **SQLite** (défaut, `db_sqlite.py`) : un fichier dans le dossier des données, aucune installation.
+- **PostgreSQL + pgvector** (option, `db_postgres.py`) : rôles séparés, audit protégé par un rôle dédié.
+
+Les requêtes sont écrites pour PostgreSQL (`$1`, `now()`, `::text`…) ; l'adaptateur SQLite les traduit. Les rares
+requêtes sans équivalent direct (recherche mémoire, audit) ont une version par moteur (`base.dialecte`).
 """
 
 from __future__ import annotations
 
-import json
-import logging
+import sqlite3
+from collections.abc import Iterable
+from contextlib import AbstractAsyncContextManager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 import asyncpg
-from pgvector.asyncpg import register_vector
 
-journal = logging.getLogger("jarvis2.db")
+if TYPE_CHECKING:
+    from .config import Parametres
 
-# Une connexion (directe ou prêtée par le pool), ou le pool lui-même
-Connexion = asyncpg.Connection | asyncpg.pool.PoolConnectionProxy
-Executant = asyncpg.Pool | Connexion
+Dialecte = Literal["postgres", "sqlite"]
 
 DOSSIER_MIGRATIONS = Path(__file__).parent / "migrations"
-VERROU_MIGRATIONS = 726_002  # verrou consultatif réservé aux migrations
+
+# Erreurs de base, quel que soit le moteur
+ErreurBase = (asyncpg.PostgresError, sqlite3.Error)
+ErreurBaseOuReseau = (asyncpg.PostgresError, sqlite3.Error, OSError)
 
 
-def lister_migrations() -> list[tuple[str, Path]]:
-    return [(f.stem, f) for f in sorted(DOSSIER_MIGRATIONS.glob("*.sql"))]
+class Ligne(Protocol):
+    """Une ligne de résultat : accès par nom ou par position, `get`, `keys` (asyncpg.Record ou équivalent)."""
+
+    def __getitem__(self, cle: str | int, /) -> Any: ...
+    def get(self, cle: str, defaut: Any = None, /) -> Any: ...
+    def keys(self) -> Iterable[str]: ...
 
 
-async def _initialiser_connexion(conn: asyncpg.Connection) -> None:
-    await register_vector(conn)
-    await conn.set_type_codec("jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
+class Executant(Protocol):
+    """Ce qui exécute une requête : la base elle-même ou une connexion prêtée."""
+
+    @property
+    def dialecte(self) -> Dialecte: ...
+    async def fetch(self, requete: str, *args: Any) -> list[Any]: ...
+    async def fetchrow(self, requete: str, *args: Any) -> Any: ...
+    async def fetchval(self, requete: str, *args: Any) -> Any: ...
+    async def execute(self, requete: str, *args: Any) -> str: ...
 
 
-async def creer_pool(url: str, min_size: int = 1, max_size: int = 10) -> asyncpg.Pool:
-    pool = await asyncpg.create_pool(url, min_size=min_size, max_size=max_size, init=_initialiser_connexion)
-    if pool is None:  # pragma: no cover — create_pool ne renvoie None qu'avec un pool paresseux
-        raise RuntimeError("Pool PostgreSQL indisponible")
-    return pool
+class Connexion(Executant, Protocol):
+    """Connexion prêtée par la base : transactions (imbriquées = points de sauvegarde) et verrou de transaction."""
+
+    def transaction(self) -> AbstractAsyncContextManager[None]: ...
+    async def verrouiller(self, cle: int) -> None: ...
 
 
-async def appliquer_migrations(url_proprio: str) -> list[str]:
-    """Applique les migrations manquantes, chacune dans sa transaction (idempotent).
-
-    Renvoie les versions appliquées lors de cet appel. Doit être lancé avec le rôle propriétaire.
-    """
-    appliquees: list[str] = []
-    conn = await asyncpg.connect(url_proprio)
-    try:
-        await conn.execute("SELECT pg_advisory_lock($1)", VERROU_MIGRATIONS)
-        try:
-            await conn.execute(
-                "CREATE TABLE IF NOT EXISTS schema_migrations ("
-                " version text PRIMARY KEY, appliquee_le timestamptz NOT NULL DEFAULT now())"
-            )
-            deja = {r["version"] for r in await conn.fetch("SELECT version FROM schema_migrations")}
-            for version, chemin in lister_migrations():
-                if version in deja:
-                    continue
-                journal.info("Migration %s…", version)
-                async with conn.transaction():
-                    await conn.execute(chemin.read_text(encoding="utf-8"))
-                    await conn.execute("INSERT INTO schema_migrations (version) VALUES ($1)", version)
-                appliquees.append(version)
-            await conn.execute("GRANT SELECT ON schema_migrations TO jarvis2_app")
-        finally:
-            await conn.execute("SELECT pg_advisory_unlock($1)", VERROU_MIGRATIONS)
-    finally:
-        await conn.close()
-    return appliquees
+class Base(Executant, Protocol):
+    def acquire(self) -> AbstractAsyncContextManager[Connexion]: ...
+    async def close(self) -> None: ...
 
 
-async def version_schema(pool: asyncpg.Pool) -> str | None:
-    valeur: Any = await pool.fetchval("SELECT max(version) FROM schema_migrations")
+def lister_migrations(dialecte: Dialecte = "postgres") -> list[tuple[str, Path]]:
+    dossier = DOSSIER_MIGRATIONS / "sqlite" if dialecte == "sqlite" else DOSSIER_MIGRATIONS
+    return [(f.stem, f) for f in sorted(dossier.glob("*.sql"))]
+
+
+async def version_schema(base: Executant) -> str | None:
+    valeur: Any = await base.fetchval("SELECT max(version) FROM schema_migrations")
     return str(valeur) if valeur is not None else None
+
+
+async def ouvrir_base(p: Parametres, max_size: int = 10) -> Base:
+    """Base du Core, selon `JARVIS2_STOCKAGE` (rôle applicatif pour PostgreSQL)."""
+    if p.stockage_effectif == "postgres":
+        from .db_postgres import BasePostgres, creer_pool
+
+        return BasePostgres(await creer_pool(p.url_base("app"), max_size=max_size))
+    from .db_sqlite import BaseSQLite
+
+    return await BaseSQLite.ouvrir(p.chemin_sqlite)
+
+
+async def migrer(p: Parametres, base_pg: str | None = None) -> list[str]:
+    """Applique les migrations manquantes du stockage choisi (rôle propriétaire pour PostgreSQL)."""
+    if p.stockage_effectif == "postgres":
+        from .db_postgres import appliquer_migrations
+
+        return await appliquer_migrations(p.url_base("proprio", base_pg))
+    from .db_sqlite import appliquer_migrations as appliquer_sqlite
+
+    return await appliquer_sqlite(p.chemin_sqlite)

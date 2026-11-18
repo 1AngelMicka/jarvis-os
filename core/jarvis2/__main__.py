@@ -1,6 +1,6 @@
-"""Point d'entrée : `python -m jarvis2 <commande>`.
+"""Point d'entrée : `jarvis2 <commande>` (ou `python -m jarvis2 <commande>`).
 
-- `migrer`  : applique les migrations (rôle propriétaire)
+- `migrer`  : applique les migrations du stockage choisi (SQLite par défaut, PostgreSQL en option)
 - `serveur` : lance le Core sur JARVIS2_HOTE:JARVIS2_PORT (127.0.0.1:8765 par défaut)
 """
 
@@ -10,43 +10,46 @@ import argparse
 import asyncio
 import logging
 import sys
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
 
 from .config import Parametres, parametres
 from .config_locale import charger as charger_config_locale
-from .db import appliquer_migrations
+from .db import Base, Executant, migrer, ouvrir_base
 from .importeurs import SOURCES
 from .journal import configurer_journal
 
 journal = logging.getLogger("jarvis2")
 
 
+@asynccontextmanager
+async def _base(p: Parametres) -> AsyncIterator[Base]:
+    base = await ouvrir_base(p, max_size=1)
+    try:
+        yield base
+    finally:
+        await base.close()
+
+
 async def _jumeler(p: Parametres, adresse: str | None) -> int:
-    from .db import creer_pool
     from .securite import appareils, audit
 
-    pool = await creer_pool(p.url_base("app"), max_size=1)
-    try:
-        code, expire = await appareils.creer_jumelage(pool, None, "navigateur")
-        await audit.journaliser(pool, acteur="cli", action="jumelage.cree", details={"type": "navigateur"})
-    finally:
-        await pool.close()
-    base = (adresse or f"http://localhost:{p.port}").rstrip("/")
+    async with _base(p) as base:
+        code, expire = await appareils.creer_jumelage(base, None, "navigateur")
+        await audit.journaliser(base, acteur="cli", action="jumelage.cree", details={"type": "navigateur"})
+    adresse_base = (adresse or f"http://localhost:{p.port}").rstrip("/")
     print(f"Ouvrez cette adresse sur l'appareil à associer (une seule fois, avant {expire:%H:%M:%S} UTC) :")
-    print(f"{base}/#jumeler={code}")
+    print(f"{adresse_base}/#jumeler={code}")
     return 0
 
 
 async def _verifier_audit(p: Parametres) -> int:
-    from .db import creer_pool
     from .securite import audit
 
-    pool = await creer_pool(p.url_base("app"), max_size=1)
-    try:
-        rompue = await audit.verifier(pool)
-        total = await pool.fetchval("SELECT count(*) FROM audit")
-    finally:
-        await pool.close()
+    async with _base(p) as base:
+        rompue = await audit.verifier(base)
+        total = await base.fetchval("SELECT count(*) FROM audit")
     if rompue is None:
         print(f"Journal d'audit intact : {total} entrées, chaîne d'empreintes vérifiée.")
         return 0
@@ -55,17 +58,22 @@ async def _verifier_audit(p: Parametres) -> int:
 
 
 async def _lever_urgence(p: Parametres) -> int:
-    """Secours local : exige les identifiants du PROPRIÉTAIRE de la base (fichier .env du PC), journalisé 🔴.
+    """Secours local, journalisé 🔴. PostgreSQL : exige les identifiants du PROPRIÉTAIRE de la base (`.env` du PC).
+    SQLite : exige l'accès au fichier de la base, donc à la session de l'utilisateur sur le PC.
 
     Le Core en marche garde l'état en mémoire : le redémarrer après cette commande.
     """
-    import asyncpg
-
     from .securite import audit
     from .securite.urgence import ArretUrgence
 
-    conn = await asyncpg.connect(p.url_base("proprio"))
-    try:
+    acces: AbstractAsyncContextManager[Executant]
+    if p.stockage_effectif == "postgres":
+        from .db_postgres import connexion_directe
+
+        acces = connexion_directe(p.url_base("proprio"))
+    else:
+        acces = _base(p)
+    async with acces as conn:
         urgence = ArretUrgence()
         await urgence.charger(conn)
         if not urgence.actif:
@@ -73,8 +81,6 @@ async def _lever_urgence(p: Parametres) -> int:
             return 0
         await urgence.lever(conn)
         await audit.journaliser(conn, acteur="cli:proprietaire", action="urgence.levee_secours", niveau="rouge")
-    finally:
-        await conn.close()
     print("Arrêt d'urgence levé (journalisé). Redémarrez le Core pour qu'il le prenne en compte.")
     return 0
 
@@ -83,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     analyseur = argparse.ArgumentParser(prog="jarvis2", description="JARVIS 2 — Core")
     sous = analyseur.add_subparsers(dest="commande", required=True)
     m = sous.add_parser("migrer", help="appliquer les migrations")
-    m.add_argument("--base", help="base cible (défaut : POSTGRES_DB)")
+    m.add_argument("--base", help="PostgreSQL : base cible (défaut : POSTGRES_DB)")
     sous.add_parser("serveur", help="lancer le Core")
     imp = sous.add_parser("importer", help="importer les données d'une autre source (lecture seule côté source)")
     imp.add_argument("source", choices=sorted(SOURCES), help="source d'import")
@@ -102,9 +108,17 @@ def main(argv: list[str] | None = None) -> int:
     configurer_journal(p.niveau_journal, p.dossier_journaux)
 
     if args.commande == "migrer":
-        appliquees = asyncio.run(appliquer_migrations(p.url_base("proprio", args.base)))
+        appliquees = asyncio.run(migrer(p, args.base))
         journal.info("Migrations appliquées : %s", ", ".join(appliquees) or "aucune (déjà à jour)")
         return 0
+
+    if args.commande in ("importer", "verifier-import") and p.stockage_effectif != "postgres":
+        journal.error(
+            "L'import %s passe par une base d'attente PostgreSQL : lancez-le avec JARVIS2_STOCKAGE=postgres, puis"
+            " copiez les données vers SQLite avec `jarvis2 stockage copier` si vous le souhaitez.",
+            args.source,
+        )
+        return 2
 
     if args.commande == "importer":
         module = SOURCES[args.source]
@@ -117,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
             source, empreinte = args.sauvegarde.name, module.empreinte(args.sauvegarde)
         else:
             source, empreinte = "base d'attente existante", "-"
-        asyncio.run(appliquer_migrations(p.url_base("proprio")))
+        asyncio.run(migrer(p))
         rapport = asyncio.run(
             module.importer(
                 p.url_base("proprio", module.BASE_ATTENTE), p.url_base("app"), source, empreinte, locale.exclusions

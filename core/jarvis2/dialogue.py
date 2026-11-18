@@ -15,9 +15,8 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-import asyncpg
-
 from .conversations import Conversation, DepotConversations, MessageStocke, titre_provisoire
+from .db import Base
 from .embeddings import Encodeur
 from .memoire import ContexteMemoire, ReglagesRecherche, lire_noyau, rechercher_multi
 from .moteurs.base import Delta, ErreurMoteur, Fin, Message, Options
@@ -55,7 +54,7 @@ def maintenant_paris() -> str:
 class SourceMemoire:
     """Accès à la mémoire pour le dialogue (absente = dialogue sans mémoire, comme en phase 2)."""
 
-    pool: asyncpg.Pool
+    pool: Base
     encodeur: Encodeur
     reglages: ReglagesRecherche = field(default_factory=ReglagesRecherche)
 

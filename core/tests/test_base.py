@@ -6,18 +6,25 @@ import asyncpg
 import pytest
 
 from jarvis2.conversations import DepotConversations, titre_provisoire
-from jarvis2.db import appliquer_migrations, lister_migrations
+from jarvis2.db import lister_migrations
+from jarvis2.db_postgres import BasePostgres, appliquer_migrations
 
 pytestmark = pytest.mark.base
 
 
-async def test_migrations_idempotentes(url_proprio: str, pool: asyncpg.Pool) -> None:
+@pytest.fixture
+def pool(pool_pg: BasePostgres) -> BasePostgres:
+    """Tests propres à PostgreSQL (rôles, droits, types, import) : jamais sur SQLite."""
+    return pool_pg
+
+
+async def test_migrations_idempotentes(url_proprio: str, pool: BasePostgres) -> None:
     assert await appliquer_migrations(url_proprio) == []
     versions = [r["version"] for r in await pool.fetch("SELECT version FROM schema_migrations ORDER BY 1")]
     assert versions == [v for v, _ in lister_migrations()]
 
 
-async def test_schema_memoires_compatible(pool: asyncpg.Pool) -> None:
+async def test_schema_memoires_compatible(pool: BasePostgres) -> None:
     colonnes = {
         r["column_name"]: r["udt_name"]
         for r in await pool.fetch(
@@ -57,7 +64,7 @@ async def test_schema_memoires_compatible(pool: asyncpg.Pool) -> None:
     assert "hnsw" in index and "vector_cosine_ops" in index
 
 
-async def test_memoire_vecteur_et_texte_francais(pool: asyncpg.Pool) -> None:
+async def test_memoire_vecteur_et_texte_francais(pool: BasePostgres) -> None:
     vecteur = [1.0] + [0.0] * 383
     await pool.execute(
         "INSERT INTO memoires (contenu, type, tags, confidentialite, embedding, embedding_model, tsv, origine)"
@@ -86,13 +93,13 @@ async def test_memoire_vecteur_et_texte_francais(pool: asyncpg.Pool) -> None:
         "INSERT INTO schema_migrations (version) VALUES ('999_intrus')",
     ],
 )
-async def test_role_applicatif_sans_droit_de_structure(pool: asyncpg.Pool, instruction: str) -> None:
+async def test_role_applicatif_sans_droit_de_structure(pool: BasePostgres, instruction: str) -> None:
     assert await pool.fetchval("SELECT current_user") == "jarvis2_app"
     with pytest.raises(asyncpg.PostgresError):
         await pool.execute(instruction)
 
 
-async def test_conversations(pool: asyncpg.Pool) -> None:
+async def test_conversations(pool: BasePostgres) -> None:
     depot = DepotConversations(pool)
     conv = await depot.creer("Essai")
     await depot.ajouter_message(conv.id, "utilisateur", "Bonjour")

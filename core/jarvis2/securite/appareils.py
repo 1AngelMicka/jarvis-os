@@ -13,13 +13,11 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-import asyncpg
-
-from ..db import Connexion, Executant
+from ..db import Connexion, Executant, Ligne
 
 DUREE_JUMELAGE = timedelta(minutes=5)
 
@@ -59,7 +57,7 @@ class Appareil:
 COLONNES = "id, nom, type, cree_le, dernier_acces, revoque_le"
 
 
-def _appareil(r: asyncpg.Record) -> Appareil:
+def _appareil(r: Ligne) -> Appareil:
     return Appareil(r["id"], r["nom"], r["type"], r["cree_le"], r["dernier_acces"], r["revoque_le"])
 
 
@@ -85,8 +83,9 @@ async def authentifier(conn: Executant, jeton: str) -> Appareil | None:
     ligne = await conn.fetchrow(
         "UPDATE appareils SET dernier_acces = now()"
         " WHERE jeton_hash = $1 AND revoque_le IS NULL"
-        f" AND (dernier_acces IS NULL OR dernier_acces < now() - interval '1 minute') RETURNING {COLONNES}",
+        f" AND (dernier_acces IS NULL OR dernier_acces < $2) RETURNING {COLONNES}",
         empreinte(jeton),
+        datetime.now(UTC) - timedelta(minutes=1),
     )
     if ligne is None:
         ligne = await conn.fetchrow(
@@ -115,7 +114,7 @@ async def premier_possible(conn: Executant) -> bool:
 async def creer_premier(conn: Connexion, nom: str) -> tuple[Appareil, str]:
     """Premier appareil : refusé dès qu'un appareil a existé (verrou contre deux premiers simultanés)."""
     async with conn.transaction():
-        await conn.execute("SELECT pg_advisory_xact_lock(726005)")
+        await conn.verrouiller(726005)
         if not await premier_possible(conn):
             raise ErreurJumelage("Un appareil est déjà enregistré : utilisez le jumelage")
         return await creer(conn, nom, "pc")
@@ -124,12 +123,11 @@ async def creer_premier(conn: Connexion, nom: str) -> tuple[Appareil, str]:
 async def creer_jumelage(conn: Executant, cree_par: UUID | None, type_: str = "telephone") -> tuple[str, datetime]:
     code = nouveau_secret()
     expire: datetime = await conn.fetchval(
-        "INSERT INTO jumelages (code_hash, cree_par, type, expire_le) VALUES ($1, $2, $3, now() + $4)"
-        " RETURNING expire_le",
+        "INSERT INTO jumelages (code_hash, cree_par, type, expire_le) VALUES ($1, $2, $3, $4) RETURNING expire_le",
         empreinte(code),
         cree_par,
         type_,
-        DUREE_JUMELAGE,
+        datetime.now(UTC) + DUREE_JUMELAGE,
     )
     return code, expire
 
