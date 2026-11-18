@@ -1,0 +1,157 @@
+/* Tokens du HUD JARVIS : repris tels quels de l'ancien JARVIS (static/css/hud.css, section 1) ;
+   documentés dans interface/DESIGN.md. Toute valeur visuelle passe par un token. */
+:root {
+  /* Échelle globale (agrandie sur les très grands écrans) */
+  --k: 1;
+
+  /* Thème actif (html[data-theme] : « original » ici, « realiste » dans css/theme-realiste.css).
+     Les couleurs vivent en CANAUX RVB (--c-*) : rgb(var(--c-cyan) / .16) donne une variante translucide
+     sans jamais écrire une couleur en dur dans un composant ; un thème ne redéfinit que ces jetons. */
+  --c-vide: 2 7 12;           /* fond spatial */
+  --c-creux: 2 12 20;         /* champs, zones en creux */
+  --c-verre: 8 34 52;         /* surfaces vitrées (haut des panneaux, menus) */
+  --c-verre-bas: 3 14 23;     /* surfaces vitrées (bas), cartes */
+  --c-voile-fond: 0 4 8;      /* voile derrière les dialogues */
+  --c-ombre: 0 0 0;           /* ombres portées */
+  --c-cyan: 107 230 255;      /* accent principal */
+  --c-cyan-vif: 196 247 255;  /* titres, valeurs, état actif */
+  --c-bleu: 42 134 255;
+  --c-ambre: 255 181 71;
+  --c-rouge: 255 61 79;
+  --c-vert: 75 232 180;
+  --c-lilas: 196 166 255;
+
+  /* Couleurs de base */
+  --vide: rgb(var(--c-vide));
+  --vide-2: #051320;        /* fond des surfaces opaques */
+  --vide-3: #082234;        /* fond des dialogues */
+  --cyan: rgb(var(--c-cyan));          /* accent principal, lignes, lueurs */
+  --cyan-vif: rgb(var(--c-cyan-vif));  /* titres, valeurs, état actif */
+  --bleu: rgb(var(--c-bleu));          /* profondeur, messages de l'utilisateur */
+  --texte: #d7f3ff;
+  --texte-2: #9cc3d3;       /* contraste ≥ 7:1 sur le fond */
+  --texte-3: #7a9fb1;       /* contraste ≥ 4,5:1 même sur un panneau éclairé (AA) */
+  --texte-fort: #f0fdff;    /* texte sur fond accentué, titres de dialogue */
+  --ambre: rgb(var(--c-ambre));        /* attention, demandes jaunes */
+  --ambre-clair: #ffe2b3;   /* texte sur fond ambré */
+  --ambre-texte: #ffd08a;   /* texte d'avertissement */
+  --sur-ambre: #1a0d00;     /* texte posé sur l'ambre plein */
+  --rouge: rgb(var(--c-rouge));        /* danger, arrêt d'urgence */
+  --rouge-pale: #ff8793;
+  --rouge-clair: #ffd6da;   /* texte sur fond rougi */
+  --vert: rgb(var(--c-vert));          /* succès */
+  --mix-clair: #fff;        /* sens des éclaircissements (color-mix) : vers le blanc sur fond sombre */
+
+  /* Interrupteurs de style (thèmes) : multiplicateurs et valeurs qu'un thème peut neutraliser */
+  --lueur-k: 1;             /* intensité des lueurs colorées (0 = aucune) */
+  --chasse-k: 1;            /* multiplicateur de l'espacement des lettres */
+  --casse: uppercase;       /* capitales des titres techniques */
+  --g-affiche: 400;         /* graisse de la police d'affiche */
+
+  /* Accents des interlocuteurs (le cyan reste dominant) */
+  --i-jarvis: var(--cyan);
+  --i-gpt: #7af2cc;
+  --i-gemini: #9aa6ff;
+  --i-grok: #ffe2bd;
+  --i-conseil: #e9d08a;
+  --i-local: #c4a6ff;        /* IA locales (PC) : lilas */
+  --i-gemma: #f2b4dc;        /* Gemma gratuit : rose orchidée */
+  --i-qwen: #c6ee8c;         /* Qwen gratuit : anis */
+  --i-claude: #ffc496;       /* Claude (expert inclus dans Max) : abricot */
+
+  /* Lignes et verre (redéfinis en rouge pendant l'arrêt d'urgence) */
+  --ligne: rgb(var(--c-cyan) / .16);
+  --ligne-faible: rgb(var(--c-cyan) / .09);
+  --ligne-forte: rgb(var(--c-cyan) / .42);
+  --coin: var(--cyan);
+  --verre: rgb(var(--c-verre) / .42);
+  --verre-bas: rgb(var(--c-verre-bas) / .55);
+  --voile: rgb(var(--c-cyan) / .035);
+  --voile-2: rgb(var(--c-cyan) / .07);
+  --voile-3: rgb(var(--c-cyan) / .14);
+
+  /* Typographie */
+  --f-affiche: "DIN Condensed", "Bahnschrift Condensed", "Bahnschrift SemiCondensed", "Bahnschrift", "Arial Narrow", sans-serif;
+  --f-ui: "DIN Alternate", "Bahnschrift", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --f-texte: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  --f-donnees: var(--f-mono);   /* relevés, horodatages, compteurs (le Réaliste les écrit en police d'interface) */
+  --t-micro: calc(11px * var(--k));
+  --t-mini: calc(12px * var(--k));
+  --t-petit: calc(13px * var(--k));
+  --t-corps: calc(14px * var(--k));
+  --t-base: calc(15px * var(--k));
+  --t-moyen: calc(17px * var(--k));
+  --t-grand: calc(20px * var(--k));
+  --t-titre: calc(24px * var(--k));
+  --t-affiche: calc(34px * var(--k));
+  --t-geant: calc(52px * var(--k));
+  --interligne: 1.55;
+  --chasse-titre: .12em;
+
+  /* Espacements (grille de 4 px) */
+  --e-1: calc(2px * var(--k));
+  --e-2: calc(4px * var(--k));
+  --e-3: calc(8px * var(--k));
+  --e-4: calc(12px * var(--k));
+  --e-5: calc(16px * var(--k));
+  --e-6: calc(20px * var(--k));
+  --e-7: calc(24px * var(--k));
+  --e-8: calc(32px * var(--k));
+  --e-9: calc(40px * var(--k));
+  --e-10: calc(56px * var(--k));
+
+  /* Rayons */
+  --r-0: 0;
+  --r-1: 2px;                /* puces, étiquettes */
+  --r-2: 3px;                /* boutons, champs */
+  --r-pilule: 999px;         /* sélecteurs segmentés, saisie */
+
+  /* Épaisseurs de trait */
+  --l-fin: 1px;
+  --l-moyen: 1.5px;
+  --l-fort: 2px;
+  --l-coin: 2px;
+
+  /* Lueurs */
+  --lueur-1: 0 0 8px rgb(var(--c-cyan) / calc(.35 * var(--lueur-k)));
+  --lueur-2: 0 0 18px rgb(var(--c-cyan) / calc(.22 * var(--lueur-k)));
+  --lueur-3: 0 0 32px rgb(var(--c-cyan) / calc(.3 * var(--lueur-k)));
+  --lueur-texte: 0 0 14px rgb(var(--c-cyan) / calc(.4 * var(--lueur-k)));
+
+  /* Profondeur (z-index) */
+  --z-fond: 0;
+  --z-hud: 1;
+  --z-panneau: 2;
+  --z-barre: 5;
+  --z-onde: 40;
+  --z-auth: 50;
+  --z-voix: 70;
+  --z-notifs: 80;
+  --z-trame: 90;
+  --z-demarrage: 95;
+
+  /* Mouvement */
+  --d-instant: 90ms;
+  --d-rapide: 160ms;
+  --d-moyen: 280ms;
+  --d-lent: 520ms;
+  --d-cine: 900ms;
+  --e-sortie: cubic-bezier(.2, .7, .2, 1);   /* décélération standard */
+  --e-holo: cubic-bezier(.16, 1, .3, 1);     /* entrée holographique */
+  --e-entree: cubic-bezier(.5, 0, .75, 0);   /* accélération (sorties) */
+  --transition: var(--d-rapide) var(--e-sortie);
+
+  /* Gabarits */
+  --h-barre: 52px;
+  --h-onglets: 58px;
+  --colonne-lecture: 880px;
+  --cible: 44px;             /* cible tactile minimale */
+  --sa-haut: env(safe-area-inset-top, 0px);
+  --sa-bas: env(safe-area-inset-bottom, 0px);
+  --sa-gauche: env(safe-area-inset-left, 0px);
+  --sa-droite: env(safe-area-inset-right, 0px);
+  /* Application PC : zone réservée aux boutons de fenêtre (barre de titre superposée) */
+  --tb-droite: 0px;
+  --tb-hauteur: 0px;
+}

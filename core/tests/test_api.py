@@ -90,6 +90,13 @@ async def test_validations(client: httpx.AsyncClient) -> None:
     assert (await client.get(f"/v1/conversations/{inconnue}")).status_code == 404
 
 
+async def test_entetes_de_securite_hors_api(client: httpx.AsyncClient) -> None:
+    rep = await client.get("/page-inexistante")
+    assert "script-src 'self'" in rep.headers["content-security-policy"]
+    assert rep.headers["x-content-type-options"] == "nosniff"
+    assert "content-security-policy" not in (await client.get("/v1/sante")).headers
+
+
 async def test_origine_inconnue_refusee(client: httpx.AsyncClient) -> None:
     rep = await client.post("/v1/dialogue", json={"message": "x"}, headers={"Origin": "https://malveillant.example"})
     assert rep.status_code == 403

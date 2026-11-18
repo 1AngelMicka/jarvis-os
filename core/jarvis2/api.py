@@ -38,6 +38,12 @@ from .moteurs.telemetrie import EnregistreurPostgres, MoteurInstrumente
 
 journal = logging.getLogger("jarvis2.api")
 
+# Interface compilée : aucun script en ligne, aucune ressource externe.
+CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+    "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+)
+
 
 @dataclass
 class Contexte:
@@ -110,7 +116,12 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         if origine and origine not in autorisees:
             journal.warning("Origine refusée : %s", origine[:100])
             return JSONResponse({"detail": "Origine non autorisée"}, status_code=403)
-        return await suite(request)
+        reponse = await suite(request)
+        if not request.url.path.startswith("/v1/"):
+            reponse.headers["Content-Security-Policy"] = CSP
+            reponse.headers["X-Content-Type-Options"] = "nosniff"
+            reponse.headers["Referrer-Policy"] = "no-referrer"
+        return reponse
 
     def ctx(request: Request) -> Contexte:
         c: Contexte = request.app.state.ctx
