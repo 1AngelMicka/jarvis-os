@@ -5,9 +5,12 @@
 - `GET  /v1/conversations`            : liste
 - `GET  /v1/conversations/{id}`       : conversation + messages
 - `POST /v1/dialogue`                 : message -> réponse en flux SSE (`debut`, `delta`, `fin`, `erreur`)
+- sécurité (appareils, jumelage, clés d'accès, demandes, arrêt d'urgence, audit) : voir api_securite.py
 
-Le Core n'écoute que sur 127.0.0.1 tant que l'authentification n'existe pas (phase 4). Les requêtes d'une
-origine inconnue sont refusées (protection contre une page web malveillante qui viserait 127.0.0.1).
+Chaque requête `/v1/` exige le jeton d'un appareil autorisé (`Authorization: Bearer`), sauf la santé et le
+jumelage. Une origine inconnue est refusée (page web malveillante qui viserait le Core). Pendant l'arrêt
+d'urgence, toute écriture est refusée (HTTP 423) sauf ce qui sert à le lever. Le Core écoute sur 127.0.0.1 par
+défaut ; l'ouvrir au réseau est un choix explicite (JARVIS2_OUVERTURE_RESEAU).
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 from uuid import UUID
 
@@ -28,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__, memoire
+from .api_securite import routeur as routeur_securite
 from .config import Parametres
 from .config_locale import charger as charger_config_locale
 from .conversations import DepotConversations
@@ -38,6 +42,10 @@ from .memoire import Expurgateur, ReglagesRecherche
 from .moteurs import construire_moteurs
 from .moteurs.base import ErreurMoteur, Options
 from .moteurs.telemetrie import EnregistreurPostgres, MoteurInstrumente
+from .securite import appareils
+from .securite.actions import creer_registre
+from .securite.permissions import Approbations
+from .securite.urgence import ArretUrgence
 
 journal = logging.getLogger("jarvis2.api")
 
@@ -56,6 +64,11 @@ class Contexte:
     service: ServiceDialogue
     moteur_defaut: str
     memoire: SourceMemoire | None = None
+    urgence: ArretUrgence = field(default_factory=ArretUrgence)
+    approbations: Approbations = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.approbations = Approbations(self.pool, creer_registre(self.urgence))
 
 
 class DemandeDialogue(BaseModel):
@@ -66,10 +79,16 @@ class DemandeDialogue(BaseModel):
     effort: str | None = Field(default=None, max_length=20)
 
 
+# Sans jeton : santé, état du jumelage, premier appareil (PC seulement), échange d'un code de jumelage
+CHEMINS_PUBLICS = frozenset({"/v1/sante", "/v1/auth/etat", "/v1/appareils/premier", "/v1/jumelage/echanger"})
+# Écritures permises pendant l'arrêt d'urgence : ce qui sert à le lever ou à retirer un accès
+ECRITURES_EN_URGENCE = ("/v1/urgence/", "/v1/demandes/", "/v1/cles/", "/v1/appareils/")
+
+
 def origines_autorisees(p: Parametres) -> set[str]:
     hotes = {"127.0.0.1", "localhost"}
     ports = {p.port, 5174, 4174}
-    return {f"http://{h}:{port}" for h in hotes for port in ports}
+    return {f"http://{h}:{port}" for h in hotes for port in ports} | set(p.origines_supplementaires)
 
 
 def sse(evenement: str, donnees: dict[str, Any]) -> bytes:
@@ -106,6 +125,9 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     async def cycle_de_vie(app: FastAPI) -> AsyncIterator[None]:
         ctx = contexte or await construire_contexte(parametres)
         app.state.ctx = ctx
+        await ctx.urgence.charger(ctx.pool)
+        if ctx.urgence.actif:
+            journal.warning("Arrêt d'urgence ACTIF (depuis %s) : écritures refusées", ctx.urgence.depuis)
         prechargement = None
         if ctx.memoire is not None:  # modèle d'embeddings chargé en tâche de fond : le 1er message n'attend pas
             prechargement = asyncio.create_task(ctx.memoire.encodeur.encoder("préchargement"))
@@ -124,11 +146,33 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     autorisees = origines_autorisees(parametres)
 
     @app.middleware("http")
-    async def verifier_origine(request: Request, suite: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def garde(request: Request, suite: Callable[[Request], Awaitable[Response]]) -> Response:
         origine = request.headers.get("origin")
         if origine and origine not in autorisees:
             journal.warning("Origine refusée : %s", origine[:100])
             return JSONResponse({"detail": "Origine non autorisée"}, status_code=403)
+        chemin = request.url.path
+        if chemin.startswith("/v1/") and chemin not in CHEMINS_PUBLICS:
+            c: Contexte = request.app.state.ctx
+            entete = request.headers.get("authorization", "")
+            jeton = entete[7:].strip() if entete.lower().startswith("bearer ") else ""
+            appareil = await appareils.authentifier(c.pool, jeton) if jeton else None
+            if appareil is None:
+                return JSONResponse(
+                    {"detail": "Appareil non autorisé : jumelez cet appareil"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            request.state.appareil = appareil
+            ecriture = request.method not in ("GET", "HEAD", "OPTIONS")
+            if c.urgence.actif and ecriture and not chemin.startswith(ECRITURES_EN_URGENCE):
+                return JSONResponse(
+                    {
+                        "detail": "Arrêt d'urgence actif : aucune écriture n'est acceptée",
+                        "urgence": c.urgence.en_dict(),
+                    },
+                    status_code=423,
+                )
         reponse = await suite(request)
         if not request.url.path.startswith("/v1/"):
             reponse.headers["Content-Security-Policy"] = CSP
@@ -152,12 +196,18 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     @app.get("/v1/etat")
     async def etat(request: Request) -> dict[str, Any]:
         c = ctx(request)
-        moteurs, conversations, comptes = await asyncio.gather(
+        moteurs, conversations, comptes, demandes, nb_cles = await asyncio.gather(
             asyncio.gather(*(decrire_moteur(m) for m in c.moteurs.values())),
             c.depot.lister(limite=50),
             memoire.compter(c.pool),
+            c.approbations.lister("en_attente"),
+            c.pool.fetchval("SELECT count(*) FROM cles_acces"),
         )
         return {
+            "appareil": request.state.appareil.en_dict(),
+            "urgence": c.urgence.en_dict(),
+            "demandes": [d.en_dict() for d in demandes],
+            "cles_acces": nb_cles,
             "version": __version__,
             "moteur_defaut": c.moteur_defaut,
             "moteurs": moteurs,
@@ -203,15 +253,20 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         options = Options(modele=demande.modele or None, effort=demande.effort or None)
 
         async def flux() -> AsyncIterator[bytes]:
-            try:
-                async for ev in c.service.repondre(demande.message, demande.conversation_id, demande.moteur, options):
-                    yield sse(ev.type, ev.donnees)
-            except (ErreurMoteur, ValueError, LookupError) as exc:
-                yield sse("erreur", {"message": str(exc)})
+            with c.urgence.suivre():  # l'arrêt d'urgence annule cette réponse (et tue la CLI) immédiatement
+                try:
+                    async for ev in c.service.repondre(
+                        demande.message, demande.conversation_id, demande.moteur, options
+                    ):
+                        yield sse(ev.type, ev.donnees)
+                except (ErreurMoteur, ValueError, LookupError) as exc:
+                    yield sse("erreur", {"message": str(exc)})
 
         return StreamingResponse(
             flux(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
         )
+
+    app.include_router(routeur_securite)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():

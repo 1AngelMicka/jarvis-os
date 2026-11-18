@@ -14,6 +14,7 @@ from jarvis2.config import Parametres
 from jarvis2.conversations import DepotConversations
 from jarvis2.dialogue import ServiceDialogue
 from jarvis2.moteurs.telemetrie import EnregistreurPostgres, MoteurInstrumente
+from jarvis2.securite import appareils
 
 from .test_registre_telemetrie import FauxMoteur
 
@@ -38,7 +39,12 @@ async def client(pool: asyncpg.Pool) -> httpx.AsyncClient:
     ctx = Contexte(pool, depot, moteurs, ServiceDialogue(depot, moteurs, "faux"), "faux")
     app = creer_app(Parametres(), ctx)
     app.state.ctx = ctx
-    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1:8765")
+    _, jeton = await appareils.creer(pool, "PC de test", "pc")
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://127.0.0.1:8765",
+        headers={"Authorization": f"Bearer {jeton}"},
+    )
 
 
 async def test_dialogue_complet(client: httpx.AsyncClient, pool: asyncpg.Pool) -> None:
@@ -101,4 +107,4 @@ async def test_origine_inconnue_refusee(client: httpx.AsyncClient) -> None:
     rep = await client.post("/v1/dialogue", json={"message": "x"}, headers={"Origin": "https://malveillant.example"})
     assert rep.status_code == 403
     ok = await client.get("/v1/sante", headers={"Origin": "http://127.0.0.1:5174"})
-    assert ok.status_code == 200 and ok.json()["base"] is True and ok.json()["schema"] == "003_memoire_v2_socle"
+    assert ok.status_code == 200 and ok.json()["base"] is True and ok.json()["schema"] == "004_securite"

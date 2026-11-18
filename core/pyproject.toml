@@ -13,6 +13,8 @@ dependencies = [
     "pydantic-settings>=2.6",
     "fastembed>=0.7",
     "tzdata>=2026.6",
+    "webauthn>=2.2",
+    "segno>=1.6",
 ]
 
 [dependency-groups]
@@ -51,6 +53,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S105", "S106", "S108", "S608"]  # SQL des fixtures : constantes
+"jarvis2/securite/*" = ["S608"]  # listes de colonnes constantes, valeurs toujours en paramètres $n
 
 [tool.mypy]
 python_version = "3.13"

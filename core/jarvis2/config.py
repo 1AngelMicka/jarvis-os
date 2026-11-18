@@ -46,6 +46,10 @@ class Parametres(BaseSettings):
     port: int = Field(8765, alias="JARVIS2_PORT")
     dossier_donnees: Path = Field(default_factory=lambda: dossier_donnees_defaut(), alias="JARVIS2_DOSSIER_DONNEES")
     niveau_journal: str = Field("INFO", alias="JARVIS2_NIVEAU_JOURNAL")
+    # Ouvrir le Core au réseau (autre que 127.0.0.1) : choix explicite, jamais par défaut
+    ouverture_reseau: bool = Field(False, alias="JARVIS2_OUVERTURE_RESEAU")
+    # Origines web supplémentaires autorisées (ex. l'adresse Tailscale du PC), en liste JSON
+    origines_supplementaires: list[str] = Field(default_factory=list, alias="JARVIS2_ORIGINES")
 
     # Moteurs
     moteur_defaut: str = Field("claude_code", alias="JARVIS2_MOTEUR_DEFAUT")

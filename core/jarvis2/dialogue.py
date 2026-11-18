@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -21,6 +22,7 @@ from .embeddings import Encodeur
 from .memoire import ContexteMemoire, ReglagesRecherche, lire_noyau, rechercher_multi
 from .moteurs.base import Delta, ErreurMoteur, Fin, Message, Options
 from .moteurs.telemetrie import MoteurInstrumente
+from .securite.filtre import masquer
 
 journal = logging.getLogger("jarvis2.dialogue")
 
@@ -37,6 +39,9 @@ Les souvenirs les plus récents et le noyau priment ; les documents de planifica
 dépassés ; si une information manque, dis-le sans inventer.
 Date et heure actuelles : {maintenant}
 {memoire}"""
+
+
+TEXTE_MASQUE = "(réponse confidentielle produite par une IA locale : masquée pour les IA externes)"
 
 
 def maintenant_paris() -> str:
@@ -126,10 +131,26 @@ class ServiceDialogue:
                 await self.depot.renommer(conversation.id, titre, "extrait")
         historique = await self.depot.messages(conversation.id, limite=NB_MESSAGES_HISTORIQUE)
         msg_utilisateur = await self.depot.ajouter_message(conversation.id, "utilisateur", message)
-        consignes, contexte = await self.consignes(message, externe=instance.interne.externe)
+        externe = instance.interne.externe
+        consignes, contexte = await self.consignes(message, externe=externe)
         messages = [Message("systeme", consignes)]
-        messages += [Message("utilisateur" if m.role == "utilisateur" else "assistant", m.contenu) for m in historique]
+        for m in historique:
+            contenu = m.contenu
+            if externe and m.meta.get("prive"):  # réponse locale bâtie sur des souvenirs privés
+                contenu = TEXTE_MASQUE
+            messages.append(Message("utilisateur" if m.role == "utilisateur" else "assistant", contenu))
         messages.append(Message("utilisateur", message))
+        masques: Counter[str] = Counter()
+        if externe:  # dernière barrière : secrets et données personnelles ne quittent jamais le PC
+            filtres = []
+            for envoi in messages:
+                filtre = masquer(envoi.contenu)
+                masques.update(filtre.masques)
+                filtres.append(Message(envoi.role, filtre.texte))
+            messages = filtres
+        prive = any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs) or any(
+            s.confidentialite == "local_uniquement" for s in contexte.noyau
+        )
         yield EvenementDialogue(
             "debut",
             {
@@ -140,6 +161,7 @@ class ServiceDialogue:
                 "modele": options.modele if options else None,
                 "souvenirs": len(contexte.souvenirs),
                 "noyau": len(contexte.noyau),
+                "masques": dict(masques),
             },
         )
         morceaux: list[str] = []
@@ -160,6 +182,8 @@ class ServiceDialogue:
                         **{k: v for k, v in rep.meta.items() if k in ("effort", "source_auth")},
                         "souvenirs": [r.souvenir.id for r in contexte.souvenirs],
                         "memoire_consultee": contexte.consultee,
+                        "masques": dict(masques),
+                        "prive": prive,
                     }
                     stocke = await self.depot.ajouter_message(conversation.id, "jarvis", rep.texte, meta)
                     termine = True

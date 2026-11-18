@@ -16,6 +16,10 @@ from pgvector.asyncpg import register_vector
 
 journal = logging.getLogger("jarvis2.db")
 
+# Une connexion (directe ou prêtée par le pool), ou le pool lui-même
+Connexion = asyncpg.Connection | asyncpg.pool.PoolConnectionProxy
+Executant = asyncpg.Pool | Connexion
+
 DOSSIER_MIGRATIONS = Path(__file__).parent / "migrations"
 VERROU_MIGRATIONS = 726_002  # verrou consultatif réservé aux migrations
 
