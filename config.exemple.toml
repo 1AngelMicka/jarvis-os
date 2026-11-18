@@ -10,7 +10,7 @@ sujets_exclus = [
   # 'projet[\s_-]*secret',
 ]
 
-# Une section par source d'import (ici : l'ancien JARVIS, « JARVIS v1 »).
+# Une section par source d'import (ici : JARVIS v1).
 [import.jarvis_v1]
 # Souvenirs dont la SOURCE correspond : jamais importés (ex. données de tiers).
 exclure_sources = [

@@ -46,7 +46,7 @@ def _motifs(valeurs: Any, cle: str) -> tuple[re.Pattern[str], ...]:
 class ExclusionsImport:
     """Ce qu'un import ne doit jamais faire entrer en mémoire (données de tiers, sujets exclus…)."""
 
-    sources: tuple[re.Pattern[str], ...] = ()  # source du souvenir (ex. « doc:export-tiers.jsonl »)
+    sources: tuple[re.Pattern[str], ...] = ()  # source du souvenir (ex. « doc:export-messagerie.json »)
     contenus: tuple[re.Pattern[str], ...] = ()  # contenu d'un souvenir ou d'un message
 
     def exclut(self, source: str | None, contenu: str | None) -> bool:
