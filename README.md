@@ -18,7 +18,11 @@ uv run python -m jarvis2 serveur               # Core : http://127.0.0.1:8765
 cd ../interface; npm install; npm run dev      # interface de développement : http://127.0.0.1:5174
 ```
 
-Pour servir l'interface compilée par le Core : `npm run build` dans `interface`, puis ouvrir http://127.0.0.1:8765.
+Pour servir l'interface compilée par le Core : `npm run build` dans `interface`, puis ouvrir **http://localhost:8765** (le nom `localhost`, pas l'adresse IP : les clés d'accès l'exigent).
+
+Premier lancement : le navigateur du PC s'associe d'un clic (« premier appareil »). Ensuite, chaque appareil se jumelle par un QR à usage unique (onglet Sécurité) ou par `uv run python -m jarvis2 jumeler`. Enregistrez une clé d'accès (empreinte, visage, code de l'appareil) pour approuver les actions 🔴.
+
+Sécurité : `uv run python -m jarvis2 verifier-audit` (chaîne du journal d'audit), `uv run python -m jarvis2 lever-urgence` (secours si la clé d'accès est perdue).
 
 Configuration personnelle (sujets exclus, exclusions d'import, requêtes témoins) : copier `config.exemple.toml` vers `%APPDATA%\JARVIS2\config.toml` (Windows) ou `~/.config/jarvis2/config.toml`.
 

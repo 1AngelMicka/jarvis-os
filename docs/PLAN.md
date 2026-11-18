@@ -48,7 +48,7 @@ Registre de moteurs (`generate` / `stream` / `list_models` / `health`), moteurs 
 Importeur générique à sources (première source : `jarvis_v1`, depuis une sauvegarde `pg_dump`, lecture seule côté source), exclusions par la configuration locale, recherche hybride (vecteur + plein texte), noyau injecté, préparation du schéma de la mémoire v2 (modèle d'embedding par ligne, validité temporelle et remplacement sans DELETE, importance, accès, archivage, provenance, blocs éditables versionnés).
 **Terminé** : chaque ligne de la source présente ou volontairement exclue (rapport), mêmes vecteurs et mêmes premiers résultats que la source sur des requêtes témoins, réponses appuyées sur les souvenirs, souvenirs privés jamais envoyés à un moteur externe.
 
-### 4. Sécurité, appareils, approbations
+### 4. Sécurité, appareils, approbations ✅
 Permissions 🟢🟡🔴, file d'approbations, journal d'audit en ajout seul (rôle séparé du propriétaire), arrêt d'urgence, filtre secrets / données personnelles avant tout fournisseur externe, authentification, jetons par appareil, clés d'accès.
 **Terminé quand** : une action 🔴 ne s'exécute qu'après approbation, le rôle applicatif ne peut ni modifier ni effacer l'audit (test), l'arrêt d'urgence coupe tout en moins d'une seconde, un secret factice n'atteint jamais un fournisseur externe (test).
 

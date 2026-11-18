@@ -39,6 +39,16 @@ L'import est rejouable (rattrapage) : une ligne n'est mise à jour que si elle a
 
 `jarvis2/memoire.py` reprend l'algorithme de JARVIS v1 : sous-questions, score 0,75 cosinus + 0,25 plein texte français, fusion, diversité, budgets (10 souvenirs, seuil 0,2, 7 000 caractères, 3 par source), noyau (souvenirs tagués `noyau`, 4 000 caractères). Les souvenirs `local_uniquement` ne partent jamais vers un moteur externe. Les **sujets exclus** de l'utilisateur (`[confidentialite] sujets_exclus` de la configuration locale) sont retirés de tout texte de mémoire injecté au modèle.
 
+## Sécurité (phase 4, migration 004)
+
+- **Appareils** : chaque appareil a son jeton (32 octets aléatoires, `Authorization: Bearer`), dont seule l'empreinte SHA-256 est stockée ; liste et révocation dans l'onglet Sécurité. Toute route `/v1/` l'exige, sauf la santé et le jumelage.
+- **Premier appareil** : tant qu'aucun appareil n'a jamais été enregistré, le navigateur du PC (boucle locale, hôte `localhost`) s'enregistre d'un clic. Ensuite : jumelage seulement (code à usage unique valable 5 minutes, montré en QR depuis un appareil autorisé, ou `jarvis2 jumeler` sur le PC).
+- **Permissions** : 🟢 exécuté (lecture, retrait d'un accès, arrêt d'urgence) ; 🟡 demande approuvée d'un clic ; 🔴 demande approuvée **uniquement** par une clé d'accès WebAuthn (vérification de l'utilisateur exigée, défi lié à la demande, à usage unique, 5 minutes). Les clés d'accès exigent un nom d'hôte (`localhost`, nom Tailscale…), jamais une adresse IP.
+- **Audit** : table en ajout seul, propriété du rôle `jarvis2_audit` (sans connexion), alimentée par `audit_ajouter()` (SECURITY DEFINER) ; déclencheurs contre UPDATE / DELETE / TRUNCATE ; chaîne d'empreintes SHA-256 vérifiable par `jarvis2 verifier-audit` (détecte même une modification faite par un super-utilisateur).
+- **Arrêt d'urgence** : annule tout de suite les réponses en cours (la CLI est tuée), puis refuse toute écriture par HTTP 423, sauf ce qui sert à le lever ou à retirer un accès ; l'état survit au redémarrage. Le lever est une action 🔴. Secours de l'administrateur du PC (clé perdue) : `jarvis2 lever-urgence`, qui exige les identifiants du propriétaire de la base et est journalisé 🔴.
+- **Filtre** : avant tout moteur externe, chaque texte (consignes, mémoire, historique, message) passe par `securite/filtre.py` (clés d'API, jetons, clés privées, mots de passe, IBAN et cartes vérifiés, n° de sécurité sociale, e-mails, téléphones) ; les réponses d'un modèle local bâties sur des souvenirs privés sont masquées pour les moteurs externes. La conversation stockée et les modèles locaux gardent le texte d'origine.
+- **Réseau** : le Core n'écoute que sur 127.0.0.1 ; écouter ailleurs exige `JARVIS2_OUVERTURE_RESEAU=true`, et toute autre origine web doit être déclarée (`JARVIS2_ORIGINES`, liste JSON).
+
 ## Mémoire v2 préparée sans rien recalculer (migration 003)
 
 - **Modèle d'embedding stocké par ligne** (`embedding_model`) : aucune dimension n'est supposée dans le code ; la recherche ne compare que les vecteurs produits par le modèle de l'encodeur actif. Passer à un autre modèle (ex. `BAAI/bge-m3`, 1024 dimensions) = ajouter une colonne de vecteurs (index HNSW halfvec), la remplir en tâche de fond, basculer.

@@ -28,12 +28,64 @@ export interface ResumeConversation {
   nb_messages: number;
 }
 
+export interface Appareil {
+  id: string;
+  nom: string;
+  type: string;
+  cree_le: string;
+  dernier_acces: string | null;
+  revoque: boolean;
+}
+
+export interface Demande {
+  id: string;
+  action: string;
+  niveau: "jaune" | "rouge";
+  resume: string;
+  parametres: Record<string, unknown>;
+  statut: string;
+  demandeur: string;
+  cree_le: string;
+  expire_le: string;
+  resultat: Record<string, unknown> | null;
+}
+
+export interface EtatUrgence {
+  actif: boolean;
+  par: string | null;
+  depuis: string | null;
+}
+
+export interface EntreeAudit {
+  id: number;
+  horodatage: string;
+  acteur: string;
+  action: string;
+  niveau: "vert" | "jaune" | "rouge";
+  cible: string | null;
+  resultat: string;
+}
+
+export interface DemandeAction {
+  action: string;
+  parametres: Record<string, unknown>;
+}
+
+export type ReponseAction =
+  | { statut: "executee"; resultat: Record<string, unknown> }
+  | { statut: "en_attente"; demande: Demande }
+  | { statut: "refusee" };
+
 export interface Etat {
   version: string;
   moteur_defaut: string;
   moteurs: InfoMoteur[];
   conversations: ResumeConversation[];
   memoire: { total: number; noyau: number; local_uniquement: number };
+  appareil: Appareil;
+  urgence: EtatUrgence;
+  demandes: Demande[];
+  cles_acces: number;
 }
 
 export interface MetaMessage {
@@ -48,6 +100,8 @@ export interface MetaMessage {
   erreur?: string;
   souvenirs?: string[];
   memoire_consultee?: boolean;
+  masques?: Record<string, number>;
+  prive?: boolean;
 }
 
 export interface MessageStocke {

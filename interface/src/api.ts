@@ -1,11 +1,25 @@
-// Accès à l'API du Core. Une seule requête par ressource à la fois (dédoublonnage) : le démarrage de
-// l'interface fait UN appel (/v1/etat), même quand React rejoue les effets en mode strict.
+// Accès à l'API du Core. Chaque appel porte le jeton de l'appareil ; un 401 renvoie à l'écran de jumelage.
+// Une seule requête par ressource à la fois (dédoublonnage) : le démarrage fait UN appel (/v1/etat), même
+// quand React rejoue les effets en mode strict.
 
+import { EVENEMENT_NON_AUTORISE, ecrireJeton, lireJeton } from "./auth";
 import { LecteurSSE } from "./sse";
-import type { DemandeDialogue, DetailConversation, Etat, EvenementDialogue } from "./types";
+import type {
+  Appareil,
+  DemandeAction,
+  DemandeDialogue,
+  DetailConversation,
+  EntreeAudit,
+  Etat,
+  EvenementDialogue,
+  ReponseAction,
+} from "./types";
 
 export class ErreurApi extends Error {
-  constructor(message: string, readonly statut: number) {
+  constructor(
+    message: string,
+    readonly statut: number,
+  ) {
     super(message);
   }
 }
@@ -22,11 +36,15 @@ export function unSeul<T>(cle: string, appel: () => Promise<T>): Promise<T> {
 }
 
 const MESSAGES_STATUT: Record<number, string> = {
-  403: "Accès refusé par le Core.",
-  404: "Introuvable : la conversation a peut-être été supprimée.",
+  401: "Cet appareil n'est pas (ou plus) autorisé.",
+  403: "Refusé.",
+  404: "Introuvable.",
+  409: "Impossible pour l'instant.",
   422: "Demande invalide.",
+  423: "Arrêt d'urgence actif : aucune action n'est acceptée.",
   429: "Trop de demandes : réessayez dans un instant.",
 };
+const INJOIGNABLE = "Core injoignable : vérifiez qu'il tourne (python -m jarvis2 serveur).";
 
 async function lireErreur(rep: Response): Promise<ErreurApi> {
   let detail = "";
@@ -36,28 +54,65 @@ async function lireErreur(rep: Response): Promise<ErreurApi> {
   } catch {
     /* corps non JSON */
   }
+  if (rep.status === 401 && lireJeton()) {
+    ecrireJeton(null);
+    window.dispatchEvent(new Event(EVENEMENT_NON_AUTORISE));
+  }
   const base = MESSAGES_STATUT[rep.status] ?? (rep.status >= 500 ? "Le Core a rencontré une erreur." : "Erreur.");
-  return new ErreurApi(detail ? `${base} ${detail}` : base, rep.status);
+  return new ErreurApi(detail || base, rep.status);
 }
 
-async function lireJson<T>(chemin: string): Promise<T> {
+function entetes(extra: Record<string, string> = {}): Record<string, string> {
+  const jeton = lireJeton();
+  return { Accept: "application/json", ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}), ...extra };
+}
+
+async function appeler<T>(chemin: string, init: { methode?: string; corps?: unknown } = {}): Promise<T> {
   let rep: Response;
   try {
-    rep = await fetch(chemin, { headers: { Accept: "application/json" } });
+    rep = await fetch(chemin, {
+      method: init.methode ?? "GET",
+      headers: entetes(init.corps !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(init.corps !== undefined ? { body: JSON.stringify(init.corps) } : {}),
+    });
   } catch {
-    throw new ErreurApi("Core injoignable : vérifiez qu'il tourne (python -m jarvis2 serveur).", 0);
+    throw new ErreurApi(INJOIGNABLE, 0);
   }
   if (!rep.ok) throw await lireErreur(rep);
   return (await rep.json()) as T;
 }
 
-export function lireEtat(): Promise<Etat> {
-  return unSeul("etat", () => lireJson<Etat>("/v1/etat"));
-}
+const envoyer = <T>(chemin: string, corps: unknown = {}) => appeler<T>(chemin, { methode: "POST", corps });
 
-export function lireConversation(id: string): Promise<DetailConversation> {
-  return unSeul(`conversation:${id}`, () => lireJson<DetailConversation>(`/v1/conversations/${encodeURIComponent(id)}`));
-}
+export const lireEtat = () => unSeul("etat", () => appeler<Etat>("/v1/etat"));
+export const lireConversation = (id: string) =>
+  unSeul(`conversation:${id}`, () => appeler<DetailConversation>(`/v1/conversations/${encodeURIComponent(id)}`));
+
+// --- Jumelage et appareils ---
+export const etatAuth = () => appeler<{ premier_possible: boolean }>("/v1/auth/etat");
+export const premierAppareil = (nom: string) => envoyer<{ jeton: string; appareil: Appareil }>("/v1/appareils/premier", { nom });
+export const echangerCode = (code: string, nom: string) =>
+  envoyer<{ jeton: string; appareil: Appareil }>("/v1/jumelage/echanger", { code, nom });
+export const creerJumelage = (type: string) =>
+  envoyer<{ url: string; qr: string; expire_le: string; local: boolean }>("/v1/jumelage", { type });
+export const listerAppareils = () => appeler<{ appareils: (Appareil & { courant: boolean; cles: number })[] }>("/v1/appareils");
+export const revoquerAppareil = (id: string) => envoyer<{ revoque: boolean; soi_meme: boolean }>(`/v1/appareils/${id}/revoquer`);
+
+// --- Clés d'accès, actions, demandes ---
+export const optionsCle = () => envoyer<Record<string, unknown>>("/v1/cles/enregistrement/options");
+export const enregistrerCle = (credential: Record<string, unknown>, nom: string) =>
+  envoyer<{ id: string }>("/v1/cles/enregistrement", { credential, nom });
+export const demanderAction = (d: DemandeAction) => envoyer<ReponseAction>("/v1/actions", d);
+export const optionsApprobation = (id: string) => envoyer<Record<string, unknown>>(`/v1/demandes/${id}/options`);
+export const approuver = (id: string, credential?: Record<string, unknown>) =>
+  envoyer<ReponseAction>(`/v1/demandes/${id}/approuver`, credential ? { credential } : {});
+export const refuser = (id: string) => envoyer<{ statut: string }>(`/v1/demandes/${id}/refuser`);
+
+// --- Arrêt d'urgence, audit ---
+export const arreterUrgence = () => envoyer<{ reponses_interrompues: number }>("/v1/urgence/arreter");
+export const leverUrgence = () => envoyer<ReponseAction>("/v1/urgence/lever");
+export const lireAudit = (limite = 12) =>
+  appeler<{ entrees: EntreeAudit[]; rompue_a: number | null }>(`/v1/audit?limite=${String(limite)}`);
 
 /** Envoie un message et transmet chaque événement du flux à `surEvenement`. */
 export async function dialoguer(
@@ -69,15 +124,13 @@ export async function dialoguer(
   try {
     rep = await fetch("/v1/dialogue", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: entetes({ "Content-Type": "application/json", Accept: "text/event-stream" }),
       body: JSON.stringify(demande),
       signal,
     });
   } catch (e) {
     if (signal.aborted) return;
-    throw e instanceof Error && e.name === "AbortError"
-      ? e
-      : new ErreurApi("Core injoignable : vérifiez qu'il tourne (python -m jarvis2 serveur).", 0);
+    throw e instanceof Error && e.name === "AbortError" ? e : new ErreurApi(INJOIGNABLE, 0);
   }
   if (!rep.ok || !rep.body) throw await lireErreur(rep);
   const lecteur = rep.body.pipeThrough(new TextDecoderStream()).getReader();

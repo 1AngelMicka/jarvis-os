@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { dialoguer, ErreurApi, lireConversation, lireEtat } from "./api";
+import { arreterUrgence, demanderAction, dialoguer, ErreurApi, leverUrgence, lireConversation, lireEtat } from "./api";
+import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
+import { ListeDemandes } from "./composants/Demandes";
 import { Console, Fil, type MessageAffiche } from "./composants/Dialogue";
 import { ListeConversations } from "./composants/Historique";
+import { EcranJumelage } from "./composants/Jumelage";
 import { Panneau } from "./composants/Panneau";
 import { type EtatNoyau, Reacteur } from "./composants/Reacteur";
+import { PanneauSecurite } from "./composants/Securite";
 import { ecrirePreferences, lirePreferences } from "./preferences";
-import type { Etat, EvenementDialogue, InfoMoteur, MessageStocke, ResumeConversation } from "./types";
+import type { Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
 
 let compteur = 0;
 const nouvelleCle = () => `m${String(++compteur)}`;
@@ -21,7 +25,32 @@ function modeleParDefaut(moteur: InfoMoteur | undefined, prefere?: string): stri
   return (moteur.modeles.find((m) => m.defaut) ?? moteur.modeles[0])?.id ?? "";
 }
 
+/** Porte d'entrée : écran de jumelage tant que cet appareil n'a pas de jeton valable. */
 export function App() {
+  const [autorise, setAutorise] = useState(() => Boolean(lireJeton()) && !window.location.hash.includes("jumeler="));
+  useEffect(() => {
+    const surRefus = () => {
+      setAutorise(false);
+    };
+    window.addEventListener(EVENEMENT_NON_AUTORISE, surRefus);
+    return () => {
+      window.removeEventListener(EVENEMENT_NON_AUTORISE, surRefus);
+    };
+  }, []);
+  return autorise ? (
+    <Hud />
+  ) : (
+    <EcranJumelage
+      surAutorise={() => {
+        setAutorise(true);
+      }}
+    />
+  );
+}
+
+type Onglet = "conversations" | "demandes" | "securite";
+
+function Hud() {
   const [etat, setEtat] = useState<Etat | null>(null);
   const [erreurEtat, setErreurEtat] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ResumeConversation[]>([]);
@@ -34,16 +63,29 @@ export function App() {
   const [enCours, setEnCours] = useState(false);
   const [premierMorceau, setPremierMorceau] = useState(false);
   const [alerte, setAlerte] = useState(false);
-  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
+  const [lateralOuvert, setLateralOuvert] = useState(false);
+  const [onglet, setOnglet] = useState<Onglet>("conversations");
   const [annonce, setAnnonce] = useState("");
+  const [notif, setNotif] = useState<string | null>(null);
   const controleur = useRef<AbortController | null>(null);
+  const minuterieNotif = useRef<number | undefined>(undefined);
 
-  const charger = useCallback(() => {
+  const notifier = useCallback((message: string) => {
+    setNotif(message);
+    setAnnonce(message);
+    window.clearTimeout(minuterieNotif.current);
+    minuterieNotif.current = window.setTimeout(() => {
+      setNotif(null);
+    }, 4200);
+  }, []);
+
+  const charger = useCallback((initial = true) => {
     setErreurEtat(null);
     lireEtat()
       .then((e) => {
         setEtat(e);
         setConversations(e.conversations);
+        if (!initial) return;
         const prefs = lirePreferences();
         const choisi = e.moteurs.find((m) => m.id === prefs.moteur) ?? e.moteurs.find((m) => m.id === e.moteur_defaut);
         setMoteur(choisi?.id ?? e.moteurs[0]?.id ?? "");
@@ -56,18 +98,34 @@ export function App() {
       });
   }, []);
 
-  useEffect(charger, [charger]);
+  useEffect(() => {
+    charger();
+  }, [charger]);
+
+  const rafraichir = useCallback(
+    (message?: string) => {
+      if (message) notifier(message);
+      charger(false);
+    },
+    [charger, notifier],
+  );
 
   useEffect(() => {
     if (moteur) ecrirePreferences({ moteur, modeles, effort });
   }, [moteur, modeles, effort]);
 
+  // Arrêt d'urgence : toute l'interface passe en rouge (les jetons de couleur sont redéfinis)
+  const urgence = etat?.urgence.actif ?? false;
   useEffect(() => {
-    if (!historiqueOuvert) return;
-    document.querySelector<HTMLElement>(".colonne-droite .hist-item, .colonne-droite .btn-fermer-historique")?.focus();
+    document.documentElement.classList.toggle("en-urgence", urgence);
+  }, [urgence]);
+
+  useEffect(() => {
+    if (!lateralOuvert) return;
+    document.querySelector<HTMLElement>(".colonne-droite .onglet[aria-selected='true']")?.focus();
     const surTouche = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setHistoriqueOuvert(false);
+        setLateralOuvert(false);
         document.querySelector<HTMLElement>(".btn-historique")?.focus();
       }
     };
@@ -75,12 +133,12 @@ export function App() {
     return () => {
       window.removeEventListener("keydown", surTouche);
     };
-  }, [historiqueOuvert]);
+  }, [lateralOuvert]);
 
   const ouvrir = useCallback((id: string) => {
     controleur.current?.abort();
     setActive(id);
-    setHistoriqueOuvert(false);
+    setLateralOuvert(false);
     setChargement(true);
     lireConversation(id)
       .then((d) => {
@@ -98,7 +156,7 @@ export function App() {
     controleur.current?.abort();
     setActive(null);
     setMessages([]);
-    setHistoriqueOuvert(false);
+    setLateralOuvert(false);
     document.getElementById("saisie-message")?.focus();
   };
 
@@ -107,6 +165,51 @@ export function App() {
     window.setTimeout(() => {
       setAlerte(false);
     }, 2400);
+  };
+
+  const montrerDemandes = () => {
+    setOnglet("demandes");
+    setLateralOuvert(true);
+  };
+
+  const suiteAction = (r: ReponseAction, ok: string) => {
+    if (r.statut === "en_attente") {
+      rafraichir(r.demande.niveau === "rouge" ? "Action 🔴 : approuvez-la avec votre clé d'accès." : "Action 🟡 en attente de votre accord.");
+      montrerDemandes();
+    } else rafraichir(ok);
+  };
+
+  const agirSurConversation = (action: "conversation.archiver" | "conversation.supprimer") => {
+    if (!active) return;
+    const titre = conversations.find((c) => c.id === active)?.titre;
+    demanderAction({ action, parametres: { conversation_id: active, titre } })
+      .then((r) => {
+        suiteAction(r, "Fait.");
+      })
+      .catch((e: unknown) => {
+        notifier(e instanceof Error ? e.message : "Action impossible.");
+      });
+  };
+
+  const declencherUrgence = () => {
+    controleur.current?.abort();
+    arreterUrgence()
+      .then((r) => {
+        rafraichir(`Arrêt d'urgence : ${String(r.reponses_interrompues)} réponse(s) interrompue(s).`);
+      })
+      .catch((e: unknown) => {
+        notifier(e instanceof Error ? e.message : "Arrêt impossible.");
+      });
+  };
+
+  const demanderLevee = () => {
+    leverUrgence()
+      .then((r) => {
+        suiteAction(r, "Arrêt d'urgence levé.");
+      })
+      .catch((e: unknown) => {
+        notifier(e instanceof Error ? e.message : "Impossible.");
+      });
   };
 
   const envoyer = (texte: string) => {
@@ -169,6 +272,7 @@ export function App() {
         const message = err instanceof ErreurApi || err instanceof Error ? err.message : "Réponse impossible.";
         setMessages((ms) => [...ms, { cle: nouvelleCle(), role: "erreur", texte: message }]);
         signalerAlerte();
+        if (err instanceof ErreurApi && err.statut === 423) rafraichir();
       })
       .finally(() => {
         if (ctrl.signal.aborted) {
@@ -183,19 +287,37 @@ export function App() {
     controleur.current?.abort();
   };
 
-  const etatNoyau: EtatNoyau = alerte ? "alerte" : enCours ? (premierMorceau ? "parole" : "reflexion") : "repos";
+  const etatNoyau: EtatNoyau = alerte || urgence ? "alerte" : enCours ? (premierMorceau ? "parole" : "reflexion") : "repos";
   const moteurs = etat?.moteurs ?? [];
   const titreActif = conversations.find((c) => c.id === active)?.titre;
+  const nbDemandes = etat?.demandes.length ?? 0;
 
-  const historique = <ListeConversations conversations={conversations} active={active} surChoisir={ouvrir} />;
-  const boutonNouvelle = (
-    <button type="button" className="btn btn-mini" onClick={nouvelle}>
-      <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-      Nouvelle
-    </button>
+  const actionsDialogue = (
+    <div className="panneau-actions">
+      {active && (
+        <>
+          <button type="button" className="btn btn-discret btn-mini" title="Archiver (🟡, demande votre accord)" onClick={() => { agirSurConversation("conversation.archiver"); }}>
+            Archiver
+          </button>
+          <button type="button" className="btn btn-discret btn-mini btn-danger" title="Supprimer définitivement (🔴, clé d'accès)" onClick={() => { agirSurConversation("conversation.supprimer"); }}>
+            Supprimer
+          </button>
+        </>
+      )}
+      <button type="button" className="btn btn-mini" onClick={nouvelle}>
+        <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        Nouvelle
+      </button>
+    </div>
   );
+
+  const ONGLETS: { id: Onglet; nom: string; pastille?: number }[] = [
+    { id: "conversations", nom: "Conversations" },
+    { id: "demandes", nom: "Demandes", pastille: nbDemandes },
+    { id: "securite", nom: "Sécurité" },
+  ];
 
   return (
     <div className="hud" data-noyau={etatNoyau}>
@@ -210,22 +332,43 @@ export function App() {
           <span className="marque-version">2</span>
         </div>
         <div className="barre-etat" role="status">
-          <span className="point-etat" data-ok={erreurEtat ? false : etat ? true : undefined} aria-hidden="true" />
-          <span className="barre-etat-texte">{erreurEtat ? "Core hors ligne" : etat ? "Core en ligne" : "Connexion…"}</span>
+          <span className="point-etat" data-ok={erreurEtat ? false : etat ? !urgence : undefined} aria-hidden="true" />
+          <span className="barre-etat-texte">{erreurEtat ? "Core hors ligne" : etat ? (urgence ? "Arrêt d'urgence" : "Core en ligne") : "Connexion…"}</span>
         </div>
+        {!urgence && etat && (
+          <button type="button" className="btn btn-rouge btn-mini btn-urgence" onClick={declencherUrgence} title="Tout arrêter tout de suite">
+            <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0" />
+            </svg>
+            <span className="btn-urgence-texte">Arrêt d'urgence</span>
+          </button>
+        )}
         <button
           type="button"
           className="icone-btn btn-historique"
-          aria-label="Conversations"
-          aria-expanded={historiqueOuvert}
+          aria-label={`Panneau latéral${nbDemandes ? ` (${String(nbDemandes)} demande${nbDemandes > 1 ? "s" : ""} en attente)` : ""}`}
+          aria-expanded={lateralOuvert}
           onClick={() => {
-            setHistoriqueOuvert((o) => !o);
+            setLateralOuvert((o) => !o);
           }}
         >
           <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 6h16M4 12h16M4 18h10" />
           </svg>
+          {nbDemandes > 0 && <span className="pastille pastille--ambre">{nbDemandes}</span>}
         </button>
+        {urgence && (
+          <div className="bandeau-urgence" role="alert">
+            <span>
+              <b>Arrêt d'urgence actif</b>
+              {etat?.urgence.par ? ` · déclenché par ${etat.urgence.par.replace(/^appareil:/, "")}` : ""} : plus aucune
+              action n'est acceptée.
+            </span>
+            <button type="button" className="btn btn-mini" onClick={demanderLevee}>
+              Lever l'arrêt (clé d'accès)
+            </button>
+          </div>
+        )}
       </header>
 
       <aside className="colonne-gauche">
@@ -237,9 +380,9 @@ export function App() {
         <Panneau titre="État" className="panneau-etat" ordre={1} meta={etat ? `v${etat.version}` : undefined}>
           <ul className="etat-liste">
             <li className="etat-item">
-              <span className="point-etat" data-ok={erreurEtat ? false : etat ? true : undefined} aria-hidden="true" />
+              <span className="point-etat" data-ok={erreurEtat ? false : etat ? !urgence : undefined} aria-hidden="true" />
               <span className="etat-nom">JARVIS-Core</span>
-              <span className="etat-valeur">{erreurEtat ? "hors ligne" : etat ? "en ligne" : "…"}</span>
+              <span className="etat-valeur">{erreurEtat ? "hors ligne" : etat ? (urgence ? "arrêt d'urgence" : "en ligne") : "…"}</span>
             </li>
             {etat && (
               <li className="etat-item" title={`${String(etat.memoire.noyau)} souvenirs noyau · ${String(etat.memoire.local_uniquement)} privés (IA locales uniquement)`}>
@@ -255,24 +398,32 @@ export function App() {
                 <span className="etat-valeur">{m.disponible ? `${String(m.modeles.length)} modèle${m.modeles.length > 1 ? "s" : ""}` : "arrêté"}</span>
               </li>
             ))}
+            {etat && (
+              <li className="etat-item">
+                <span className="point-etat" data-ok={nbDemandes === 0} aria-hidden="true" />
+                <button type="button" className="etat-nom etat-lien" onClick={montrerDemandes}>
+                  Demandes
+                </button>
+                <span className="etat-valeur">{nbDemandes ? `${String(nbDemandes)} en attente` : "aucune"}</span>
+              </li>
+            )}
           </ul>
         </Panneau>
       </aside>
 
       <main className="scene">
-        <Panneau
-          titre="Dialogue"
-          className="panneau-scene"
-          ordre={2}
-          id="dialogue"
-          meta={titreActif ?? "Nouvelle conversation"}
-          actions={boutonNouvelle}
-        >
+        <Panneau titre="Dialogue" className="panneau-scene" ordre={2} id="dialogue" meta={titreActif ?? "Nouvelle conversation"} actions={actionsDialogue}>
           {erreurEtat ? (
             <div className="vide">
               <p className="vide-titre">Le Core ne répond pas</p>
               <p>{erreurEtat}</p>
-              <button type="button" className="btn btn-principal" onClick={charger}>
+              <button
+                type="button"
+                className="btn btn-principal"
+                onClick={() => {
+                  charger();
+                }}
+              >
                 Réessayer
               </button>
             </div>
@@ -285,6 +436,7 @@ export function App() {
                 modele={modeles[moteur] ?? ""}
                 effort={effort}
                 enCours={enCours}
+                bloquee={urgence}
                 surMoteur={setMoteur}
                 surModele={(id) => {
                   setModeles((ms) => ({ ...ms, [moteur]: id }));
@@ -298,38 +450,61 @@ export function App() {
         </Panneau>
       </main>
 
-      <aside className="colonne-droite" data-ouvert={historiqueOuvert || undefined}>
-        <Panneau
-          titre="Conversations"
-          className="panneau-historique"
-          ordre={3}
-          meta={conversations.length ? String(conversations.length) : undefined}
-          actions={
+      <aside className="colonne-droite" data-ouvert={lateralOuvert || undefined}>
+        <section className="panneau panneau-lateral" style={{ "--ordre": 3 } as React.CSSProperties} aria-label="Panneau latéral">
+          <header className="panneau-tete panneau-tete--onglets">
+            <div className="onglets" role="tablist" aria-label="Vues">
+              {ONGLETS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  role="tab"
+                  className="onglet"
+                  id={`onglet-${o.id}`}
+                  aria-selected={onglet === o.id}
+                  aria-controls={`vue-${o.id}`}
+                  onClick={() => {
+                    setOnglet(o.id);
+                  }}
+                >
+                  {o.nom}
+                  {o.pastille ? <span className="pastille pastille--ambre">{o.pastille}</span> : null}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               className="icone-btn petit btn-fermer-historique"
               aria-label="Fermer"
               onClick={() => {
-                setHistoriqueOuvert(false);
+                setLateralOuvert(false);
               }}
             >
               <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
             </button>
-          }
-        >
-          <div className="panneau-corps">{historique}</div>
-        </Panneau>
+          </header>
+          <div className="panneau-corps" role="tabpanel" id={`vue-${onglet}`} aria-labelledby={`onglet-${onglet}`}>
+            {onglet === "conversations" && <ListeConversations conversations={conversations} active={active} surChoisir={ouvrir} />}
+            {onglet === "demandes" && <ListeDemandes demandes={etat?.demandes ?? []} nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />}
+            {onglet === "securite" && <PanneauSecurite nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />}
+          </div>
+        </section>
       </aside>
-      {historiqueOuvert && (
+      {lateralOuvert && (
         <div
           className="voile-historique"
           aria-hidden="true"
           onClick={() => {
-            setHistoriqueOuvert(false);
+            setLateralOuvert(false);
           }}
         />
+      )}
+      {notif && (
+        <div className="notif" role="status">
+          {notif}
+        </div>
       )}
       <p className="visuellement-cache" aria-live="polite">
         {annonce}

@@ -52,6 +52,7 @@ export function ListeConversations({ conversations, active, surChoisir }: Props)
                 <button
                   type="button"
                   className="hist-item"
+                  aria-label={`${c.titre} — ${quand(new Date(c.maj_le), maintenant)}, ${String(c.nb_messages)} message${c.nb_messages > 1 ? "s" : ""}`}
                   aria-current={c.id === active ? "true" : undefined}
                   onClick={() => {
                     surChoisir(c.id);

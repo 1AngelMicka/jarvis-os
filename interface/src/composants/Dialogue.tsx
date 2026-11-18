@@ -28,6 +28,10 @@ function nomModele(moteurs: InfoMoteur[], meta: MetaMessage | undefined): string
     .join(" · ");
 }
 
+function nbMasques(meta: MetaMessage): number {
+  return Object.values(meta.masques ?? {}).reduce((a, b) => a + b, 0);
+}
+
 function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
   const local = m.meta?.moteur === "ollama";
   return (
@@ -47,6 +51,11 @@ function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
           ) : null}
           {m.meta.memoire_consultee === false && <span className="msg-meta msg-meta--ambre">mémoire indisponible</span>}
           {m.meta.jetons_sortie ? <span className="msg-meta">{m.meta.jetons_sortie} jetons</span> : null}
+          {nbMasques(m.meta) > 0 && (
+            <span className="msg-meta msg-meta--ambre" title={Object.entries(m.meta.masques ?? {}).map(([k, n]) => `${k} : ${String(n)}`).join(" · ")}>
+              {nbMasques(m.meta)} élément{nbMasques(m.meta) > 1 ? "s" : ""} masqué{nbMasques(m.meta) > 1 ? "s" : ""} avant envoi
+            </span>
+          )}
           {m.meta.moteur === "claude_code" && m.meta.source_auth === "none" && <span className="msg-meta msg-meta--ok">abonnement · 0 $</span>}
           {m.meta.interrompu && <span className="msg-meta msg-meta--ambre">interrompue</span>}
         </div>
@@ -134,6 +143,8 @@ interface ConsoleProps {
   modele: string;
   effort: string;
   enCours: boolean;
+  /** Arrêt d'urgence : rien ne part. */
+  bloquee?: boolean;
   surMoteur: (id: string) => void;
   surModele: (id: string) => void;
   surEffort: (e: string) => void;
@@ -169,7 +180,7 @@ export function Console(p: ConsoleProps) {
 
   const envoyer = () => {
     const t = texte.trim();
-    if (!t || p.enCours || !moteurActif?.disponible) return;
+    if (!t || p.enCours || p.bloquee || !moteurActif?.disponible) return;
     p.surEnvoyer(t);
     setTexte("");
   };
@@ -241,6 +252,11 @@ export function Console(p: ConsoleProps) {
           </label>
         )}
       </div>
+      {p.bloquee && (
+        <p className="console-alerte" role="status">
+          Arrêt d'urgence actif : JARVIS n'envoie plus rien tant qu'il n'est pas levé.
+        </p>
+      )}
       {moteurActif && !moteurActif.disponible && (
         <p className="console-alerte" role="status">
           {moteurActif.nom} indisponible : {moteurActif.detail}.
@@ -271,7 +287,7 @@ export function Console(p: ConsoleProps) {
           type="submit"
           className="envoyer-btn"
           data-arreter={p.enCours || undefined}
-          disabled={!p.enCours && (!texte.trim() || !moteurActif?.disponible)}
+          disabled={!p.enCours && (!texte.trim() || !moteurActif?.disponible || p.bloquee)}
           aria-label={p.enCours ? "Arrêter la réponse" : "Envoyer"}
           title={p.enCours ? "Arrêter (Échap)" : "Envoyer (Entrée)"}
         >

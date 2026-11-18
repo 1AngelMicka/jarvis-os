@@ -54,6 +54,31 @@ async def _verifier_audit(p: Parametres) -> int:
     return 3
 
 
+async def _lever_urgence(p: Parametres) -> int:
+    """Secours local : exige les identifiants du PROPRIÉTAIRE de la base (fichier .env du PC), journalisé 🔴.
+
+    Le Core en marche garde l'état en mémoire : le redémarrer après cette commande.
+    """
+    import asyncpg
+
+    from .securite import audit
+    from .securite.urgence import ArretUrgence
+
+    conn = await asyncpg.connect(p.url_base("proprio"))
+    try:
+        urgence = ArretUrgence()
+        await urgence.charger(conn)
+        if not urgence.actif:
+            print("L'arrêt d'urgence n'est pas actif.")
+            return 0
+        await urgence.lever(conn)
+        await audit.journaliser(conn, acteur="cli:proprietaire", action="urgence.levee_secours", niveau="rouge")
+    finally:
+        await conn.close()
+    print("Arrêt d'urgence levé (journalisé). Redémarrez le Core pour qu'il le prenne en compte.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     analyseur = argparse.ArgumentParser(prog="jarvis2", description="JARVIS 2 — Core")
     sous = analyseur.add_subparsers(dest="commande", required=True)
@@ -66,6 +91,9 @@ def main(argv: list[str] | None = None) -> int:
     jum = sous.add_parser("jumeler", help="code de jumelage à usage unique (5 min) pour un nouvel appareil")
     jum.add_argument("--adresse", default=None, help="adresse de l'interface (défaut : http://localhost:<port>)")
     sous.add_parser("verifier-audit", help="vérifier la chaîne d'empreintes du journal d'audit")
+    sous.add_parser(
+        "lever-urgence", help="secours de l'administrateur du PC (clé d'accès perdue) : lever l'arrêt d'urgence"
+    )
     ver = sous.add_parser("verifier-import", help="même modèle d'embeddings et mêmes résultats de recherche")
     ver.add_argument("source", choices=sorted(SOURCES), help="source d'import")
     args = analyseur.parse_args(argv)
@@ -117,6 +145,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.commande == "verifier-audit":
         return asyncio.run(_verifier_audit(p))
+
+    if args.commande == "lever-urgence":
+        return asyncio.run(_lever_urgence(p))
 
     if args.commande == "serveur":
         import uvicorn
