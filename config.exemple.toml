@@ -37,6 +37,7 @@ sujets_prives = [
 # Modèle par défaut d'un connecteur, ou liste de modèles quand le fournisseur n'en publie pas (Codex).
 # [connecteurs.ollama]
 # modele = "qwen3.5:2b"
+# modele_vision = "qwen3.5:2b"   # modèle Ollama qui voit les images (bouton « Écran »)
 # [connecteurs.codex]
 # modeles = ["<modèle de votre compte>"]
 # Point d'accès compatible OpenAI supplémentaire (clé : nom dans le coffre ; local = true pour un serveur du PC).

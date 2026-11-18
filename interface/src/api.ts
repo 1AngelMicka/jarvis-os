@@ -238,3 +238,26 @@ export const consigneAtelier = (id: string, consigne: string, reprendre = false)
 export const arreterAtelier = (id: string) => envoyer<{ arrete: boolean }>(`/v1/ateliers/${id}/arreter`);
 export const abandonnerAtelier = (id: string) => envoyer<{ abandonne: boolean }>(`/v1/ateliers/${id}/abandonner`);
 export const repondreAttente = (id: string, accorde: boolean) => envoyer<{ accorde: boolean }>(`/v1/ateliers/attentes/${id}`, { accorde });
+// --- Voix et vision (phase 10) ---
+/** Enregistrement → texte (transcription sur le PC) ; `eveil` : la phrase commence par « Jarvis ». */
+export async function transcrireAudio(audio: Blob): Promise<{ texte: string; eveil: boolean; commande: string }> {
+  let rep: Response;
+  try {
+    rep = await fetch("/v1/voix/transcrire", {
+      method: "POST",
+      headers: entetes({ "Content-Type": audio.type || "audio/webm" }),
+      body: audio,
+    });
+  } catch {
+    throw new ErreurApi(INJOIGNABLE, 0);
+  }
+  if (!rep.ok) throw await lireErreur(rep);
+  return (await rep.json()) as { texte: string; eveil: boolean; commande: string };
+}
+export const decrireImage = (image: string, question?: string) =>
+  envoyer<{ description: string; modele: string }>("/v1/vision/decrire", { image, ...(question ? { question } : {}) });
+export const listerCreations = () =>
+  appeler<{ creations: { id: string; titre: string; description: string; version_courante: number; maj_le: string }[] }>("/v1/creations");
+export const creerCreation = (titre: string, demande: string) => envoyer<{ id: string; version: number }>("/v1/creations", { titre, demande });
+export const modifierCreation = (id: string, demande: string) => envoyer<{ id: string; version: number }>(`/v1/creations/${id}/modifier`, { demande });
+export const lienCreation = (id: string) => appeler<{ url: string; version: number }>(`/v1/creations/${id}/lien`);

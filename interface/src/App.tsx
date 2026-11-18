@@ -13,8 +13,10 @@ import { EcranJumelage } from "./composants/Jumelage";
 import { Panneau } from "./composants/Panneau";
 import { type EtatNoyau, Reacteur } from "./composants/Reacteur";
 import { PanneauSecurite } from "./composants/Securite";
+import { CommandesVoix } from "./composants/Voix";
 import { SelecteurTheme } from "./composants/SelecteurTheme";
 import { ecrirePreferences, lirePreferences } from "./preferences";
+import { LecteurVocal } from "./voix";
 import type { AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
 
 let compteur = 0;
@@ -76,6 +78,7 @@ function Hud() {
   const [annonce, setAnnonce] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
   const controleur = useRef<AbortController | null>(null);
+  const lecteur = useRef(new LecteurVocal()).current;
   const minuterieNotif = useRef<number | undefined>(undefined);
 
   const notifier = useCallback((message: string) => {
@@ -264,6 +267,7 @@ function Hud() {
           break;
         }
         case "delta":
+          lecteur.pousser(ev.donnees.texte);
           setPremierMorceau(true);
           setMessages((ms) => {
             const dernier = ms.at(-1);
@@ -272,6 +276,7 @@ function Hud() {
           });
           break;
         case "fin":
+          lecteur.finir();
           setMessages((ms) => [...ms.filter((m) => m.cle !== cleJarvis), { cle: cleJarvis, role: "jarvis", texte: ev.donnees.texte, meta: ev.donnees }]);
           setConversations((cs) => cs.map((c, i) => (i === 0 ? { ...c, nb_messages: c.nb_messages + 1 } : c)));
           setAnnonce("Réponse de JARVIS terminée.");
@@ -314,6 +319,7 @@ function Hud() {
   };
 
   const arreter = () => {
+    lecteur.arreter();
     controleur.current?.abort();
   };
 
@@ -534,7 +540,7 @@ function Hud() {
             className="panneau-scene"
             ordre={2}
             id="agents"
-            meta="missions, recettes, mémoire, outils MCP"
+            meta="missions, recettes, mémoire, créations, outils MCP"
             actions={
               <button
                 type="button"
@@ -624,6 +630,20 @@ function Hud() {
                   surEffort={setEffort}
                   surEnvoyer={envoyer}
                   surArreter={arreter}
+                  extras={
+                    <CommandesVoix
+                      lecteur={lecteur}
+                      enCours={enCours}
+                      bloquee={urgence}
+                      surEnvoyer={envoyer}
+                      surNotifier={notifier}
+                      surDescription={(texte) => {
+                        setMessages((ms) => [...ms, { cle: nouvelleCle(), role: "jarvis", texte: `Votre écran : ${texte}` }]);
+                        lecteur.pousser(`${texte}\n`);
+                        lecteur.finir();
+                      }}
+                    />
+                  }
                 />
               </>
             )}

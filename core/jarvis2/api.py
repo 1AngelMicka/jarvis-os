@@ -41,6 +41,8 @@ from .api_accueil import routeur as routeur_accueil
 from .api_agents import routeur as routeur_agents
 from .api_ateliers import routeur as routeur_ateliers
 from .api_connecteurs import routeur as routeur_connecteurs
+from .api_medias import routeur as routeur_medias
+from .api_medias import routeur_pages as routeur_creations
 from .api_memoire import routeur as routeur_memoire
 from .api_securite import routeur as routeur_securite
 from .ateliers.gestionnaire import GestionnaireAteliers, Projet
@@ -65,6 +67,7 @@ from .securite.permissions import Approbations
 from .securite.urgence import ArretUrgence
 from .tailscale import EtatTailscale
 from .tailscale import lire_etat as lire_tailscale
+from .voix import Transcripteur, TranscripteurWhisper
 
 journal = logging.getLogger("jarvis2.api")
 
@@ -95,6 +98,9 @@ class Contexte:
     dossier_donnees: Path | None = None  # tâches de nuit de la mémoire (export Markdown dans memoire-md/)
     etat_bascule: EtatBascule | None = None
     ateliers: GestionnaireAteliers | None = None
+    transcripteur: Transcripteur | None = None
+    url_ollama: str = "http://127.0.0.1:11434"
+    modele_vision: str | None = None
     approbations: Approbations = field(init=False)
     conseil: ServiceConseil = field(init=False)
     missions: ServiceMissions = field(init=False)
@@ -176,6 +182,9 @@ async def construire_contexte(p: Parametres) -> Contexte:
             [p.claude_commande] if p.claude_commande else None,
         ),
         urgence=urgence,
+        transcripteur=TranscripteurWhisper(p.dossier_modeles, p.modele_voix),
+        url_ollama=p.ollama_url,
+        modele_vision=locale.connecteur("ollama").get("modele_vision"),
     )
 
 
@@ -318,7 +327,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
                     status_code=423,
                 )
         reponse = await suite(request)
-        if not request.url.path.startswith("/v1/"):
+        if not request.url.path.startswith(("/v1/", "/creations/")):  # une création porte sa propre CSP (bac à sable)
             reponse.headers["Content-Security-Policy"] = CSP
             reponse.headers["X-Content-Type-Options"] = "nosniff"
             reponse.headers["Referrer-Policy"] = "no-referrer"
@@ -421,6 +430,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_accueil)
     app.include_router(routeur_agents)
     app.include_router(routeur_ateliers)
+    app.include_router(routeur_medias)
+    app.include_router(routeur_creations)
     app.include_router(routeur_memoire)
 
     dossier = parametres.dossier_interface

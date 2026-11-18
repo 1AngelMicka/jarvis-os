@@ -82,6 +82,8 @@ class Parametres(BaseSettings):
 
     # Mémoire
     modele_embeddings: str = Field(MODELE_EMBEDDINGS, alias="JARVIS2_MODELE_EMBEDDINGS")
+    # Voix : modèle Whisper de la transcription locale (tiny, base, small, medium…)
+    modele_voix: str = Field("base", alias="JARVIS2_MODELE_VOIX")
 
     def url_base(self, role: str = "app", base: str | None = None) -> str:
         """URL de connexion : `role` = « app » (Core) ou « proprio » (migrations uniquement)."""

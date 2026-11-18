@@ -177,6 +177,8 @@ interface ConsoleProps {
   surEffort: (e: string) => void;
   surEnvoyer: (texte: string) => void;
   surArreter: () => void;
+  /** Commandes supplémentaires (voix, vision), à côté du conseil. */
+  extras?: React.ReactNode;
 }
 
 export function Console(p: ConsoleProps) {
@@ -256,6 +258,7 @@ export function Console(p: ConsoleProps) {
         >
           Conseil
         </button>
+        {p.extras}
         {moteurActif && moteurActif.modeles.length > 0 && (
           <label className="reglage-compact">
             <span className="visuellement-cache">Modèle</span>

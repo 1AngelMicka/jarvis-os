@@ -614,3 +614,7 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
 .atelier-fil li[data-type="attente"] { color: var(--ambre-texte); }
 .atelier-fil li[data-type="erreur"] { color: var(--rouge-pale); }
 .atelier-heure { color: var(--texte-3); }
+
+/* --- Créations (bac à sable) ------------------------------------------------------------------------------- */
+.creation-titre { width: 100%; min-height: 36px; padding: 0 var(--e-4); border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); background: rgb(var(--c-creux) / .7); color: var(--texte); }
+.creation-cadre { display: block; width: 100%; height: min(70vh, 560px); border: var(--l-fin) solid var(--ligne-forte); border-radius: var(--r-2); background: var(--mix-clair); }

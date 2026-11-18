@@ -1,6 +1,6 @@
 [project]
 name = "jarvis2"
-version = "0.6.0"
+version = "0.7.0"
 description = "JARVIS 2 — Core (API, moteurs, mémoire)"
 requires-python = ">=3.13,<3.14"
 dependencies = [
@@ -19,6 +19,7 @@ dependencies = [
     "sqlite-vec>=0.1.9",
     "pyyaml>=6.0.3",
     "croniter>=7.0.0",
+    "faster-whisper>=1.2.1",
 ]
 
 [project.scripts]
@@ -74,5 +75,5 @@ files = ["jarvis2", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["pgvector.*", "sqlite_vec"]
+module = ["pgvector.*", "sqlite_vec", "faster_whisper", "av"]
 ignore_missing_imports = true

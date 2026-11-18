@@ -1,5 +1,13 @@
 # Décisions techniques
 
+## Voix, vision, créations (phase 10)
+
+- **Transcription locale** (`voix.py`) : faster-whisper sur le CPU (int8), modèle téléchargé une fois dans `<données>/modeles/whisper` ; l'audio (webm/opus du navigateur, wav…) est décodé par PyAV puis rééchantillonné à 16 kHz par JARVIS (l'appel de PyAV dans faster-whisper n'est plus compatible avec PyAV ≥ 15). Invite initiale « Jarvis » pour l'orthographe du nom ; mot d'éveil tolérant (« j'arvi », « djarvis »…).
+- **Synthèse vocale** dans l'interface : `speechSynthesis` avec une voix française **locale** seulement (`localService`) ; sans voix locale, rien n'est lu (jamais de voix en ligne). Lecture phrase par phrase pendant le flux.
+- **Mains libres** : détection de la parole par le niveau sonore (phrase = parole puis 0,9 s de silence, 15 s au plus) ; chaque phrase est transcrite sur le PC et ignorée sauf si elle commence par « Jarvis » (ou suit un « Jarvis » seul dans les 8 s). L'écoute est suspendue pendant que JARVIS parle ou répond.
+- **Vision** (`vision.py`) : seulement sur demande, à partir d'une capture que l'utilisateur déclenche et choisit (`getDisplayMedia`) ; décrite par le modèle local `[connecteurs.ollama] modele_vision` ; l'image n'est ni gardée ni envoyée ailleurs.
+- **Créations** (`creations.py`) : page HTML générée par le routeur (IA locale pour un sujet privé), servie par `/creations/<id>?v=&j=` avec un jeton HMAC de 10 minutes (secret propre au démarrage) et la CSP `sandbox allow-scripts …; default-src 'none'; connect-src 'none'; frame-ancestors <origine de l'interface>` : origine unique (aucun accès à l'interface, aux jetons ni au stockage), aucune requête réseau. `frame-ancestors 'self'` ne convient pas : sous `sandbox`, il désignerait l'origine opaque de la page.
+
 ## Ateliers Claude Code (phase 9, migration 009)
 
 - **Binaire officiel plutôt que le SDK** : `claude -p --output-format stream-json` dans le worktree, environnement sans clés d'API, réponse refusée si `apiKeySource` ≠ `none` (même règle que le connecteur). Les ateliers exigent l'avertissement Claude Code accepté.
