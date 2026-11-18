@@ -34,7 +34,10 @@ async def pool(url_proprio: str, parametres: Parametres) -> AsyncIterator[asyncp
     await appliquer_migrations(url_proprio)
     conn = await asyncpg.connect(url_proprio)
     try:
-        await conn.execute("TRUNCATE telemetrie, messages, conversations, memoires RESTART IDENTITY CASCADE")
+        await conn.execute(
+            "TRUNCATE telemetrie, imports, chantiers, creation_donnees, creation_versions, creations, missions,"
+            " profil_reponses, messages, conversations, memoires RESTART IDENTITY CASCADE"
+        )
     finally:
         await conn.close()
     p = await creer_pool(parametres.url_base("app", BASE_TEST), max_size=4)

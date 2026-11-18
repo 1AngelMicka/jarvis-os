@@ -29,6 +29,7 @@ class Parametres(BaseSettings):
     pg_hote: str = Field("127.0.0.1", alias="JARVIS2_PG_HOTE")
     pg_port: int = Field(5433, alias="JARVIS2_PG_PORT")
     app_mot_de_passe: SecretStr = Field(SecretStr(""), alias="JARVIS2_APP_MOT_DE_PASSE")
+    conteneur_pg: str = Field("jarvis2-postgres", alias="JARVIS2_CONTENEUR_PG")
 
     # Core
     hote: str = Field("127.0.0.1", alias="JARVIS2_HOTE")
@@ -61,6 +62,11 @@ class Parametres(BaseSettings):
     @property
     def dossier_journaux(self) -> Path:
         return self.dossier_donnees / "journaux"
+
+    @property
+    def dossier_modeles(self) -> Path:
+        """Cache des modèles d'embeddings (fastembed) : sur le disque de données."""
+        return self.dossier_donnees / "modeles"
 
     @property
     def dossier_claude_vide(self) -> Path:

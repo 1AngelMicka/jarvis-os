@@ -17,7 +17,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 from uuid import UUID
 
@@ -27,11 +27,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__
+from . import __version__, memoire
 from .config import Parametres
 from .conversations import DepotConversations
 from .db import creer_pool, version_schema
-from .dialogue import ServiceDialogue
+from .dialogue import ServiceDialogue, SourceMemoire
+from .embeddings import EncodeurFastEmbed
 from .moteurs import construire_moteurs
 from .moteurs.base import ErreurMoteur, Options
 from .moteurs.telemetrie import EnregistreurPostgres, MoteurInstrumente
@@ -52,6 +53,7 @@ class Contexte:
     moteurs: dict[str, MoteurInstrumente]
     service: ServiceDialogue
     moteur_defaut: str
+    memoire: SourceMemoire | None = None
 
 
 class DemandeDialogue(BaseModel):
@@ -76,7 +78,9 @@ async def construire_contexte(p: Parametres) -> Contexte:
     pool = await creer_pool(p.url_base("app"))
     depot = DepotConversations(pool)
     moteurs = construire_moteurs(p, EnregistreurPostgres(pool))
-    return Contexte(pool, depot, moteurs, ServiceDialogue(depot, moteurs, p.moteur_defaut), p.moteur_defaut)
+    memoire = SourceMemoire(pool, EncodeurFastEmbed(p.dossier_modeles))
+    service = ServiceDialogue(depot, moteurs, p.moteur_defaut, memoire)
+    return Contexte(pool, depot, moteurs, service, p.moteur_defaut, memoire)
 
 
 async def decrire_moteur(moteur: MoteurInstrumente) -> dict[str, Any]:
@@ -98,10 +102,15 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     async def cycle_de_vie(app: FastAPI) -> AsyncIterator[None]:
         ctx = contexte or await construire_contexte(parametres)
         app.state.ctx = ctx
+        prechargement = None
+        if ctx.memoire is not None:  # modèle d'embeddings chargé en tâche de fond : le 1er message n'attend pas
+            prechargement = asyncio.create_task(ctx.memoire.encodeur.encoder("préchargement"))
         journal.info("JARVIS 2 prêt — moteurs : %s", ", ".join(ctx.moteurs))
         try:
             yield
         finally:
+            if prechargement is not None and not prechargement.done():
+                prechargement.cancel()
             if contexte is None:
                 for m in ctx.moteurs.values():
                     await m.fermer()
@@ -139,16 +148,32 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     @app.get("/v1/etat")
     async def etat(request: Request) -> dict[str, Any]:
         c = ctx(request)
-        moteurs, conversations = await asyncio.gather(
+        moteurs, conversations, comptes = await asyncio.gather(
             asyncio.gather(*(decrire_moteur(m) for m in c.moteurs.values())),
             c.depot.lister(limite=50),
+            memoire.compter(c.pool),
         )
         return {
             "version": __version__,
             "moteur_defaut": c.moteur_defaut,
             "moteurs": moteurs,
             "conversations": [conv.en_dict() for conv in conversations],
+            "memoire": comptes,
         }
+
+    @app.get("/v1/memoire/recherche")
+    async def recherche_memoire(request: Request, q: str, limite: int = 10, local: bool = False) -> dict[str, Any]:
+        """Recherche hybride telle que le dialogue la fait. `local=true` inclut les souvenirs privés."""
+        c = ctx(request)
+        if c.memoire is None:
+            raise HTTPException(503, "Mémoire indisponible")
+        if not q.strip():
+            raise HTTPException(422, "Requête vide")
+        reglages = replace(c.memoire.reglages, limite=max(1, min(limite, 50)))
+        resultats = await memoire.rechercher_multi(
+            c.pool, c.memoire.encodeur, q, exclure_local=not local, reglages=reglages
+        )
+        return {"resultats": [{"score": r.score, **r.souvenir.en_dict()} for r in resultats]}
 
     @app.get("/v1/conversations")
     async def conversations(request: Request, limite: int = 50, archivees: bool = False) -> dict[str, Any]:
