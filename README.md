@@ -4,7 +4,7 @@ Assistant personnel local d'abord : mémoire à long terme, conversation en flux
 
 Plan : [docs/PLAN.md](docs/PLAN.md) · décisions : [docs/DECISIONS.md](docs/DECISIONS.md) · design : [interface/DESIGN.md](interface/DESIGN.md).
 
-> Projet en construction. L'installation simplifiée (sans Docker ni Node) arrive en phase 5.
+> Projet en construction. L'installation simplifiée (sans Docker ni Node) arrive en phase 6.
 
 ## Démarrer (développement)
 

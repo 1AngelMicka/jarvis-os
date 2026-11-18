@@ -2,7 +2,7 @@
 
 ## Stockage PostgreSQL dans un volume Docker
 
-PostgreSQL exige des droits Unix (0700) sur son dossier de données. Un dossier monté depuis un système de fichiers qui ne les gère pas (exFAT, montages Windows via Docker Desktop) est refusé (`initdb: could not change permissions … Operation not permitted`). `docker-compose.yml` utilise donc un volume Docker nommé (`jarvis2_pg`). Pour placer les données sur un autre disque, déplacer le disque virtuel de Docker Desktop (Settings › Resources › Advanced › Disk image location). Le stockage SQLite par défaut (phase 5) supprimera ce besoin pour la plupart des installations.
+PostgreSQL exige des droits Unix (0700) sur son dossier de données. Un dossier monté depuis un système de fichiers qui ne les gère pas (exFAT, montages Windows via Docker Desktop) est refusé (`initdb: could not change permissions … Operation not permitted`). `docker-compose.yml` utilise donc un volume Docker nommé (`jarvis2_pg`). Pour placer les données sur un autre disque, déplacer le disque virtuel de Docker Desktop (Settings › Resources › Advanced › Disk image location). Le stockage SQLite par défaut (phase 6) supprimera ce besoin pour la plupart des installations.
 
 ## asyncpg plutôt que psycopg
 
@@ -54,4 +54,4 @@ L'import est rejouable (rattrapage) : une ligne n'est mise à jour que si elle a
 - **Modèle d'embedding stocké par ligne** (`embedding_model`) : aucune dimension n'est supposée dans le code ; la recherche ne compare que les vecteurs produits par le modèle de l'encodeur actif. Passer à un autre modèle (ex. `BAAI/bge-m3`, 1024 dimensions) = ajouter une colonne de vecteurs (index HNSW halfvec), la remplir en tâche de fond, basculer.
 - **Validité temporelle sans DELETE** : `valid_from`, `valid_to`, `superseded_by`, `observed_at` ; la recherche et le noyau ne voient que `valid_to IS NULL AND NOT archived`.
 - **Oubli et consolidation** : `importance` (0 à 1), `last_accessed_at`, `access_count`, `archived`, `derived_from`.
-- **Blocs éditables** (`memory_blocks`, historique `memory_block_versions`) : créés mais vides ; le noyau reste pour l'instant le tag `noyau` et deviendra des blocs en phase 7.
+- **Blocs éditables** (`memory_blocks`, historique `memory_block_versions`) : créés mais vides ; le noyau reste pour l'instant le tag `noyau` et deviendra des blocs en phase 8.

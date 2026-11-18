@@ -127,7 +127,7 @@ export function PanneauSecurite({ nbCles, surChangement }: Props) {
             <img src={qr.qr} alt="QR de jumelage" width={176} height={176} />
             <p className="sec-texte">
               Scannez ce code (valable jusqu'à {DATE.format(new Date(qr.expire_le))}, une seule fois).
-              {qr.local && " Depuis un téléphone, ouvrez d'abord JARVIS par son adresse réseau (phase 5 : Tailscale)."}
+              {qr.local && " Depuis un téléphone, ouvrez d'abord JARVIS par son adresse réseau (phase 6 : Tailscale)."}
             </p>
             <button
               type="button"

@@ -1,8 +1,8 @@
 -- 002 — Données héritées de JARVIS v1 : profil, missions, créations, chantiers, journal des imports.
 -- Mêmes colonnes et mêmes contraintes que l'ancien Core (lu le 18 nov. 2026 dans sa sauvegarde) : les lignes
--- s'importent telles quelles, identifiants compris. Les modules qui s'en serviront arrivent en phases 5 à 7.
+-- s'importent telles quelles, identifiants compris. Les modules qui s'en serviront arrivent en phases 7 à 10.
 
--- Messages importés : identifiant d'origine, pour qu'un nouvel import (rattrapage, phase 9) ne les double pas.
+-- Messages importés : identifiant d'origine, pour qu'un nouvel import (rattrapage, phase 12) ne les double pas.
 ALTER TABLE messages ADD COLUMN ancien_id bigint;
 CREATE UNIQUE INDEX messages_ancien_id_idx ON messages (ancien_id) WHERE ancien_id IS NOT NULL;
 
@@ -72,7 +72,7 @@ CREATE TABLE creation_donnees (
 CREATE INDEX creation_donnees_idx ON creation_donnees (creation_id, collection, cree_le);
 
 -- Chantiers (table « taches » de JARVIS v1). `session_id` désignait une session d'atelier de l'ancien
--- JARVIS : gardé tel quel, sans clé étrangère (les ateliers sont refaits en phase 6).
+-- JARVIS : gardé tel quel, sans clé étrangère (les ateliers sont refaits en phase 9).
 CREATE TABLE chantiers (
     id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     titre              text NOT NULL CHECK (char_length(titre) BETWEEN 1 AND 300),
