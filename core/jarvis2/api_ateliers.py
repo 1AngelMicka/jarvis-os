@@ -93,7 +93,9 @@ async def consigne(request: Request, ident: UUID, corps: Consigne) -> dict[str, 
     g, a = _ateliers(request), _appareil(request)
     connecteurs = _ctx(request).connecteurs
     if connecteurs is not None and connecteurs.conditions_a_accepter("claude_code"):
-        raise HTTPException(409, "Les ateliers utilisent votre abonnement Claude : acceptez d'abord l'avertissement Claude Code")
+        raise HTTPException(
+            409, "Les ateliers utilisent votre abonnement Claude : acceptez d'abord l'avertissement Claude Code"
+        )
     try:
         await g.lancer(ident, corps.consigne, corps.reprendre)
     except ErreurAtelier as exc:
