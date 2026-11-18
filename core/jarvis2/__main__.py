@@ -119,12 +119,76 @@ async def _copier_stockage(p: Parametres, vers: str, fichier: Path | None) -> in
     return 0 if rapport.complet else 3
 
 
+async def _docteur(p: Parametres, en_json: bool, reparer: bool) -> int:
+    """Diagnostic de l'installation ; `--reparer` applique les réparations sûres (schéma SQLite, modèle)."""
+    import contextlib
+    import json
+
+    import httpx
+
+    from . import diagnostic
+    from .config_locale import chemin_config
+    from .connecteurs import Connecteurs, construire_catalogue
+    from .db import ErreurBaseOuReseau
+    from .moteurs.telemetrie import EnregistreurBase
+    from .securite.coffre import Coffre
+    from .tailscale import lire_etat as lire_tailscale
+
+    if reparer and p.stockage_effectif == "sqlite":
+        await migrer(p)
+    if reparer and not diagnostic.modele_present(p.dossier_modeles, p.modele_embeddings):
+        from .embeddings import EncodeurFastEmbed
+
+        print("Téléchargement du modèle d'embeddings (une seule fois)…")
+        await asyncio.to_thread(EncodeurFastEmbed(p.dossier_modeles, p.modele_embeddings).encoder_sync, "essai")
+    base: Base | None
+    try:
+        base = await ouvrir_base(p, max_size=1)
+    except (*ErreurBaseOuReseau, RuntimeError):
+        base = None
+    try:
+        connecteurs = None
+        if base is not None:
+            coffre = Coffre(chemin_config().parent / "coffre.json")
+            catalogue = construire_catalogue(p, charger_config_locale(), coffre, EnregistreurBase(base))
+            connecteurs = Connecteurs(base, catalogue, coffre, prefere=p.moteur_defaut)
+            with contextlib.suppress(*ErreurBaseOuReseau):  # base pas encore créée : réglages par défaut
+                await connecteurs.charger()
+        verifications = await diagnostic.diagnostiquer(p, base, connecteurs, await lire_tailscale(p.port))
+    finally:
+        if base is not None:
+            await base.close()
+    try:
+        async with httpx.AsyncClient(timeout=2) as client:
+            en_marche = (await client.get(f"http://127.0.0.1:{p.port}/v1/sante")).status_code == 200
+    except httpx.HTTPError:
+        en_marche = False
+    verifications.append(
+        diagnostic.Verification(
+            "core",
+            "Core",
+            "ok" if en_marche else "info",
+            f"en marche sur http://localhost:{p.port}" if en_marche else "arrêté",
+            aide=None if en_marche else "jarvis2 (démarre le Core et ouvre l'interface)",
+        )
+    )
+    if en_json:
+        print(json.dumps([v.en_dict() for v in verifications], ensure_ascii=False, indent=2))
+    else:
+        print(f"JARVIS 2 — diagnostic ({p.stockage_effectif})\n{diagnostic.texte(verifications)}")
+    return 1 if any(v.statut == "erreur" for v in verifications) else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     analyseur = argparse.ArgumentParser(prog="jarvis2", description="JARVIS 2 — Core")
-    sous = analyseur.add_subparsers(dest="commande", required=True)
+    sous = analyseur.add_subparsers(dest="commande")
     m = sous.add_parser("migrer", help="appliquer les migrations")
     m.add_argument("--base", help="PostgreSQL : base cible (défaut : POSTGRES_DB)")
-    sous.add_parser("serveur", help="lancer le Core")
+    srv = sous.add_parser("serveur", help="lancer le Core")
+    srv.add_argument("--ouvrir", action="store_true", help="ouvrir l'interface dans le navigateur")
+    doc = sous.add_parser("docteur", aliases=["doctor"], help="diagnostic de l'installation")
+    doc.add_argument("--json", action="store_true", help="résultat en JSON")
+    doc.add_argument("--reparer", action="store_true", help="appliquer les réparations sûres (schéma, modèle)")
     imp = sous.add_parser("importer", help="importer les données d'une autre source (lecture seule côté source)")
     imp.add_argument("source", choices=sorted(SOURCES), help="source d'import")
     imp.add_argument("--sauvegarde", type=Path, help="sauvegarde de la source (jarvis_v1 : pg_dump -Fc)")
@@ -142,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
     cop.add_argument("--vers", choices=["sqlite", "postgres"], required=True, help="moteur cible")
     cop.add_argument("--fichier", type=Path, default=None, help="fichier SQLite (défaut : JARVIS2_SQLITE)")
     args = analyseur.parse_args(argv)
+    if args.commande is None:  # `jarvis2` seul : démarrer et ouvrir l'interface
+        args = analyseur.parse_args(["serveur", "--ouvrir"])
 
     p = parametres()
     configurer_journal(p.niveau_journal, p.dossier_journaux)
@@ -193,6 +259,9 @@ def main(argv: list[str] | None = None) -> int:
         print(verification.texte())
         return 0 if verification.vecteurs_identiques and verification.recherches_identiques else 3
 
+    if args.commande in ("docteur", "doctor"):
+        return asyncio.run(_docteur(p, args.json, args.reparer))
+
     if args.commande == "stockage":
         return asyncio.run(_copier_stockage(p, args.vers, args.fichier))
 
@@ -213,6 +282,12 @@ def main(argv: list[str] | None = None) -> int:
         if p.hote not in ("127.0.0.1", "localhost", "::1") and not p.ouverture_reseau:
             journal.error("Refusé : le Core n'écoute que sur 127.0.0.1, sauf JARVIS2_OUVERTURE_RESEAU=true")
             return 2
+        if p.stockage_effectif == "sqlite":  # aucune installation : le fichier est créé ou mis à jour ici
+            appliquees = asyncio.run(migrer(p))
+            if appliquees:
+                journal.info("Stockage SQLite %s : migrations %s", p.chemin_sqlite, ", ".join(appliquees))
+        if args.ouvrir:
+            p = p.model_copy(update={"ouvrir_navigateur": True})
         uvicorn.run(creer_app(p), host=p.hote, port=p.port, log_config=None, access_log=False)
         return 0
     return 1

@@ -33,7 +33,7 @@ from jarvis2.moteurs.base import (
     Reponse,
 )
 from jarvis2.moteurs.compatible_openai import MoteurCompatibleOpenAI
-from jarvis2.moteurs.telemetrie import EnregistreurMemoire, EnregistreurPostgres, MoteurInstrumente
+from jarvis2.moteurs.telemetrie import EnregistreurBase, EnregistreurMemoire, MoteurInstrumente
 from jarvis2.securite import appareils
 from jarvis2.securite.coffre import Coffre
 
@@ -227,7 +227,7 @@ async def systeme(pool: Base, tmp_path: Path) -> dict[str, Any]:
     }
     coffre = Coffre(tmp_path / "coffre.json")
     defs = {
-        i: Definition(MoteurInstrumente(m, EnregistreurPostgres(pool)), "cle" if i == "cle" else None)
+        i: Definition(MoteurInstrumente(m, EnregistreurBase(pool)), "cle" if i == "cle" else None)
         for i, m in moteurs.items()
     }
     connecteurs = Connecteurs(pool, defs, coffre)

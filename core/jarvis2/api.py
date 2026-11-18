@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import webbrowser
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
@@ -30,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__, memoire
+from .api_accueil import routeur as routeur_accueil
 from .api_connecteurs import routeur as routeur_connecteurs
 from .api_securite import routeur as routeur_securite
 from .config import Parametres
@@ -43,12 +45,14 @@ from .dialogue import ServiceDialogue, SourceMemoire
 from .embeddings import EncodeurFastEmbed
 from .memoire import Expurgateur, ReglagesRecherche
 from .moteurs.base import ErreurMoteur, Options
-from .moteurs.telemetrie import EnregistreurPostgres, MoteurInstrumente
+from .moteurs.telemetrie import EnregistreurBase, MoteurInstrumente
 from .securite import appareils
 from .securite.actions import creer_registre
 from .securite.coffre import Coffre
 from .securite.permissions import Approbations
 from .securite.urgence import ArretUrgence
+from .tailscale import EtatTailscale
+from .tailscale import lire_etat as lire_tailscale
 
 journal = logging.getLogger("jarvis2.api")
 
@@ -69,6 +73,8 @@ class Contexte:
     memoire: SourceMemoire | None = None
     urgence: ArretUrgence = field(default_factory=ArretUrgence)
     connecteurs: Connecteurs | None = None
+    tailscale: EtatTailscale | None = None
+    chargement_modele: str | None = None  # None, « en_cours », « termine », « erreur »
     approbations: Approbations = field(init=False)
     conseil: ServiceConseil = field(init=False)
 
@@ -107,7 +113,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
     locale = charger_config_locale()
     coffre = Coffre(chemin_config().parent / "coffre.json")
     connecteurs = Connecteurs(
-        pool, construire_catalogue(p, locale, coffre, EnregistreurPostgres(pool)), coffre, prefere=p.moteur_defaut
+        pool, construire_catalogue(p, locale, coffre, EnregistreurBase(pool)), coffre, prefere=p.moteur_defaut
     )
     moteurs = connecteurs.moteurs
     reglages = ReglagesRecherche(expurgateur=Expurgateur(locale.sujets_exclus))
@@ -130,6 +136,32 @@ async def decrire_moteur(moteur: MoteurInstrumente) -> dict[str, Any]:
     }
 
 
+async def precharger_modele(ctx: Contexte) -> None:
+    """Télécharge (première fois) puis charge le modèle d'embeddings ; l'état est montré par le diagnostic."""
+    if ctx.memoire is None:
+        return
+    ctx.chargement_modele = "en_cours"
+    try:
+        await ctx.memoire.encodeur.encoder("préchargement")
+    except Exception:  # réseau absent, disque plein… : la mémoire le signalera, le Core reste utilisable
+        journal.exception("Modèle d'embeddings indisponible")
+        ctx.chargement_modele = "erreur"
+    else:
+        ctx.chargement_modele = "termine"
+
+
+async def detecter_tailscale(ctx: Contexte, port: int, autorisees: set[str]) -> None:
+    """Adresse Tailscale du PC : origine autorisée (le téléphone y ouvre l'interface) et adresse du QR."""
+    ctx.tailscale = await lire_tailscale(port)
+    if ctx.tailscale.adresse:
+        autorisees.add(ctx.tailscale.adresse)
+        journal.info(
+            "Tailscale : %s%s",
+            ctx.tailscale.adresse,
+            "" if ctx.tailscale.serve_actif else f" (Core non publié : {ctx.tailscale.commande_serve(port)})",
+        )
+
+
 def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastAPI:
     @asynccontextmanager
     async def cycle_de_vie(app: FastAPI) -> AsyncIterator[None]:
@@ -140,15 +172,22 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             await ctx.connecteurs.charger()
         if ctx.urgence.actif:
             journal.warning("Arrêt d'urgence ACTIF (depuis %s) : écritures refusées", ctx.urgence.depuis)
-        prechargement = None
+        app.state.parametres = parametres
+        taches: list[asyncio.Task[Any]] = []
         if ctx.memoire is not None:  # modèle d'embeddings chargé en tâche de fond : le 1er message n'attend pas
-            prechargement = asyncio.create_task(ctx.memoire.encodeur.encoder("préchargement"))
+            taches.append(asyncio.create_task(precharger_modele(ctx)))
+        taches.append(asyncio.create_task(detecter_tailscale(ctx, parametres.port, autorisees)))
         journal.info("JARVIS 2 prêt — moteurs : %s", ", ".join(ctx.moteurs))
+        if parametres.ouvrir_navigateur:
+            adresse = f"http://localhost:{parametres.port}/"
+            journal.info("Ouverture de %s dans le navigateur", adresse)
+            asyncio.get_running_loop().run_in_executor(None, webbrowser.open, adresse)
         try:
             yield
         finally:
-            if prechargement is not None and not prechargement.done():
-                prechargement.cancel()
+            for tache in taches:
+                if not tache.done():
+                    tache.cancel()
             if contexte is None:
                 for m in ctx.moteurs.values():
                     await m.fermer()
@@ -156,6 +195,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
 
     app = FastAPI(title="JARVIS 2", version=__version__, lifespan=cycle_de_vie, docs_url=None, redoc_url=None)
     autorisees = origines_autorisees(parametres)
+    app.state.origines = autorisees  # complété par l'adresse Tailscale une fois détectée
+    app.state.parametres = parametres
 
     @app.middleware("http")
     async def garde(request: Request, suite: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -286,6 +327,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
 
     app.include_router(routeur_securite)
     app.include_router(routeur_connecteurs)
+    app.include_router(routeur_accueil)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():

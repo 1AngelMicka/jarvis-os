@@ -11,9 +11,9 @@ import pytest
 from jarvis2.api import Contexte, creer_app
 from jarvis2.config import Parametres
 from jarvis2.conversations import DepotConversations
-from jarvis2.db import Base
+from jarvis2.db import Base, lister_migrations
 from jarvis2.dialogue import ServiceDialogue
-from jarvis2.moteurs.telemetrie import EnregistreurPostgres, MoteurInstrumente
+from jarvis2.moteurs.telemetrie import EnregistreurBase, MoteurInstrumente
 from jarvis2.securite import appareils
 
 from .test_registre_telemetrie import FauxMoteur
@@ -33,8 +33,8 @@ def lire_sse(corps: str) -> list[tuple[str, dict[str, Any]]]:
 async def client(pool: Base) -> httpx.AsyncClient:
     depot = DepotConversations(pool)
     moteurs = {
-        "faux": MoteurInstrumente(FauxMoteur(), EnregistreurPostgres(pool)),
-        "panne": MoteurInstrumente(FauxMoteur(echec=True), EnregistreurPostgres(pool)),
+        "faux": MoteurInstrumente(FauxMoteur(), EnregistreurBase(pool)),
+        "panne": MoteurInstrumente(FauxMoteur(echec=True), EnregistreurBase(pool)),
     }
     ctx = Contexte(pool, depot, moteurs, ServiceDialogue(depot, moteurs, "faux"), "faux")
     app = creer_app(Parametres(), ctx)
@@ -107,4 +107,4 @@ async def test_origine_inconnue_refusee(client: httpx.AsyncClient) -> None:
     rep = await client.post("/v1/dialogue", json={"message": "x"}, headers={"Origin": "https://malveillant.example"})
     assert rep.status_code == 403
     ok = await client.get("/v1/sante", headers={"Origin": "http://127.0.0.1:5174"})
-    assert ok.status_code == 200 and ok.json()["base"] is True and ok.json()["schema"] == "005_connecteurs"
+    assert ok.status_code == 200 and ok.json()["base"] is True and ok.json()["schema"] == lister_migrations()[-1][0]

@@ -121,10 +121,19 @@ async def creer_jumelage(request: Request, corps: Jumelage) -> dict[str, Any]:
     """Code à usage unique (5 min) + QR, pour associer un nouvel appareil."""
     c, a = ctx(request), appareil_courant(request)
     code, expire = await appareils.creer_jumelage(c.pool, a.id, corps.type)
-    url = f"{origine_page(request)}/#jumeler={code}"
+    # Le téléphone ne joint pas « localhost » : adresse Tailscale du PC quand le Core y est publié
+    ts = c.tailscale
+    distante = ts.adresse if ts is not None and ts.serve_actif else None
+    url = f"{distante or origine_page(request)}/#jumeler={code}"
     qr = segno.make(url, error="m").svg_data_uri(scale=5, border=2, dark="#02070c", light="#c4f7ff")
     await audit.journaliser(c.pool, acteur=a.acteur, action="jumelage.cree", details={"type": corps.type})
-    return {"url": url, "qr": qr, "expire_le": expire.isoformat(), "local": est_local(request)}
+    return {
+        "url": url,
+        "qr": qr,
+        "expire_le": expire.isoformat(),
+        "local": est_local(request),
+        "tailscale": distante is not None,
+    }
 
 
 @routeur.get("/appareils")

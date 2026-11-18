@@ -41,7 +41,20 @@ CONDITIONS: dict[str, dict[str, str]] = {
             "recommandée : le connecteur « Google Gemini (clé d'API) »."
         ),
         "url": "https://antigravity.google/terms",
-    }
+    },
+    # Accueil du moteur Claude Code : avertissement honnête, case cochée par l'utilisateur, alternatives
+    "claude_code": {
+        "version": "claude-code-2026-11",
+        "texte": (
+            "JARVIS appelle le programme officiel Claude Code, installé et connecté par vous (« claude /login »), sans "
+            "le modifier : vos échanges passent par votre abonnement Claude et comptent dans ses limites. Cet "
+            "abonnement relève des conditions d'Anthropic pour les particuliers : usage personnel, pas d'usage "
+            "commercial ni pour d'autres personnes. JARVIS ne lit, ne stocke ni ne transmet jamais vos identifiants. "
+            "Alternatives : une clé d'API Anthropic (facturée à l'usage), Ollama (modèles locaux), ou un fournisseur "
+            "compatible OpenAI."
+        ),
+        "url": "https://www.anthropic.com/legal/consumer-terms",
+    },
 }
 
 
@@ -206,10 +219,16 @@ class Connecteurs:
         if d is None:
             return False
         r = self._reglages.get(ident)
-        if d.moteur.interne.risque:  # à risque : seulement après l'avertissement accepté, dans sa version actuelle
+        if ident in CONDITIONS or d.moteur.interne.risque:
+            # Avertissement à accepter (à risque, ou accueil de Claude Code) : seulement après la case cochée par
+            # l'utilisateur, dans la version actuelle de l'avertissement
             attendue = CONDITIONS.get(ident, {}).get("version")
             return bool(r and r["actif"] and r["conditions_version"] == attendue)
         return bool(r["actif"]) if r else d.moteur.interne.actif_par_defaut
+
+    def conditions_a_accepter(self, ident: str) -> bool:
+        """Connecteur installé dont l'avertissement n'a pas été accepté dans sa version actuelle."""
+        return ident in CONDITIONS and self._version_acceptee(ident) != CONDITIONS[ident]["version"]
 
     def _version_acceptee(self, ident: str) -> str | None:
         r = self._reglages.get(ident)
@@ -334,10 +353,10 @@ class Connecteurs:
     async def activer(self, ident: str, appareil: Appareil, accepte: bool = False, version: str | None = None) -> None:
         d = self._verifier(ident)
         details: dict[str, Any] = {}
-        if d.moteur.interne.risque:
+        if ident in CONDITIONS or d.moteur.interne.risque:
             attendue = CONDITIONS[ident]["version"]
             if not accepte or version != attendue:
-                raise ErreurAction("Connecteur à risque : cochez vous-même l'avertissement pour l'activer")
+                raise ErreurAction("Cochez vous-même l'avertissement de ce connecteur pour l'activer")
             details = {"conditions_version": attendue, "conditions_url": CONDITIONS[ident]["url"]}
             await self._ecrire(ident, actif=True, conditions_version=attendue)
         else:

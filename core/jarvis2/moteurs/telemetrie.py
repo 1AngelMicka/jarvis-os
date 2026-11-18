@@ -50,7 +50,7 @@ class EnregistreurMemoire:
         self.mesures.append(mesure)
 
 
-class EnregistreurPostgres:
+class EnregistreurBase:
     def __init__(self, pool: Base) -> None:
         self.pool = pool
 

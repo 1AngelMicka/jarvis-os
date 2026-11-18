@@ -28,9 +28,23 @@ def dossier_donnees_defaut() -> Path:
 MODELE_EMBEDDINGS = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
+def dossier_config() -> Path:
+    """Dossier de la configuration locale (même règle que `config_locale.chemin_config`)."""
+    if os.environ.get("JARVIS2_CONFIG"):
+        return Path(os.environ["JARVIS2_CONFIG"]).parent
+    if sys.platform == "win32" and os.environ.get("APPDATA"):
+        return Path(os.environ["APPDATA"]) / "JARVIS2"
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "jarvis2"
+
+
 class Parametres(BaseSettings):
+    # `.env` du dépôt (développement), sinon `jarvis2.env` du dossier de configuration (installation) ; tout est
+    # facultatif : sans fichier, JARVIS 2 démarre avec SQLite sur 127.0.0.1:8765.
     model_config = SettingsConfigDict(
-        env_file=RACINE_DEPOT / ".env", env_file_encoding="utf-8", extra="ignore", populate_by_name=True
+        env_file=(dossier_config() / "jarvis2.env", RACINE_DEPOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
     )
 
     # Stockage : « sqlite » (défaut, aucune installation) ou « postgres ». Vide : PostgreSQL si son mot de passe
@@ -52,6 +66,8 @@ class Parametres(BaseSettings):
     port: int = Field(8765, alias="JARVIS2_PORT")
     dossier_donnees: Path = Field(default_factory=lambda: dossier_donnees_defaut(), alias="JARVIS2_DOSSIER_DONNEES")
     niveau_journal: str = Field("INFO", alias="JARVIS2_NIVEAU_JOURNAL")
+    # Ouvrir l'interface dans le navigateur au démarrage (`jarvis2 serveur --ouvrir`, ou `jarvis2` seul)
+    ouvrir_navigateur: bool = Field(False, alias="JARVIS2_OUVRIR")
     # Ouvrir le Core au réseau (autre que 127.0.0.1) : choix explicite, jamais par défaut
     ouverture_reseau: bool = Field(False, alias="JARVIS2_OUVERTURE_RESEAU")
     # Origines web supplémentaires autorisées (ex. l'adresse Tailscale du PC), en liste JSON
@@ -113,7 +129,9 @@ class Parametres(BaseSettings):
 
     @property
     def dossier_interface(self) -> Path:
-        return RACINE_DEPOT / "interface" / "dist"
+        """Interface compilée : livrée dans le paquet installé (`jarvis2/web`), sinon celle du dépôt."""
+        livree = Path(__file__).parent / "web"
+        return livree if (livree / "index.html").is_file() else RACINE_DEPOT / "interface" / "dist"
 
 
 @lru_cache(maxsize=1)
