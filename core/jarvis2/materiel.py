@@ -46,7 +46,9 @@ def _ram_windows() -> float | None:
 
 def _vram_windows() -> tuple[float | None, str | None]:
     """Plus grande mémoire vidéo déclarée dans le registre (valeur 64 bits, fiable au-delà de 4 Go)."""
-    import winreg  # type: ignore[import-not-found, unused-ignore]
+    if sys.platform != "win32":  # registre Windows ; mypy ne vérifie la suite que pour Windows
+        return (None, None)
+    import winreg
 
     cle = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
     meilleure: tuple[float | None, str | None] = (None, None)
