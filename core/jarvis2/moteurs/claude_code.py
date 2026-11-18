@@ -1,4 +1,4 @@
-"""Moteur `claude_code` : la CLI `claude -p` de l'abonnement Claude. **Jamais de clé API.**
+"""Moteur `claude_code` : la CLI `claude -p` de l'abonnement Claude de l'utilisateur. **Jamais de clé API.**
 
 Repris de `FournisseurClaudeCode` (JARVIS v1, `llm.py`) et amélioré :
 - le prompt passe par l'entrée standard (Windows limite la ligne de commande à 32 767 caractères) ;
