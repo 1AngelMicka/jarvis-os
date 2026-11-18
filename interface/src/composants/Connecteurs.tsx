@@ -57,9 +57,11 @@ function Carte({ c, surChangement }: CarteProps) {
       });
   };
 
-  const statut = STATUTS[c.statut];
+  // Avertissement à lire et à cocher soi-même : connecteur à risque, ou accueil de Claude Code
+  const aAccepter = Boolean(c.conditions) && !c.conditions_acceptees;
+  const statut = c.installe && !c.actif && aAccepter && !c.risque ? { texte: "À accepter", ton: "attention" } : STATUTS[c.statut];
   const activer = () => {
-    if (c.risque && c.conditions) {
+    if (aAccepter) {
       setAvertissement(true);
       return;
     }
@@ -128,7 +130,7 @@ function Carte({ c, surChangement }: CarteProps) {
       )}
 
       {avertissement && c.conditions && (
-        <div className="carte-co-avertissement" role="alertdialog" aria-labelledby={`av-${c.id}`}>
+        <div className="carte-co-avertissement" data-risque={c.risque || undefined} role="alertdialog" aria-labelledby={`av-${c.id}`}>
           <p id={`av-${c.id}`} className="carte-co-avertissement-titre">
             Avant d'activer ce connecteur
           </p>
@@ -144,7 +146,9 @@ function Carte({ c, surChangement }: CarteProps) {
                 setCoche(e.target.checked);
               }}
             />
-            J'ai lu cet avertissement et j'accepte ce risque pour mon compte.
+            {c.risque
+              ? "J'ai lu cet avertissement et j'accepte ce risque pour mon compte."
+              : "J'ai lu cet avertissement ; j'utilise ce connecteur pour mon usage personnel."}
           </label>
           <div className="carte-co-actions">
             <button
@@ -159,17 +163,17 @@ function Carte({ c, surChangement }: CarteProps) {
             </button>
             <button
               type="button"
-              className="btn btn-rouge btn-mini"
+              className={c.risque ? "btn btn-rouge btn-mini" : "btn btn-principal btn-mini"}
               disabled={!coche || occupe}
               onClick={() => {
                 const version = c.conditions?.version;
                 agir(async () => {
                   await activerConnecteur(c.id, true, version);
                   setAvertissement(false);
-                }, `${c.nom} activé, à vos risques.`);
+                }, c.risque ? `${c.nom} activé, à vos risques.` : `${c.nom} activé.`);
               }}
             >
-              Activer quand même
+              {c.risque ? "Activer quand même" : "Activer"}
             </button>
           </div>
         </div>
@@ -268,7 +272,7 @@ function Recommandations({ m }: { m: Materiel }) {
   );
 }
 
-export function VueConnecteurs({ surChangement }: { surChangement: (message?: string) => void }) {
+export function VueConnecteurs({ surChangement, familles }: { surChangement: (message?: string) => void; familles?: Connecteur["famille"][] }) {
   const [liste, setListe] = useState<Connecteur[] | null>(null);
   const [materiel, setMateriel] = useState<Materiel | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -308,7 +312,7 @@ export function VueConnecteurs({ surChangement }: { surChangement: (message?: st
   }
   return (
     <div className="connecteurs">
-      {FAMILLES.map((f) => (
+      {FAMILLES.filter((f) => !familles || familles.includes(f.id)).map((f) => (
         <section key={f.id} className="famille-co" aria-labelledby={`famille-${f.id}`}>
           <h3 className="sec-titre" id={`famille-${f.id}`}>
             {f.titre}

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireConversation, lireEtat } from "./api";
+import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat } from "./api";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
+import { VueAccueil } from "./composants/Accueil";
 import { VueConnecteurs } from "./composants/Connecteurs";
 import { ListeDemandes } from "./composants/Demandes";
 import { Console, Fil, type MessageAffiche } from "./composants/Dialogue";
@@ -66,7 +67,7 @@ function Hud() {
   const [alerte, setAlerte] = useState(false);
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
-  const [vue, setVue] = useState<"dialogue" | "connecteurs">("dialogue");
+  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil">("dialogue");
   const [conseil, setConseil] = useState(false);
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
   const [annonce, setAnnonce] = useState("");
@@ -104,6 +105,14 @@ function Hud() {
 
   useEffect(() => {
     charger();
+    // Premier lancement : l'assistant s'ouvre tant qu'il n'a pas été terminé
+    lireAccueil()
+      .then((a) => {
+        if (!a.termine) setVue("accueil");
+      })
+      .catch(() => {
+        /* Core injoignable : l'écran d'erreur du dialogue le dit déjà */
+      });
   }, [charger]);
 
   const rafraichir = useCallback(
@@ -428,6 +437,21 @@ function Hud() {
             ))}
             {etat && (
               <li className="etat-item">
+                <span className="point-etat" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="etat-nom etat-lien"
+                  onClick={() => {
+                    setVue("accueil");
+                  }}
+                >
+                  Installation
+                </button>
+                <span className="etat-valeur">diagnostic</span>
+              </li>
+            )}
+            {etat && (
+              <li className="etat-item">
                 <span className="point-etat" data-ok={nbDemandes === 0} aria-hidden="true" />
                 <button type="button" className="etat-nom etat-lien" onClick={montrerDemandes}>
                   Demandes
@@ -440,7 +464,19 @@ function Hud() {
       </aside>
 
       <main className="scene">
-        {vue === "connecteurs" ? (
+        {vue === "accueil" ? (
+          <Panneau titre="Installation" className="panneau-scene" ordre={2} id="accueil" meta="premier lancement">
+            <div className="panneau-corps">
+              <VueAccueil
+                surChangement={rafraichir}
+                surTermine={() => {
+                  setVue("dialogue");
+                  rafraichir("JARVIS est prêt.");
+                }}
+              />
+            </div>
+          </Panneau>
+        ) : vue === "connecteurs" ? (
           <Panneau
             titre="Connecteurs"
             className="panneau-scene"

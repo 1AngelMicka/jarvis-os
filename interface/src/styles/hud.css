@@ -506,11 +506,13 @@ html.en-urgence {
 .carte-co-case--ligne input { margin: 0; }
 .carte-co-avertissement {
   display: flex; flex-direction: column; gap: var(--e-3); padding: var(--e-4);
-  border: var(--l-fin) solid var(--rouge); border-radius: var(--r-2); background: rgb(var(--c-rouge) / .08);
+  border: var(--l-fin) solid var(--cyan); border-radius: var(--r-2); background: rgb(var(--c-cyan) / .06);
   font-size: var(--t-mini); line-height: 1.5; color: var(--texte);
 }
+.carte-co-avertissement[data-risque] { border-color: var(--rouge); background: rgb(var(--c-rouge) / .08); }
 .carte-co-avertissement p { margin: 0; }
-.carte-co-avertissement-titre { font: 600 var(--t-petit)/1.3 var(--f-ui); color: var(--rouge-clair); }
+.carte-co-avertissement-titre { font: 600 var(--t-petit)/1.3 var(--f-ui); color: var(--cyan-vif); }
+.carte-co-avertissement[data-risque] .carte-co-avertissement-titre { color: var(--rouge-clair); }
 .materiel { padding: var(--e-3) var(--e-4); border-left: var(--l-fort) solid var(--i-local); background: color-mix(in srgb, var(--i-local) 6%, transparent); }
 .materiel-liste { margin: var(--e-2) 0 0; padding-left: var(--e-5); font-size: var(--t-mini); color: var(--texte-2); }
 .materiel-liste b { color: var(--texte); font-weight: 600; }
@@ -539,4 +541,41 @@ html.en-urgence {
 @media (max-width: 420px) {
   .barre-etat-texte { display: none; }
   .msg { max-width: 94%; }
+}
+
+/* --- Assistant de premier lancement (Installation) ------------------------------------------------------- */
+.installation { display: flex; flex-direction: column; gap: var(--e-5); max-width: var(--colonne-lecture); margin: 0 auto; padding: var(--e-3) 0 var(--e-6); }
+.etapes { display: flex; flex-wrap: wrap; gap: var(--e-2); margin: 0; padding: 0; list-style: none; counter-reset: etape; }
+.etape-btn {
+  display: inline-flex; align-items: center; gap: var(--e-2); min-height: var(--cible); padding: 0 var(--e-3);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-pilule); background: transparent;
+  font: var(--t-mini)/1 var(--f-ui); color: var(--texte-2); cursor: pointer; transition: var(--transition);
+}
+.etape-btn:hover { color: var(--cyan-vif); border-color: var(--cyan); }
+.etape-num {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  border: var(--l-fin) solid currentColor; font: var(--t-micro)/1 var(--f-donnees);
+}
+.etape[data-faite] .etape-btn { color: var(--vert); border-color: rgb(var(--c-vert) / .45); }
+.etape[aria-current="step"] .etape-btn { color: var(--texte-fort); border-color: var(--cyan); background: rgb(var(--c-cyan) / .12); box-shadow: var(--lueur-1); }
+.installation-corps { display: flex; flex-direction: column; gap: var(--e-4); }
+.installation-titre { margin: 0; font: var(--g-affiche) var(--t-moyen)/1.2 var(--f-affiche); letter-spacing: calc(.06em * var(--chasse-k)); text-transform: var(--casse); color: var(--cyan-vif); }
+.installation-titre:focus { outline: none; }
+.installation-titre:focus-visible { outline: var(--l-moyen) solid var(--cyan); outline-offset: 4px; }
+.installation-nav { display: flex; justify-content: flex-end; align-items: center; gap: var(--e-3); padding-top: var(--e-4); border-top: var(--l-fin) solid var(--ligne-faible); }
+.installation .connecteurs { padding: 0; }
+.verif-liste { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; width: 100%; }
+.verif {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--e-1) var(--e-3);
+  padding: var(--e-3) 0; border-bottom: var(--l-fin) solid var(--ligne-faible);
+}
+.verif-titre { font: 600 var(--t-petit)/1.3 var(--f-ui); color: var(--texte); }
+.verif-detail, .verif-suite { grid-column: 2 / -1; }
+.verif-detail { font: var(--t-mini)/1.4 var(--f-donnees); color: var(--texte-3); overflow-wrap: anywhere; }
+.verif-suite { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2) var(--e-3); }
+.verif-aide { font-size: var(--t-mini); color: var(--texte-2); }
+.verif-commande {
+  display: inline-block; padding: 2px 8px; border: var(--l-fin) solid var(--ligne); border-radius: var(--r-1);
+  background: rgb(var(--c-creux) / .7); font: var(--t-mini)/1.5 var(--f-mono); color: var(--cyan-vif);
+  user-select: all; overflow-wrap: anywhere;
 }

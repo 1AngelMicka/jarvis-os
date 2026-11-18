@@ -168,3 +168,37 @@ export type EvenementDialogue =
   | { type: "fin"; donnees: MetaMessage & { message_id: number; texte: string } }
   | { type: "erreur"; donnees: { message: string; conversation_id?: string } }
   | { type: "avis"; donnees: AvisExpert };
+
+// --- Premier lancement ---
+export interface Verification {
+  id: string;
+  titre: string;
+  statut: "ok" | "info" | "attention" | "erreur";
+  detail: string;
+  reparation: string | null;
+  aide: string | null;
+}
+
+export interface EtatTailscale {
+  installe: boolean;
+  connecte: boolean;
+  nom: string | null;
+  serve_actif: boolean;
+  adresse: string | null;
+  commande: string;
+  aide: string;
+}
+
+export interface EtatAccueil {
+  termine: boolean;
+  stockage: "sqlite" | "postgres";
+  tailscale: EtatTailscale | null;
+}
+
+export interface Jumelage {
+  url: string;
+  qr: string;
+  expire_le: string;
+  local: boolean;
+  tailscale: boolean;
+}

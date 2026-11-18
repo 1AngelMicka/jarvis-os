@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { creerJumelage, enregistrerCle, lireAudit, listerAppareils, optionsCle, revoquerAppareil } from "../api";
-import type { Appareil, EntreeAudit } from "../types";
+import type { Appareil, EntreeAudit, Jumelage } from "../types";
 import { clesDisponibles, creerCle } from "../webauthn";
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -17,7 +17,7 @@ interface Props {
 export function PanneauSecurite({ nbCles, surChangement }: Props) {
   const [liste, setListe] = useState<AppareilListe[] | null>(null);
   const [audit, setAudit] = useState<{ entrees: EntreeAudit[]; rompue_a: number | null } | null>(null);
-  const [qr, setQr] = useState<{ qr: string; url: string; expire_le: string; local: boolean } | null>(null);
+  const [qr, setQr] = useState<Jumelage | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const charger = useCallback(() => {
@@ -127,7 +127,7 @@ export function PanneauSecurite({ nbCles, surChangement }: Props) {
             <img src={qr.qr} alt="QR de jumelage" width={176} height={176} />
             <p className="sec-texte">
               Scannez ce code (valable jusqu'à {DATE.format(new Date(qr.expire_le))}, une seule fois).
-              {qr.local && " Depuis un téléphone, ouvrez d'abord JARVIS par son adresse réseau (phase 6 : Tailscale)."}
+              {!qr.tailscale && " Ce lien vise ce PC : sur un téléphone, il ne fonctionne qu'une fois JARVIS publié par Tailscale (voir Installation)."}
             </p>
             <button
               type="button"

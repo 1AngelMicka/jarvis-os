@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import mimetypes
 import webbrowser
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -55,6 +56,8 @@ from .tailscale import EtatTailscale
 from .tailscale import lire_etat as lire_tailscale
 
 journal = logging.getLogger("jarvis2.api")
+
+mimetypes.add_type("application/manifest+json", ".webmanifest")  # PWA : inconnu de certains systèmes
 
 # Interface compilée : aucun script en ligne, aucune ressource externe.
 CSP = (

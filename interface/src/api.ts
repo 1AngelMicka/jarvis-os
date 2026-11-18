@@ -12,6 +12,10 @@ import type {
   DemandeDialogue,
   DetailConversation,
   EntreeAudit,
+  EtatAccueil,
+  EtatTailscale,
+  Jumelage,
+  Verification,
   Etat,
   EvenementDialogue,
   ReponseAction,
@@ -46,7 +50,7 @@ const MESSAGES_STATUT: Record<number, string> = {
   423: "Arrêt d'urgence actif : aucune action n'est acceptée.",
   429: "Trop de demandes : réessayez dans un instant.",
 };
-const INJOIGNABLE = "Core injoignable : vérifiez qu'il tourne (python -m jarvis2 serveur).";
+const INJOIGNABLE = "Core injoignable : vérifiez qu'il tourne (commande jarvis2 sur le PC).";
 
 async function lireErreur(rep: Response): Promise<ErreurApi> {
   let detail = "";
@@ -96,7 +100,7 @@ export const premierAppareil = (nom: string) => envoyer<{ jeton: string; apparei
 export const echangerCode = (code: string, nom: string) =>
   envoyer<{ jeton: string; appareil: Appareil }>("/v1/jumelage/echanger", { code, nom });
 export const creerJumelage = (type: string) =>
-  envoyer<{ url: string; qr: string; expire_le: string; local: boolean }>("/v1/jumelage", { type });
+  envoyer<Jumelage>("/v1/jumelage", { type });
 export const listerAppareils = () => appeler<{ appareils: (Appareil & { courant: boolean; cles: number })[] }>("/v1/appareils");
 export const revoquerAppareil = (id: string) => envoyer<{ revoque: boolean; soi_meme: boolean }>(`/v1/appareils/${id}/revoquer`);
 
@@ -129,6 +133,13 @@ export const enregistrerCleApi = (id: string, cle: string) =>
   appeler<{ ok: boolean }>(`/v1/connecteurs/${id}/cle`, { methode: "PUT", corps: { cle } });
 export const supprimerCleApi = (id: string) => appeler<{ ok: boolean }>(`/v1/connecteurs/${id}/cle`, { methode: "DELETE" });
 export const lireMateriel = () => unSeul("materiel", () => appeler<Materiel>("/v1/materiel"));
+
+// --- Premier lancement : assistant, diagnostic, téléphone ---
+export const lireAccueil = () => unSeul("accueil", () => appeler<EtatAccueil>("/v1/accueil"));
+export const terminerAccueil = () => envoyer<{ termine: boolean }>("/v1/accueil/terminer");
+export const lireDiagnostic = () => unSeul("diagnostic", () => appeler<{ verifications: Verification[] }>("/v1/diagnostic"));
+export const reparer = (id: string) => envoyer<{ verifications: Verification[] }>(`/v1/diagnostic/reparer/${encodeURIComponent(id)}`);
+export const lireTailscale = () => appeler<EtatTailscale>("/v1/tailscale");
 
 /** Conseil multi-IA : mêmes événements que le dialogue, plus un `avis` par expert. */
 export function conseiller(
