@@ -65,7 +65,7 @@ def test_decisions_d_autorisation(tmp_path: Path) -> None:
     for dehors in (
         "../voisin/a.py",
         str(tmp_path / "autre.txt"),
-        "C:/Windows/system32/x.dll",
+        str(Path(racine.anchor) / "Windows" / "x.dll"),
         "sous/../../evasion.txt",
     ):
         d = decider(racine, "Write", {"file_path": dehors})
@@ -141,7 +141,10 @@ async def test_route_d_autorisation_et_serveur_mcp(
     app.state.ctx = ctx
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://localhost:8765") as client:
-        corps = {"tool_name": "Write", "input": {"file_path": "C:/hors/atelier.txt"}}
+        corps = {
+            "tool_name": "Write",
+            "input": {"file_path": str(Path(ateliers.dossier.anchor) / "hors" / "atelier.txt")},
+        }
         rep = await client.post("/v1/ateliers-autorisation", json=corps, headers={"X-Atelier-Jeton": "jeton-route"})
         assert rep.status_code == 200 and rep.json()["behavior"] == "deny"
         sans_jeton = await client.post("/v1/ateliers-autorisation", json=corps)
