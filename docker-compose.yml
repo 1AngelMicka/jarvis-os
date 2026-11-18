@@ -1,0 +1,32 @@
+# PostgreSQL 16 + pgvector pour JARVIS 2.
+# Variables lues dans .env (voir .env.example). Port publié sur 127.0.0.1 uniquement.
+#
+# Données : volume Docker nommé « jarvis2_pg ». Un dossier monté depuis un disque en exFAT est impossible tant qu'il est en
+# exFAT (PostgreSQL exige des droits Unix 0700 sur son dossier de données) : voir docs/DECISIONS.md.
+name: jarvis2
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: jarvis2-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER manquant dans .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env}
+      POSTGRES_DB: ${POSTGRES_DB:-jarvis2}
+      JARVIS2_APP_MOT_DE_PASSE: ${JARVIS2_APP_MOT_DE_PASSE:?JARVIS2_APP_MOT_DE_PASSE manquant dans .env}
+      TZ: Europe/Paris
+    ports:
+      - "127.0.0.1:${JARVIS2_PG_PORT:-5433}:5432"
+    volumes:
+      - jarvis2_pg:/var/lib/postgresql/data
+      - ./infra/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  jarvis2_pg:
+    name: jarvis2_pg

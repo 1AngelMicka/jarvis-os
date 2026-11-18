@@ -1,0 +1,28 @@
+# Secrets : jamais dans git (seul .env.example est versionné)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_*
+*jeton*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Interface
+node_modules/
+interface/dist/
+*.tsbuildinfo
+
+# Divers
+*.log
+.DS_Store
+Thumbs.db
