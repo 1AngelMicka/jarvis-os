@@ -38,7 +38,9 @@ PAR_SOUS_REQUETE = 2
 MAX_SOUS_REQUETES = 6
 MAX_SOURCES_ORIENTEES = 4
 
-COLONNES = "id, contenu, type, tags, source, confidentialite, origine, canal_detail, cree_le, maj_le"
+COLONNES = (
+    "id, contenu, type, tags, source, confidentialite, origine, canal_detail, cree_le, maj_le, importance, access_count"
+)
 
 _INTERROGATIFS = (
     r"(?:quel(?:le)?s?|pourquoi|comment|combien|quand|où|qui|que|qu['’]|est-ce|"
@@ -63,6 +65,8 @@ class Souvenir:
     canal_detail: str | None
     cree_le: datetime
     maj_le: datetime
+    importance: float = 0.5
+    acces: int = 0
 
     def en_dict(self) -> dict[str, Any]:
         return {
@@ -76,6 +80,8 @@ class Souvenir:
             "canal_detail": self.canal_detail,
             "cree_le": self.cree_le.isoformat(),
             "maj_le": self.maj_le.isoformat(),
+            "importance": self.importance,
+            "acces": self.acces,
         }
 
 
@@ -83,6 +89,8 @@ class Souvenir:
 class Resultat:
     souvenir: Souvenir
     score: float
+    similarite: float = 0.0  # composante vecteur (cosinus du modèle actif)
+    texte: float = 0.0  # composante plein texte
 
 
 def _souvenir(ligne: Ligne) -> Souvenir:
@@ -97,6 +105,8 @@ def _souvenir(ligne: Ligne) -> Souvenir:
         canal_detail=ligne["canal_detail"],
         cree_le=ligne["cree_le"],
         maj_le=ligne["maj_le"],
+        importance=float(ligne.get("importance", 0.5) if ligne.get("importance") is not None else 0.5),
+        acces=int(ligne.get("access_count") or 0),
     )
 
 
@@ -166,7 +176,8 @@ async def rechercher(
         ), scores AS (
             SELECT m.*,
                    CASE WHEN m.embedding_model = $8 THEN COALESCE(1 - (m.embedding <=> req.v), 0)
-                        ELSE 0 END AS similarite,
+                        ELSE COALESCE((SELECT 1 - (mv.vecteur <=> req.v) FROM memoire_vecteurs mv
+                                       WHERE mv.memoire_id = m.id AND mv.modele = $8), 0) END AS similarite,
                    CASE WHEN m.tsv @@ req.tsq THEN 0.5 + 0.5 * ts_rank_cd(m.tsv, req.tsq, 32)
                         WHEN cardinality(req.mots) = 0 THEN 0
                         ELSE 0.45 * (SELECT count(*) FROM unnest(req.mots) AS mot
@@ -177,7 +188,7 @@ async def rechercher(
               AND (NOT $3 OR m.confidentialite <> 'local_uniquement')
               AND ($4::text[] IS NULL OR m.origine = ANY($4::text[]))
         )
-        SELECT {COLONNES}, $5 * similarite + $6 * texte AS score
+        SELECT {COLONNES}, similarite, texte, $5 * similarite + $6 * texte AS score
         FROM scores
         ORDER BY score DESC, cree_le DESC
         LIMIT $7
@@ -191,7 +202,9 @@ async def rechercher(
         limite,
         encodeur.nom_modele,
     )
-    return [Resultat(_souvenir(r), round(float(r["score"]), 4)) for r in lignes]
+    return [
+        Resultat(_souvenir(r), round(float(r["score"]), 4), float(r["similarite"]), float(r["texte"])) for r in lignes
+    ]
 
 
 # Mots vides (équivalent approché du dictionnaire « french » de PostgreSQL, qui en retire davantage)
@@ -303,8 +316,10 @@ async def _rechercher_sqlite(
     similarites = {
         str(r["id"]): float(r["s"] or 0.0)
         for r in await conn.fetch(
-            "SELECT id, CASE WHEN embedding_model = $3 AND embedding IS NOT NULL"
-            " THEN 1 - vec_distance_cosine(embedding, $4) END AS s" + filtre,
+            "SELECT id, CASE WHEN embedding_model = $3 AND embedding IS NOT NULL"  # noqa: S608 — constantes
+            " THEN 1 - vec_distance_cosine(embedding, $4)"
+            " ELSE (SELECT 1 - vec_distance_cosine(mv.vecteur, $4) FROM memoire_vecteurs mv"
+            " WHERE mv.memoire_id = memoires.id AND mv.modele = $3) END AS s" + filtre,
             *filtres,
             modele,
             vecteur_octets(vecteur),
@@ -338,7 +353,7 @@ async def _rechercher_sqlite(
             r = pertinence[ident]
             texte = 0.5 + 0.5 * r / (r + 1) if nb == len(termes) else 0.45 * nb / len(termes)
         score = POIDS_VECTEUR * similarites[ident] + POIDS_TEXTE * texte
-        resultats.append(Resultat(_souvenir(ligne), round(score, 4)))
+        resultats.append(Resultat(_souvenir(ligne), round(score, 4), similarites[ident], texte))
     resultats.sort(key=lambda x: (-x.score, -x.souvenir.cree_le.timestamp()))
     return resultats[:limite]
 
@@ -354,23 +369,34 @@ async def ajouter(
     origine: str = "autre",
     vecteur: list[float] | None = None,
     modele: str | None = None,
+    importance: float = 0.5,
 ) -> str:
     """Nouveau souvenir (plein texte indexé par le moteur : tsvector français ou FTS5)."""
     if conn.dialecte == "sqlite":
         requete = (
             "INSERT INTO memoires (contenu, type, tags, source, confidentialite, origine, embedding, embedding_model,"
-            " valid_from, observed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now()) RETURNING id"
+            " valid_from, observed_at, importance)"
+            " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now(), $9) RETURNING id"
         )
         valeur: Any = vecteur_octets(vecteur) if vecteur is not None else None
     else:
         requete = (
             "INSERT INTO memoires (contenu, type, tags, source, confidentialite, origine, embedding, embedding_model,"
-            " valid_from, observed_at, tsv) VALUES ($1, $2, $3, $4, $5, $6, $7::text::vector, $8, now(), now(),"
-            " to_tsvector('french', $1)) RETURNING id"
+            " valid_from, observed_at, tsv, importance) VALUES ($1, $2, $3, $4, $5, $6, $7::text::vector, $8, now(),"
+            " now(), to_tsvector('french', $1), $9) RETURNING id"
         )
         valeur = vecteur_sql(vecteur) if vecteur is not None else None
     ident = await conn.fetchval(
-        requete, contenu, type_, list(tags), source, confidentialite, origine, valeur, modele if vecteur else None
+        requete,
+        contenu,
+        type_,
+        list(tags),
+        source,
+        confidentialite,
+        origine,
+        valeur,
+        modele if vecteur else None,
+        min(max(importance, 0.0), 1.0),
     )
     return str(ident)
 
@@ -538,6 +564,7 @@ class ReglagesRecherche:
     max_par_source: int = 3
     budget_noyau: int = 4000
     expurgateur: Expurgateur = field(default_factory=Expurgateur)
+    classement: str = "v2"  # « v1 » (score hybride de JARVIS v1) ou « v2 » (RRF + importance, memoire_v2.py)
 
 
 async def rechercher_multi(
@@ -555,6 +582,10 @@ async def rechercher_multi(
         await rechercher(conn, encodeur, q, limite=max(reglages.limite * 3, 20), exclure_local=exclure_local)
         for q in decouper_requetes(texte)
     ]
+    if reglages.classement == "v2":
+        from .memoire_v2 import classer_v2
+
+        par_requete = [classer_v2(r) for r in par_requete]
     if o is not None and o.origines:
         dedies = await rechercher(
             conn,
@@ -666,6 +697,7 @@ def formater_noyau(noyau: list[Souvenir]) -> str:
 @dataclass
 class ContexteMemoire:
     noyau: list[Souvenir] = field(default_factory=list)
+    blocs: list[Any] = field(default_factory=list)  # blocs.Bloc : textes éditables, toujours injectés
     souvenirs: list[Resultat] = field(default_factory=list)
     consultee: bool = True
     expurgateur: Expurgateur = field(default_factory=Expurgateur)
@@ -675,6 +707,12 @@ class ContexteMemoire:
         if not self.consultee:
             return "\nSouvenirs pertinents :\n(mémoire indisponible pour ce message)"
         texte = ""
+        if self.blocs:
+            from .blocs import texte as texte_blocs
+
+            texte += (
+                f"\nBlocs de mémoire (tenus par l'utilisateur et JARVIS, prioritaires) :\n{texte_blocs(self.blocs)}\n"
+            )
         if self.noyau:
             texte += f"\nNoyau (connaissances de référence, prioritaires) :\n{formater_noyau(self.noyau)}\n"
         texte += (

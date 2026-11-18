@@ -16,6 +16,8 @@ import type {
   EtatTailscale,
   Jumelage,
   Verification,
+  BlocMemoire,
+  EtatMemoire,
   Mission,
   Recette,
   ServeurMcp,
@@ -209,3 +211,14 @@ async function diffuser(
     lecteur.releaseLock();
   }
 }
+
+// --- Mémoire v2 : blocs, bascule de modèle, tâches de nuit ---
+export const lireEtatMemoire = () => unSeul("memoire", () => appeler<EtatMemoire>("/v1/memoire/etat"));
+export const listerBlocs = () => appeler<{ blocs: BlocMemoire[] }>("/v1/memoire/blocs");
+export const ecrireBloc = (label: string, contenu: string, confidentialite?: BlocMemoire["confidentialite"]) =>
+  appeler<BlocMemoire>(`/v1/memoire/blocs/${encodeURIComponent(label)}`, {
+    methode: "PUT",
+    corps: { contenu, ...(confidentialite ? { confidentialite } : {}) },
+  });
+export const noyauEnBlocs = () => envoyer<{ convertis: Record<string, number> }>("/v1/memoire/noyau-en-blocs");
+export const lancerTacheMemoire = (id: string) => envoyer<{ lancee: string }>(`/v1/memoire/taches/${encodeURIComponent(id)}/lancer`);

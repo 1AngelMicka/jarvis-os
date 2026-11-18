@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { activerOutilMcp, demanderAction, lancerMission, lancerRecette, listerMissions, listerOutilsMcp, listerRecettes } from "../api";
 import { TexteRiche } from "../texte";
 import type { Mission, OutilMcp, Recette, ReponseAction, ServeurMcp } from "../types";
+import { SectionMemoire } from "./Memoire";
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const TYPES: { id: Mission["type"]; nom: string; aide: string }[] = [
@@ -382,6 +383,7 @@ export function VueAgents({ surChangement, surOuvrirConversation, surAction }: P
     <div className="connecteurs">
       <Missions surChangement={surChangement} />
       <Recettes surChangement={surChangement} surOuvrir={surOuvrirConversation} />
+      <SectionMemoire surChangement={surChangement} />
       <OutilsMcp surAction={surAction} />
     </div>
   );

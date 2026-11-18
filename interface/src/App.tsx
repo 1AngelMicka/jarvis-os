@@ -495,7 +495,7 @@ function Hud() {
             className="panneau-scene"
             ordre={2}
             id="agents"
-            meta="missions, recettes planifiées, outils MCP"
+            meta="missions, recettes, mémoire, outils MCP"
             actions={
               <button
                 type="button"

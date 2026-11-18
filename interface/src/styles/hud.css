@@ -603,3 +603,4 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
 .progression span { display: block; height: 100%; background: var(--degrade-accent); transition: width var(--d-moyen) var(--e-sortie); }
 .rapport { padding: var(--e-4); border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-2); background: rgb(var(--c-creux) / .5); font-size: var(--t-corps); line-height: var(--interligne); overflow-wrap: anywhere; }
 .mcp-serveur { display: flex; flex-direction: column; gap: var(--e-3); }
+.bloc-texte { width: 100%; min-height: 84px; padding: var(--e-3) var(--e-4); resize: vertical; font-size: var(--t-corps); line-height: 1.5; }

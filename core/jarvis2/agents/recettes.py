@@ -17,8 +17,10 @@ l'arrêt d'urgence. Une recette n'agit pas : elle ne fait que demander une répo
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -104,6 +106,19 @@ def charger(dossier: Path) -> tuple[list[Recette], list[str]]:
     return recettes, erreurs
 
 
+@dataclass(frozen=True)
+class TacheSysteme:
+    """Tâche de JARVIS lui-même (consolidation, oubli, export) : planifiée comme une recette, sans consigne.
+
+    `action` reçoit le début de sa dernière exécution réussie (None la première fois).
+    """
+
+    id: str
+    nom: str
+    planification: str
+    action: Callable[[datetime | None], Awaitable[dict[str, Any]]]
+
+
 class Planificateur:
     def __init__(
         self,
@@ -112,12 +127,14 @@ class Planificateur:
         dossier: Path,
         urgence: ArretUrgence,
         intervalle: float = 30.0,
+        taches: Sequence[TacheSysteme] = (),
     ) -> None:
         self.base = base
         self.dialogue = dialogue
         self.dossier = dossier
         self.urgence = urgence
         self.intervalle = intervalle
+        self.taches = list(taches)
         self.depart = datetime.now(UTC)  # une recette jamais exécutée attend sa première heure après le démarrage
         self.en_cours: set[str] = set()
 
@@ -145,7 +162,52 @@ class Planificateur:
             if r.prochaine(reference) <= maintenant:
                 lancees.append(r.id)
                 await self.executer(r, "planification")
+        for t in self.taches:
+            ident = f"systeme:{t.id}"
+            if ident in self.en_cours:
+                continue
+            derniere = await self.derniere(ident)
+            reference = derniere["debut"] if derniere else self.depart
+            suivante: datetime = croniter(t.planification, reference.astimezone(FUSEAU)).get_next(datetime)
+            if suivante.astimezone(UTC) <= maintenant:
+                lancees.append(ident)
+                await self.executer_tache(t, "planification")
         return lancees
+
+    async def executer_tache(self, t: TacheSysteme, declencheur: str = "manuel") -> dict[str, Any]:
+        ident = f"systeme:{t.id}"
+        if self.urgence.actif:
+            return {"statut": "ignoree"}
+        reussie = await self.base.fetchval(
+            "SELECT max(debut) FROM executions_recettes WHERE recette = $1 AND statut = 'ok'", ident
+        )
+        self.en_cours.add(ident)
+        execution = await self.base.fetchval(
+            "INSERT INTO executions_recettes (recette, declencheur, statut) VALUES ($1, $2, 'en_cours') RETURNING id",
+            ident,
+            declencheur,
+        )
+        try:
+            with self.urgence.suivre():
+                resultat = await t.action(reussie if isinstance(reussie, datetime) else None)
+            statut = "ignoree" if resultat.get("statut") == "ignoree" else "ok"
+            await self.base.execute(
+                "UPDATE executions_recettes SET statut = $2, fin = now(), resultat = $3 WHERE id = $1",
+                execution,
+                statut,
+                json.dumps(resultat, ensure_ascii=False, default=str)[:20_000],
+            )
+            return {**resultat, "statut": statut}
+        except Exception as exc:
+            journal.warning("Tâche %s en échec : %s", ident, exc)
+            await self.base.execute(
+                "UPDATE executions_recettes SET statut = 'erreur', fin = now(), erreur = $2 WHERE id = $1",
+                execution,
+                str(exc)[:2000],
+            )
+            return {"statut": "erreur", "erreur": str(exc)}
+        finally:
+            self.en_cours.discard(ident)
 
     async def boucle(self) -> None:
         while True:

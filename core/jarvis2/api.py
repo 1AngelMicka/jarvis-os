@@ -40,6 +40,7 @@ from .agents.recherche_web import RechercheWeb
 from .api_accueil import routeur as routeur_accueil
 from .api_agents import routeur as routeur_agents
 from .api_connecteurs import routeur as routeur_connecteurs
+from .api_memoire import routeur as routeur_memoire
 from .api_securite import routeur as routeur_securite
 from .config import Parametres
 from .config_locale import charger as charger_config_locale
@@ -51,8 +52,10 @@ from .db import Base, ErreurBaseOuReseau, ouvrir_base, version_schema
 from .dialogue import ServiceDialogue, SourceMemoire
 from .embeddings import EncodeurFastEmbed
 from .memoire import Expurgateur, ReglagesRecherche
+from .memoire_v2 import EtatBascule, basculer, modele_actif, modele_majoritaire
 from .moteurs.base import ErreurMoteur, Options
 from .moteurs.telemetrie import EnregistreurBase, MoteurInstrumente
+from .nuit import taches_memoire
 from .securite import appareils
 from .securite.actions import creer_registre
 from .securite.coffre import Coffre
@@ -87,6 +90,8 @@ class Contexte:
     mcp: GestionnaireMCP | None = None
     recherche: RechercheWeb = field(default_factory=lambda: RechercheWeb(None))
     dossier_recettes: Path | None = None
+    dossier_donnees: Path | None = None  # tâches de nuit de la mémoire (export Markdown dans memoire-md/)
+    etat_bascule: EtatBascule | None = None
     approbations: Approbations = field(init=False)
     conseil: ServiceConseil = field(init=False)
     missions: ServiceMissions = field(init=False)
@@ -96,8 +101,13 @@ class Contexte:
         self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp))
         self.conseil = ServiceConseil(self.service)
         self.missions = ServiceMissions(self.pool, self.service, self.recherche, self.urgence)
+        taches = (
+            taches_memoire(self.pool, self.service, self.dossier_donnees / "memoire-md")
+            if self.dossier_donnees is not None and self.memoire is not None
+            else []
+        )
         self.planificateur = (
-            Planificateur(self.pool, self.service, self.dossier_recettes, self.urgence)
+            Planificateur(self.pool, self.service, self.dossier_recettes, self.urgence, taches=taches)
             if self.dossier_recettes is not None
             else None
         )
@@ -150,7 +160,32 @@ async def construire_contexte(p: Parametres) -> Contexte:
         mcp=GestionnaireMCP.depuis_config(locale.serveurs_mcp),
         recherche=RechercheWeb(locale.searxng),
         dossier_recettes=chemin_config().parent / "recettes",
+        dossier_donnees=p.dossier_donnees,
     )
+
+
+async def preparer_bascule(ctx: Contexte, p: Parametres) -> asyncio.Task[None] | None:
+    """Modèle d'embeddings changé (JARVIS2_MODELE_EMBEDDINGS) : la recherche garde l'ancien modèle tant que tous
+    les souvenirs n'ont pas leur vecteur du nouveau, calculés en tâche de fond ; puis elle bascule seule."""
+    if ctx.memoire is None:
+        return None
+    voulu = ctx.memoire.encodeur
+    existant = await modele_majoritaire(ctx.pool)
+    actif = await modele_actif(ctx.pool, existant or voulu.nom_modele)
+    ctx.etat_bascule = EtatBascule(actif)
+    if actif == voulu.nom_modele:
+        return None
+    memoire_source = ctx.memoire
+    memoire_source.encodeur = EncodeurFastEmbed(p.dossier_modeles, actif)
+    journal.info("Mémoire : bascule %s → %s en tâche de fond", actif, voulu.nom_modele)
+
+    async def bascule() -> None:
+        assert ctx.etat_bascule is not None
+        await basculer(ctx.pool, voulu, ctx.etat_bascule)
+        if ctx.etat_bascule.actif == voulu.nom_modele:
+            memoire_source.encodeur = voulu
+
+    return asyncio.create_task(bascule())
 
 
 async def decrire_moteur(moteur: MoteurInstrumente) -> dict[str, Any]:
@@ -208,8 +243,12 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         if ctx.memoire is not None:  # modèle d'embeddings chargé en tâche de fond : le 1er message n'attend pas
             taches.append(asyncio.create_task(precharger_modele(ctx)))
         taches.append(asyncio.create_task(detecter_tailscale(ctx, parametres.port, autorisees)))
-        if ctx.planificateur is not None:  # recettes planifiées
+        if ctx.planificateur is not None:  # recettes planifiées et tâches de nuit de la mémoire
             taches.append(asyncio.create_task(ctx.planificateur.boucle()))
+        if contexte is None:
+            bascule = await preparer_bascule(ctx, parametres)
+            if bascule is not None:
+                taches.append(bascule)
         journal.info("JARVIS 2 prêt — moteurs : %s", ", ".join(ctx.moteurs))
         if parametres.ouvrir_navigateur:
             adresse = f"http://localhost:{parametres.port}/"
@@ -364,6 +403,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_connecteurs)
     app.include_router(routeur_accueil)
     app.include_router(routeur_agents)
+    app.include_router(routeur_memoire)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():

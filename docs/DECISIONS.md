@@ -1,5 +1,16 @@
 # Décisions techniques
 
+## Mémoire v2 (phase 8, migration 008)
+
+- **Classement v2** (`memoire_v2.classer_v2`, défaut ; `ReglagesRecherche.classement = "v1"` pour l'ancien) : par sous-question, score = (0,6 × hybride + 0,4 × RRF normalisé, k = 60) × (0,85 + 0,3 × importance). La recherche renvoie les deux composantes (cosinus, plein texte) pour cela. La récence reste dans la fusion.
+- **Blocs** (`blocs.py`, `memory_blocks`) : courts textes toujours injectés avant le noyau, chaque écriture est une version (`memory_block_versions`) ; `local_uniquement` = jamais vers une IA externe. Le noyau peut devenir les blocs « noyau » et « noyau-prive » : les souvenirs restent, leur tag devient `noyau-converti` (réversible).
+- **Oubli** : un souvenir injecté dans une réponse voit `access_count` et `last_accessed_at` mis à jour ; chaque nuit, les souvenirs jamais consultés, peu importants (≤ 0,3), vieux de plus de 180 jours sont **archivés** — jamais ceux dits par l'utilisateur, du profil ou du noyau. Rien n'est effacé.
+- **Consolidation** (`consolidation.py`, 3 h 30) : une IA **locale** seulement (sinon ignorée) lit les échanges depuis la dernière consolidation et propose des faits durables (JSON) ; un fait déjà connu (cosinus ≥ 0,92) est ignoré ; un fait sur un sujet privé est rangé privé.
+- **Bascule de modèle** : `memoire_vecteurs (memoire_id, modele, vecteur)` garde les vecteurs d'un autre modèle (dimension libre). Changer `JARVIS2_MODELE_EMBEDDINGS` lance au démarrage le calcul en tâche de fond ; la recherche garde l'ancien modèle (`etat_systeme.memoire_modele`) et ne bascule qu'à 100 %. Avant toute bascule, le modèle actif est celui de la majorité des souvenirs.
+- **Export** (4 h, ou `jarvis2 memoire exporter`) : `memoire-md/` dans le dossier des données (MEMORY.md, USER.md, SOUL.md, journal/AAAA-MM-JJ.md), en lecture seule.
+- **Banc** (`jarvis2 memoire banc --fichier questions.yaml`) : liste de `{question, attendus}` (identifiants ou fragments de contenu) ; rappel@5 et MRR en v1 et en v2. Le fichier reste chez l'utilisateur (données personnelles).
+- Les tâches de nuit passent par le planificateur des recettes (`TacheSysteme`, historique `executions_recettes` sous `systeme:<id>`), jamais pendant l'arrêt d'urgence.
+
 ## Agents (phase 7, migration 007)
 
 - **Recettes** (`agents/recettes.py`) : fichiers YAML (`nom`, `planification` cron à l'heure de Paris, `consigne`, `connecteur`, `livraison` conversation ou mémoire, `active`) dans `recettes/` à côté de la configuration locale ; relus à chaque battement (30 s), donc modifiables sans redémarrer. Une recette jamais exécutée attend sa première heure après le démarrage (pas de rattrapage en rafale). Historique dans `executions_recettes`. Une recette ne fait que demander une réponse : elle ne déclenche aucune action 🟡 ni 🔴, et rien ne tourne pendant l'arrêt d'urgence.

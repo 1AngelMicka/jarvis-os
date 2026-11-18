@@ -179,6 +179,33 @@ async def _docteur(p: Parametres, en_json: bool, reparer: bool) -> int:
     return 1 if any(v.statut == "erreur" for v in verifications) else 0
 
 
+async def _memoire(p: Parametres, action: str, fichier: Path | None, dossier: Path | None) -> int:
+    """Commandes de la mémoire v2 (banc d'évaluation, export Markdown, noyau en blocs, oubli)."""
+    import yaml
+
+    from . import blocs, memoire_v2
+    from .embeddings import EncodeurFastEmbed
+
+    async with _base(p) as base:
+        if action == "banc":
+            if fichier is None or not await asyncio.to_thread(fichier.is_file):
+                journal.error("Banc : indiquez --fichier <questions.yaml> (question, attendus)")
+                return 2
+            questions = memoire_v2.lire_banc(yaml.safe_load(await asyncio.to_thread(fichier.read_text, "utf-8")))
+            encodeur = EncodeurFastEmbed(p.dossier_modeles, p.modele_embeddings)
+            for classement in ("v1", "v2"):  # même banc, deux classements
+                print((await memoire_v2.evaluer(base, encodeur, questions, classement)).texte())
+        elif action == "exporter":
+            cible = dossier or p.dossier_donnees / "memoire-md"
+            fichiers = await memoire_v2.exporter_markdown(base, cible, await blocs.lister(base))
+            print(f"{len(fichiers)} fichiers écrits dans {cible}")
+        elif action == "noyau-en-blocs":
+            print(f"Noyau converti en blocs : {await blocs.noyau_en_blocs(base, 'cli')}")
+        elif action == "oublier":
+            print(f"Souvenirs archivés (jamais effacés) : {await memoire_v2.oublier(base)}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     analyseur = argparse.ArgumentParser(prog="jarvis2", description="JARVIS 2 — Core")
     sous = analyseur.add_subparsers(dest="commande")
@@ -205,6 +232,10 @@ def main(argv: list[str] | None = None) -> int:
     cop = sto_sous.add_parser("copier", help="tout copier vers un stockage vide de l'autre moteur (source lue seule)")
     cop.add_argument("--vers", choices=["sqlite", "postgres"], required=True, help="moteur cible")
     cop.add_argument("--fichier", type=Path, default=None, help="fichier SQLite (défaut : JARVIS2_SQLITE)")
+    mem = sous.add_parser("memoire", help="mémoire v2 : banc, export Markdown, noyau en blocs, oubli")
+    mem.add_argument("action", choices=["banc", "exporter", "noyau-en-blocs", "oublier"])
+    mem.add_argument("--fichier", type=Path, default=None, help="banc : questions YAML (question, attendus)")
+    mem.add_argument("--dossier", type=Path, default=None, help="exporter : dossier (défaut : données/memoire-md)")
     args = analyseur.parse_args(argv)
     if args.commande is None:  # `jarvis2` seul : démarrer et ouvrir l'interface
         args = analyseur.parse_args(["serveur", "--ouvrir"])
@@ -263,6 +294,9 @@ def main(argv: list[str] | None = None) -> int:
         for bavard in ("httpx", "huggingface_hub", "jarvis2.config_locale", "jarvis2.embeddings"):
             logging.getLogger(bavard).setLevel(logging.WARNING)  # le diagnostic se lit seul
         return asyncio.run(_docteur(p, args.json, args.reparer))
+
+    if args.commande == "memoire":
+        return asyncio.run(_memoire(p, args.action, args.fichier, args.dossier))
 
     if args.commande == "stockage":
         return asyncio.run(_copier_stockage(p, args.vers, args.fichier))

@@ -71,10 +71,13 @@ class SourceMemoire:
             souvenirs = await rechercher_multi(
                 self.pool, self.encodeur, texte, exclure_local=externe, reglages=self.reglages
             )
+            from .blocs import lister as lister_blocs
+
+            blocs = await lister_blocs(self.pool, exclure_local=externe)
         except Exception:  # la mémoire ne doit jamais empêcher de répondre
             journal.exception("Mémoire indisponible : réponse sans souvenirs")
             return ContexteMemoire(consultee=False, expurgateur=self.reglages.expurgateur)
-        return ContexteMemoire(noyau=noyau, souvenirs=souvenirs, expurgateur=self.reglages.expurgateur)
+        return ContexteMemoire(noyau=noyau, souvenirs=souvenirs, blocs=blocs, expurgateur=self.reglages.expurgateur)
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,6 +224,13 @@ class ServiceDialogue:
         msg_utilisateur = await self.depot.ajouter_message(conversation.id, "utilisateur", message)
         envoi = await self.preparer(instance, message, historique)
         messages, contexte, masques, prive = envoi.messages, envoi.contexte, envoi.masques, envoi.prive
+        if self.memoire is not None and contexte.souvenirs:  # base de l'oubli : ce qui sert n'est jamais archivé
+            from .memoire_v2 import noter_acces
+
+            try:
+                await noter_acces(self.memoire.pool, [r.souvenir.id for r in contexte.souvenirs])
+            except Exception:
+                journal.exception("Accès aux souvenirs non noté")
         yield EvenementDialogue(
             "debut",
             {

@@ -254,3 +254,21 @@ export interface ServeurMcp {
   erreur?: string;
   outils: OutilMcp[];
 }
+
+// --- Mémoire v2 (phase 8) ---
+export interface BlocMemoire {
+  label: string;
+  content: string;
+  version: number;
+  char_limit: number;
+  confidentialite: "normal" | "local_uniquement";
+  maj_le: string;
+}
+
+export interface EtatMemoire {
+  souvenirs: { total: number; noyau: number; local_uniquement: number };
+  modele_actif: string | null;
+  bascule: { cible: string | null; faits: number; restants: number; erreur: string | null } | null;
+  sans_vecteur: number;
+  taches: { id: string; nom: string; planification: string; derniere: { debut: string; statut: string; resultat: string | null; erreur: string | null } | null }[];
+}
