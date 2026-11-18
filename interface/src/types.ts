@@ -33,6 +33,7 @@ export interface Etat {
   moteur_defaut: string;
   moteurs: InfoMoteur[];
   conversations: ResumeConversation[];
+  memoire: { total: number; noyau: number; local_uniquement: number };
 }
 
 export interface MetaMessage {
@@ -45,6 +46,8 @@ export interface MetaMessage {
   source_auth?: string;
   interrompu?: boolean;
   erreur?: string;
+  souvenirs?: string[];
+  memoire_consultee?: boolean;
 }
 
 export interface MessageStocke {

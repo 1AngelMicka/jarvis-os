@@ -241,6 +241,13 @@ export function App() {
               <span className="etat-nom">JARVIS-Core</span>
               <span className="etat-valeur">{erreurEtat ? "hors ligne" : etat ? "en ligne" : "…"}</span>
             </li>
+            {etat && (
+              <li className="etat-item" title={`${String(etat.memoire.noyau)} souvenirs noyau · ${String(etat.memoire.local_uniquement)} privés (IA locales uniquement)`}>
+                <span className="point-etat" data-ok={etat.memoire.total > 0} aria-hidden="true" />
+                <span className="etat-nom">Mémoire</span>
+                <span className="etat-valeur">{etat.memoire.total.toLocaleString("fr-FR")} souvenirs</span>
+              </li>
+            )}
             {moteurs.map((m) => (
               <li className="etat-item" key={m.id} title={m.detail}>
                 <span className="point-etat" data-ok={m.disponible} aria-hidden="true" />

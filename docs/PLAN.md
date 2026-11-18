@@ -60,6 +60,8 @@ Export **en lecture seule** de l'ancien Core, puis import de tous les souvenirs 
 
 **Terminé quand :** le nombre d'éléments importés égale celui de l'ancien Core pour chaque table (rapport de comptage), une recherche donne les mêmes premiers résultats que l'ancien JARVIS sur un jeu de requêtes témoin, et JARVIS 2 répond en s'appuyant sur ses souvenirs. L'ancien JARVIS n'a subi aucune écriture.
 
+**État (18 nov. 2026)** : fait. Sauvegarde du 18 nov. 03:18 importée : 1 408 souvenirs, 146 conversations, 378 messages, 60 réponses de profil, 5 missions, 1 création, 59 chantiers, tous présents, empreintes de contenu identiques. Méthode et vérifications : [DECISIONS.md](DECISIONS.md).
+
 ### Phase 4 — Sécurité
 Permissions 🟢🟡🔴, file d'approbations, journal d'audit en ajout seul (rôle de base séparé du propriétaire), arrêt d'urgence, filtre secrets / données personnelles avant tout fournisseur externe, authentification de l'interface.
 

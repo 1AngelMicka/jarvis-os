@@ -40,6 +40,12 @@ function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
       {m.role === "jarvis" && !m.enCours && m.meta && (
         <div className="msg-pied">
           <span className="msg-meta">{nomModele(moteurs, m.meta)}</span>
+          {m.meta.souvenirs?.length ? (
+            <span className="msg-meta">
+              {m.meta.souvenirs.length} souvenir{m.meta.souvenirs.length > 1 ? "s" : ""}
+            </span>
+          ) : null}
+          {m.meta.memoire_consultee === false && <span className="msg-meta msg-meta--ambre">mémoire indisponible</span>}
           {m.meta.jetons_sortie ? <span className="msg-meta">{m.meta.jetons_sortie} jetons</span> : null}
           {m.meta.moteur === "claude_code" && m.meta.source_auth === "none" && <span className="msg-meta msg-meta--ok">abonnement · 0 $</span>}
           {m.meta.interrompu && <span className="msg-meta msg-meta--ambre">interrompue</span>}
