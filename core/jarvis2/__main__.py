@@ -260,6 +260,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if verification.vecteurs_identiques and verification.recherches_identiques else 3
 
     if args.commande in ("docteur", "doctor"):
+        for bavard in ("httpx", "huggingface_hub", "jarvis2.config_locale", "jarvis2.embeddings"):
+            logging.getLogger(bavard).setLevel(logging.WARNING)  # le diagnostic se lit seul
         return asyncio.run(_docteur(p, args.json, args.reparer))
 
     if args.commande == "stockage":

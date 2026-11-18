@@ -347,7 +347,7 @@ class MoteurClaudeCode(Moteur):
                 else EtatSante(False, f"CLI claude en erreur (code {proc.returncode})")
             )
         except FileNotFoundError:
-            etat = EtatSante(False, "CLI claude introuvable")
+            etat = EtatSante(False, "CLI claude introuvable", installe=False)
         except TimeoutError:
             etat = EtatSante(False, "CLI claude sans réponse")
         self._sante = (maintenant, etat)

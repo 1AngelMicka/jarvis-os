@@ -206,6 +206,7 @@ async def test_sante_et_modeles(tmp_path: Path) -> None:
 
 async def test_cli_introuvable() -> None:
     m = MoteurClaudeCode(commande=["introuvable-jarvis2-xyz"])
-    assert not (await m.health()).disponible
+    sante = await m.health()
+    assert not sante.disponible and not sante.installe  # carte « Non installé », diagnostic « facultatif »
     with pytest.raises(ErreurMoteur, match="introuvable"):
         await m.generate(MESSAGES)
