@@ -32,3 +32,12 @@ Thumbs.db
 
 # Paquets construits (uv build)
 core/dist/
+
+# Données locales de JARVIS (jamais dans git)
+*.db
+*.db-wal
+*.db-shm
+coffre.json
+jarvis2.env
+core/jarvis2/web/
+

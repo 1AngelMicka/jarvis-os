@@ -4,7 +4,7 @@ Assistant personnel local d'abord : mémoire à long terme, conversation en flux
 
 Plan : [docs/PLAN.md](docs/PLAN.md) · décisions : [docs/DECISIONS.md](docs/DECISIONS.md) · design : [interface/DESIGN.md](interface/DESIGN.md).
 
-> Projet en construction. Les installeurs (.exe, .dmg…) et la publication arrivent en phase 11.
+> **Statut : en développement.** Les phases 1 à 6 du plan sont faites (socle, dialogue, mémoire, sécurité, connecteurs d'IA, installation) ; les installeurs (.exe, .dmg…) arrivent en phase 11. Captures d'écran à venir.
 
 ## Installer (sans Docker ni Node)
 
@@ -62,6 +62,20 @@ Pour servir l'interface compilée par le Core : `npm run build` dans `interface`
 ## Importer des données
 
 Depuis JARVIS v1 (sauvegarde `pg_dump -Fc`, stockage PostgreSQL) : voir [docs/DECISIONS.md](docs/DECISIONS.md#imports--sources-génériques-lecture-seule-exclusions-locales), puis `jarvis2 stockage copier --vers sqlite` si vous voulez passer à SQLite.
+
+## Comptes d'IA et conditions des fournisseurs
+
+JARVIS n'est affilié à aucun fournisseur d'IA. Avec un compte (plutôt qu'une clé d'API), il appelle le **programme officiel** du fournisseur, installé et connecté par vous, sans le modifier, et ne lit jamais vos identifiants. Votre usage reste soumis aux conditions de chaque fournisseur :
+
+- **Claude Code** (abonnement Claude) : abonnement personnel, pour votre propre usage, pas d'usage commercial ni pour d'autres personnes. L'avertissement est à cocher une fois.
+- **OpenAI Codex** (compte ChatGPT) : selon les conditions d'OpenAI.
+- **Google Antigravity** : ses conditions interdisent l'accès par un logiciel tiers et des comptes ont été suspendus pour cet usage. Ce connecteur est désactivé par défaut, porte un badge « risque » permanent, n'est jamais choisi automatiquement, et la clé d'API Gemini est recommandée à la place.
+
+En cas de doute, une clé d'API (facturée à l'usage) ou un modèle local est toujours possible.
+
+## Licence
+
+[Apache 2.0](LICENSE).
 
 ## Vérifier
 

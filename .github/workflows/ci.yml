@@ -1,0 +1,79 @@
+# Intégration continue : Core (tests sur SQLite et PostgreSQL + pgvector, ruff, mypy) et interface (ESLint, tsc,
+# vitest, compilation). Aucun secret : les mots de passe de la base de test sont générés à chaque exécution.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core (Python)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: jarvis2_proprio
+          POSTGRES_PASSWORD: ci-proprio
+          POSTGRES_DB: jarvis2
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jarvis2_proprio -d jarvis2"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      POSTGRES_USER: jarvis2_proprio
+      POSTGRES_PASSWORD: ci-proprio
+      POSTGRES_DB: jarvis2
+      JARVIS2_PG_HOTE: 127.0.0.1
+      JARVIS2_PG_PORT: "5432"
+      JARVIS2_APP_MOT_DE_PASSE: ci-app
+      JARVIS2_DOSSIER_DONNEES: ${{ runner.temp }}/jarvis2-donnees
+      JARVIS2_CONFIG: ${{ runner.temp }}/jarvis2-config/config.toml
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Rôles et base de test (même script que docker compose)
+        working-directory: .
+        env:
+          PGHOST: 127.0.0.1
+          PGPASSWORD: ci-proprio
+        run: sh infra/postgres/initdb/01_roles.sh
+      - run: uv sync --locked
+      - name: Tests (SQLite et PostgreSQL)
+        run: uv run pytest -q
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+
+  interface:
+    name: Interface (TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: interface
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: interface/package-lock.json
+      - run: npm ci
+      - name: ESLint, tsc, vitest
+        run: npm run verifier
+      - run: npm run build

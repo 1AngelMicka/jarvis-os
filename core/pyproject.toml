@@ -38,9 +38,8 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["jarvis2"]
 
-# Interface précompilée livrée dans le paquet : aucun Node chez l'utilisateur (construire avant : npm run build)
-[tool.hatch.build.targets.wheel.force-include]
-"../interface/dist" = "jarvis2/web"
+# Interface précompilée livrée dans la roue distribuable (hatch_build.py) : aucun Node chez l'utilisateur
+[tool.hatch.build.targets.wheel.hooks.custom]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
