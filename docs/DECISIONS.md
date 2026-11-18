@@ -1,5 +1,18 @@
 # Décisions techniques
 
+## Application de bureau et publication (phase 11)
+
+- **Coque Tauri 2** (`app/`) : une fenêtre sur l'interface du Core local ; le Core n'est pas embarqué (installé par le script, `uv tool install`) : l'application le lance s'il ne tourne pas (sans console) et n'arrête que celui qu'elle a lancé. L'interface est une page distante pour l'application : aucune permission native (`capabilities/default.json` vide). Icône de notification (Ouvrir, Quitter), fermer = cacher, Ctrl+Maj+J, une seule instance.
+- **Construction** sur GitHub Actions (`publication.yml`) : à une étiquette `v*`, roue du Core + installeurs Windows (NSIS, MSI), macOS (DMG), Linux (DEB, AppImage), déposés dans une version **en brouillon** (rien de public avant que le propriétaire la publie). Signatures par secrets du dépôt, facultatifs : clé de mise à jour Tauri, certificat Windows, certificats et notarisation Apple.
+- **Installation en une ligne** : sans `-Source` et hors d'un dépôt, les scripts prennent la roue de la dernière version publiée (`releases/latest`).
+- Construction locale impossible sur un disque exFAT (Cargo ne peut pas y fixer les dates des fichiers) : elle se fait sur GitHub.
+
+## Sauvegarde et bascule (phase 12)
+
+- **Archive** (`sauvegarde.py`) : `JARVIS2S1` + sel scrypt (n = 2¹⁵) + nonce + AES-256-GCM d'un tar.gz (base, `config.toml`, recettes, manifeste). SQLite : copie cohérente par l'API de sauvegarde de SQLite ; PostgreSQL : `pg_dump -Fc` dans le conteneur. Le coffre des clés d'API n'est pas inclus (chiffré par Windows pour ce compte et ce PC). Écriture atomique (`.partiel` puis renommage), rotation des 7 dernières.
+- **Vérification** : déchiffrement, restauration dans une base temporaire (fichier temporaire ou base `jarvis2_verification_sauvegarde`, effacée ensuite), comparaison au manifeste (lignes des tables principales, chaîne d'audit et dernière empreinte).
+- **Rattrapage** : l'import `jarvis_v1` est rejouable (aucun doublon) ; à lancer avec la dernière sauvegarde quotidienne de JARVIS v1, copiée en lecture seule.
+
 ## Voix, vision, créations (phase 10)
 
 - **Transcription locale** (`voix.py`) : faster-whisper sur le CPU (int8), modèle téléchargé une fois dans `<données>/modeles/whisper` ; l'audio (webm/opus du navigateur, wav…) est décodé par PyAV puis rééchantillonné à 16 kHz par JARVIS (l'appel de PyAV dans faster-whisper n'est plus compatible avec PyAV ≥ 15). Invite initiale « Jarvis » pour l'orthographe du nom ; mot d'éveil tolérant (« j'arvi », « djarvis »…).

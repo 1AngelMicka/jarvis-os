@@ -206,6 +206,69 @@ async def _memoire(p: Parametres, action: str, fichier: Path | None, dossier: Pa
     return 0
 
 
+def _phrase(confirmer: bool) -> str:
+    import getpass
+    import os
+
+    phrase = os.environ.get("JARVIS2_PHRASE_SAUVEGARDE") or getpass.getpass("Phrase de passe de la sauvegarde : ")
+    saisie = not os.environ.get("JARVIS2_PHRASE_SAUVEGARDE")
+    if confirmer and saisie and getpass.getpass("Confirmez la phrase : ") != phrase:
+        raise SystemExit("Les deux phrases diffèrent.")
+    return phrase
+
+
+async def _comptes_postgres(p: Parametres) -> tuple[dict[str, int], str | None]:
+    from .sauvegarde import TABLES
+
+    async with _base(p) as base:
+        comptes = {t: int(await base.fetchval(f"SELECT count(*) FROM {t}")) for t in TABLES}  # noqa: S608
+        dernier = await base.fetchval("SELECT hash FROM audit ORDER BY id DESC LIMIT 1")
+    return comptes, dernier
+
+
+def _sauvegarde(p: Parametres, action: str, dossier: Path | None, fichier: Path | None, garder: int) -> int:
+    """Sauvegarde chiffrée (à garder hors du PC) et vérification par restauration réelle."""
+    from .config import dossier_config
+    from .sauvegarde import ErreurSauvegarde, creer, rotation, verifier_postgres, verifier_sqlite
+
+    try:
+        if action == "creer":
+            if dossier is None:
+                journal.error("Indiquez --dossier (disque externe, dossier synchronisé hors du PC…)")
+                return 2
+            phrase = _phrase(confirmer=True)
+            if p.stockage_effectif == "sqlite":
+                cree = creer(dossier, phrase, "sqlite", p.chemin_sqlite, dossier_config())
+            else:
+                comptes, dernier = asyncio.run(_comptes_postgres(p))
+                pg = (p.conteneur_pg, p.postgres_user, p.postgres_db)
+                cree = creer(dossier, phrase, "postgres", None, dossier_config(), pg, comptes, dernier)
+            retirees = rotation(dossier, garder)
+            print(f"Sauvegarde écrite : {cree} ({cree.stat().st_size / 1024**2:.1f} Mo)")
+            if retirees:
+                print(f"Anciennes sauvegardes retirées : {len(retirees)} (gardées : {garder})")
+            print("Vérifiez-la : jarvis2 sauvegarde verifier --fichier <ce fichier>")
+            return 0
+        if fichier is None or not fichier.is_file():
+            journal.error("Indiquez --fichier <sauvegarde .jarvis2>")
+            return 2
+        phrase = _phrase(confirmer=False)
+        if p.stockage_effectif == "sqlite":
+            rapport = verifier_sqlite(fichier, phrase)
+        else:
+            rapport = verifier_postgres(fichier, phrase, p.conteneur_pg, p.postgres_user)
+    except ErreurSauvegarde as exc:
+        journal.error("%s", exc)
+        return 3
+    etat = "VALIDE" if rapport["valide"] else "INVALIDE"
+    print(f"Sauvegarde du {rapport['date']} (JARVIS {rapport['version']}) : {etat}")
+    print(f"  Lignes restaurées : {rapport['comptes']}")
+    print(f"  Journal d'audit : {'chaîne intacte' if rapport['audit_intact'] else 'ALTÉRÉ ou différent'}")
+    for table, (attendu, trouve) in rapport["ecarts"].items():
+        print(f"  ÉCART {table} : {attendu} attendus, {trouve} restaurés")
+    return 0 if rapport["valide"] else 3
+
+
 def main(argv: list[str] | None = None) -> int:
     analyseur = argparse.ArgumentParser(prog="jarvis2", description="JARVIS 2 — Core")
     sous = analyseur.add_subparsers(dest="commande")
@@ -236,6 +299,11 @@ def main(argv: list[str] | None = None) -> int:
     mem.add_argument("action", choices=["banc", "exporter", "noyau-en-blocs", "oublier"])
     mem.add_argument("--fichier", type=Path, default=None, help="banc : questions YAML (question, attendus)")
     mem.add_argument("--dossier", type=Path, default=None, help="exporter : dossier (défaut : données/memoire-md)")
+    sau = sous.add_parser("sauvegarde", help="sauvegarde chiffrée hors du PC, et vérification par restauration")
+    sau.add_argument("action", choices=["creer", "verifier"])
+    sau.add_argument("--dossier", type=Path, default=None, help="creer : dossier de destination (hors du PC)")
+    sau.add_argument("--fichier", type=Path, default=None, help="verifier : sauvegarde .jarvis2")
+    sau.add_argument("--garder", type=int, default=7, help="creer : nombre de sauvegardes gardées (défaut 7)")
     sous.add_parser("atelier-mcp", help="(interne) outil d'autorisation des ateliers, lancé par Claude Code")
     args = analyseur.parse_args(argv)
     if args.commande == "atelier-mcp":  # serveur MCP stdio : aucun journal sur la sortie standard
@@ -299,6 +367,9 @@ def main(argv: list[str] | None = None) -> int:
         for bavard in ("httpx", "huggingface_hub", "jarvis2.config_locale", "jarvis2.embeddings"):
             logging.getLogger(bavard).setLevel(logging.WARNING)  # le diagnostic se lit seul
         return asyncio.run(_docteur(p, args.json, args.reparer))
+
+    if args.commande == "sauvegarde":
+        return _sauvegarde(p, args.action, args.dossier, args.fichier, args.garder)
 
     if args.commande == "memoire":
         return asyncio.run(_memoire(p, args.action, args.fichier, args.dossier))

@@ -32,6 +32,19 @@ Facultatif, détecté mais jamais installé par JARVIS :
 - [Ollama](https://ollama.com) pour des modèles locaux.
 - [Tailscale](https://tailscale.com/download) pour le téléphone (voir ci-dessous).
 
+## Application de bureau
+
+Les installeurs (Windows `.exe`/`.msi`, macOS `.dmg`, Linux `.deb`/`.AppImage`) sont joints à chaque version publiée. L'application ouvre l'interface dans sa propre fenêtre, lance le Core s'il ne tourne pas, se range dans la zone de notification (Ctrl+Maj+J la ramène). Elle s'appuie sur le Core installé par le script ci-dessus.
+
+## Sauvegarde
+
+```powershell
+jarvis2 sauvegarde creer --dossier D:\Sauvegardes\JARVIS      # chiffrée par votre phrase de passe ; gardez-la hors du PC
+jarvis2 sauvegarde verifier --fichier D:\Sauvegardes\JARVIS\jarvis2-AAAAMMJJ-HHMMSS.jarvis2
+```
+
+La vérification restaure la sauvegarde dans une base temporaire et contrôle les lignes et la chaîne d'audit. Sans la phrase de passe, la sauvegarde est illisible : notez-la ailleurs que sur ce PC.
+
 ## Téléphone
 
 JARVIS n'écoute que sur le PC. Pour le joindre depuis le téléphone, même hors de chez vous :

@@ -99,9 +99,10 @@ Fait : transcription locale faster-whisper (modèle « base » par défaut, `JAR
 Coque Tauri, installeurs .exe / .dmg / .deb / .AppImage par GitHub Actions, signature du code, documentation, licence. Publication du dépôt **uniquement avec l'accord explicite de l'utilisateur** (historique vérifié : aucune donnée personnelle).
 **Terminé quand** : un installeur signé s'installe et se met à jour, la documentation permet une installation sans aide, l'utilisateur a validé la publication.
 
-### 12. Bascule de l'installation personnelle
+### 12. Bascule de l'installation personnelle (outils prêts ; décisions à l'utilisateur)
 Pour l'utilisateur qui vient de JARVIS v1 : sauvegarde hors site testée, rattrapage des souvenirs créés depuis l'import (`jarvis2 importer jarvis_v1`, rejouable), fonctionnement en parallèle, arrêt de JARVIS v1 **uniquement sur décision de l'utilisateur**.
 **Terminé quand** : une restauration depuis la sauvegarde hors site a été testée, le rattrapage ne laisse aucun écart, l'utilisateur a décidé de la suite.
+Fait : `jarvis2 sauvegarde creer --dossier <hors du PC>` (archive chiffrée AES-256-GCM, phrase de passe, base + configuration + recettes + manifeste, rotation des 7 dernières) et `jarvis2 sauvegarde verifier --fichier …` (restauration réelle dans une base temporaire, mêmes lignes, chaîne d'audit intacte). Vérifié sur l'installation réelle (PostgreSQL : 1 408 souvenirs, 151 conversations) : sauvegarde de 4,8 Mo restaurée et validée en 7 s. Rattrapage essayé sur une COPIE de la base réelle avec la dernière sauvegarde de JARVIS v1 : complet, aucun écart, rejouable sans doublon (aucun nouveau souvenir aujourd'hui : même sauvegarde que l'import du matin). **À l'utilisateur** : choisir le dossier hors site (disque externe, dossier synchronisé) et garder la phrase de passe ; lancer le rattrapage sur la vraie base quand JARVIS v1 a appris du nouveau ; décider de l'arrêt de JARVIS v1.
 
 Plus tard, facultatif : passerelle de messagerie (Telegram / Signal, avec jumelage des expéditeurs inconnus), application mobile native.
 
