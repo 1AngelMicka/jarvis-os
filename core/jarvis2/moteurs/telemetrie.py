@@ -11,7 +11,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, Sequence
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 import asyncpg
@@ -85,8 +85,8 @@ def _ms(depuis: float) -> int:
 class MoteurInstrumente(Moteur):
     """Même contrat que le moteur enveloppé ; chaque appel produit une `Mesure`."""
 
-    id: ClassVar[str] = "instrumente"
-    nom: ClassVar[str] = "instrumenté"
+    id = "instrumente"
+    nom = "instrumenté"
 
     def __init__(self, interne: Moteur, enregistreur: Enregistreur) -> None:
         self.interne = interne

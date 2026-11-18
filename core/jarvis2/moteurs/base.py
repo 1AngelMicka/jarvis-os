@@ -12,7 +12,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Sequence
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Literal
+from typing import Any, Literal
 
 Role = Literal["systeme", "utilisateur", "assistant"]
 
@@ -73,15 +73,26 @@ class InfoModele:
 class EtatSante:
     disponible: bool
     detail: str = ""
+    installe: bool = True  # le programme ou le service existe sur ce PC
+    connecte: bool | None = None  # compte connecté / clé valide (None : sans objet)
+
+
+Famille = Literal["cli", "api", "local"]
 
 
 class Moteur(ABC):
-    """Classe de base : chaque moteur s'inscrit avec `@MoteurRegistry.register("<id>")`."""
+    """Classe de base d'un connecteur d'IA. Les attributs peuvent être redéfinis par instance : une même classe
+    (ex. compatible OpenAI) sert plusieurs connecteurs (OpenAI, OpenRouter, LM Studio…)."""
 
-    id: ClassVar[str]
-    nom: ClassVar[str]
-    externe: ClassVar[bool] = False  # True : les données quittent le PC (filtre de sécurité en phase 4)
-    efforts: ClassVar[tuple[str, ...]] = ()
+    id: str
+    nom: str
+    famille: Famille = "local"
+    externe: bool = False  # True : les données quittent le PC (filtre de sécurité, souvenirs privés exclus)
+    risque: bool = False  # conditions du fournisseur défavorables : jamais choisi par le routeur
+    actif_par_defaut: bool = True
+    installation_url: str | None = None  # « Comment installer »
+    conditions_url: str | None = None
+    efforts: tuple[str, ...] = ()
 
     @abstractmethod
     def stream(self, messages: Sequence[Message], options: Options | None = None) -> AsyncGenerator[Evenement]:

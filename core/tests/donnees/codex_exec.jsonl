@@ -1,0 +1,12 @@
+{"type":"thread.started","thread_id":"0199a213-81c0-7800-8aa1-bbab2a035a53"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"reasoning","text":"**Comprendre la demande**"}}
+{"type":"item.completed","item":{"id":"item_0","type":"reasoning","text":"**Comprendre la demande** L'utilisateur veut une réponse courte."}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"ls","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"ls","aggregated_output":"","exit_code":0,"status":"completed"}}
+{"type":"item.started","item":{"id":"item_2","type":"agent_message","text":""}}
+{"type":"item.updated","item":{"id":"item_2","type":"agent_message","text":"Bonjour, "}}
+{"type":"item.updated","item":{"id":"item_2","type":"agent_message","text":"Bonjour, je suis là."}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Bonjour, je suis là."}}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"Autre chose ?"}}
+{"type":"turn.completed","usage":{"input_tokens":24763,"cached_input_tokens":24448,"output_tokens":122}}

@@ -11,18 +11,21 @@ from collections import Counter
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import asyncpg
 
-from .conversations import DepotConversations, titre_provisoire
+from .conversations import Conversation, DepotConversations, MessageStocke, titre_provisoire
 from .embeddings import Encodeur
 from .memoire import ContexteMemoire, ReglagesRecherche, lire_noyau, rechercher_multi
 from .moteurs.base import Delta, ErreurMoteur, Fin, Message, Options
 from .moteurs.telemetrie import MoteurInstrumente
 from .securite.filtre import masquer
+
+if TYPE_CHECKING:
+    from .connecteurs import Connecteurs
 
 journal = logging.getLogger("jarvis2.dialogue")
 
@@ -80,6 +83,16 @@ class EvenementDialogue:
     donnees: dict[str, Any]
 
 
+@dataclass
+class Envoi:
+    """Ce qui part vers un connecteur : messages filtrés, mémoire consultée, éléments masqués, présence de privé."""
+
+    messages: list[Message]
+    contexte: ContexteMemoire
+    masques: Counter[str]
+    prive: bool
+
+
 class ServiceDialogue:
     def __init__(
         self,
@@ -87,11 +100,13 @@ class ServiceDialogue:
         moteurs: Mapping[str, MoteurInstrumente],
         moteur_defaut: str,
         memoire: SourceMemoire | None = None,
+        connecteurs: Connecteurs | None = None,
     ) -> None:
         self.depot = depot
         self.moteurs = moteurs
         self.moteur_defaut = moteur_defaut
         self.memoire = memoire
+        self.connecteurs = connecteurs
 
     async def consignes(self, texte: str, externe: bool) -> tuple[str, ContexteMemoire]:
         contexte = (
@@ -101,36 +116,31 @@ class ServiceDialogue:
         )
         return CONSIGNES_SYSTEME.format(maintenant=maintenant_paris(), memoire=contexte.bloc()), contexte
 
-    def choisir_moteur(self, moteur: str | None) -> MoteurInstrumente:
-        cle = moteur or self.moteur_defaut
+    async def choisir_moteur(self, moteur: str | None, conversation: Conversation | None = None) -> MoteurInstrumente:
+        """Choix explicite > choix imposé pour la conversation > routeur (jamais un connecteur à risque)."""
+        cle = moteur if moteur and moteur != "auto" else None
+        if cle is None and moteur is None and conversation is not None and conversation.connecteur:
+            cle = conversation.connecteur
+            if self.connecteurs is not None and not self.connecteurs.actif(cle):
+                cle = None  # le connecteur imposé a été désactivé depuis : le routeur reprend la main
+        if cle is None:
+            if self.connecteurs is not None:
+                cle = await self.connecteurs.router()
+                if cle is None:
+                    raise ErreurMoteur("Aucun connecteur d'IA disponible : ouvrez l'onglet Connecteurs")
+            else:
+                cle = self.moteur_defaut
         if cle not in self.moteurs:
-            raise ErreurMoteur(f"Moteur inconnu : « {cle} »")
+            raise ErreurMoteur(f"Connecteur inconnu : « {cle} »")
+        if self.connecteurs is not None and not self.connecteurs.actif(cle):
+            raise ErreurMoteur(
+                f"Connecteur « {self.moteurs[cle].interne.nom} » désactivé : activez-le dans Connecteurs"
+            )
         return self.moteurs[cle]
 
-    async def repondre(
-        self,
-        message: str,
-        conversation_id: UUID | None = None,
-        moteur: str | None = None,
-        options: Options | None = None,
-    ) -> AsyncIterator[EvenementDialogue]:
-        message = message.strip()
-        if not message:
-            raise ValueError("Message vide")
-        instance = self.choisir_moteur(moteur)
-        if conversation_id is None:
-            conversation = await self.depot.creer(titre_provisoire(message))
-            titre = conversation.titre
-        else:
-            trouvee = await self.depot.obtenir(conversation_id)
-            if trouvee is None:
-                raise LookupError("Conversation introuvable")
-            conversation, titre = trouvee, trouvee.titre
-            if conversation.nb_messages == 0 and conversation.titre_source == "extrait":
-                titre = titre_provisoire(message)
-                await self.depot.renommer(conversation.id, titre, "extrait")
-        historique = await self.depot.messages(conversation.id, limite=NB_MESSAGES_HISTORIQUE)
-        msg_utilisateur = await self.depot.ajouter_message(conversation.id, "utilisateur", message)
+    async def preparer(self, instance: MoteurInstrumente, message: str, historique: list[MessageStocke]) -> Envoi:
+        """Consignes + mémoire + historique + message ; pour un connecteur externe : souvenirs privés exclus,
+        réponses locales privées masquées, secrets et données personnelles remplacés."""
         externe = instance.interne.externe
         consignes, contexte = await self.consignes(message, externe=externe)
         messages = [Message("systeme", consignes)]
@@ -151,6 +161,44 @@ class ServiceDialogue:
         prive = any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs) or any(
             s.confidentialite == "local_uniquement" for s in contexte.noyau
         )
+        return Envoi(messages, contexte, masques, prive)
+
+    async def ouvrir(self, message: str, conversation_id: UUID | None) -> tuple[Conversation, str]:
+        """Conversation existante (titre provisoire si elle est vide) ou nouvelle."""
+        if conversation_id is None:
+            conversation = await self.depot.creer(titre_provisoire(message))
+            return conversation, conversation.titre
+        trouvee = await self.depot.obtenir(conversation_id)
+        if trouvee is None:
+            raise LookupError("Conversation introuvable")
+        titre = trouvee.titre
+        if trouvee.nb_messages == 0 and trouvee.titre_source == "extrait":
+            titre = titre_provisoire(message)
+            await self.depot.renommer(trouvee.id, titre, "extrait")
+        return trouvee, titre
+
+    async def repondre(
+        self,
+        message: str,
+        conversation_id: UUID | None = None,
+        moteur: str | None = None,
+        options: Options | None = None,
+    ) -> AsyncIterator[EvenementDialogue]:
+        message = message.strip()
+        if not message:
+            raise ValueError("Message vide")
+        conversation, titre = await self.ouvrir(message, conversation_id)
+        instance = await self.choisir_moteur(moteur, conversation)
+        if moteur == "auto":
+            await self.depot.retenir_connecteur(conversation.id, None, None)
+        elif moteur:  # choix explicite : il devient celui de la conversation
+            await self.depot.retenir_connecteur(
+                conversation.id, instance.id_moteur, options.modele if options else None
+            )
+        historique = await self.depot.messages(conversation.id, limite=NB_MESSAGES_HISTORIQUE)
+        msg_utilisateur = await self.depot.ajouter_message(conversation.id, "utilisateur", message)
+        envoi = await self.preparer(instance, message, historique)
+        messages, contexte, masques, prive = envoi.messages, envoi.contexte, envoi.masques, envoi.prive
         yield EvenementDialogue(
             "debut",
             {

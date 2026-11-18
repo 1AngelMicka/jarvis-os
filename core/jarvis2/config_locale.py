@@ -66,6 +66,15 @@ class ConfigLocale:
     # injectés au modèle (noyau, souvenirs). Les garde-fous d'action relèvent de la sécurité (phase 4).
     sujets_exclus: tuple[re.Pattern[str], ...] = ()
     imports: dict[str, ConfigImport] = field(default_factory=dict)
+    # Connecteurs d'IA : réglages par connecteur ([connecteurs.<id>]) et points d'accès compatibles OpenAI
+    # supplémentaires ([[connecteurs.compatibles]] : id, nom, url, local, cle)
+    connecteurs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    compatibles: tuple[dict[str, Any], ...] = ()
+    # Tarifs ($ par million de jetons, entrée et sortie) pour estimer le coût des API sans coût renvoyé
+    tarifs: dict[str, tuple[float, float]] = field(default_factory=dict)
+
+    def connecteur(self, ident: str) -> dict[str, Any]:
+        return self.connecteurs.get(ident, {})
 
     def import_(self, source: str) -> ConfigImport:
         return self.imports.get(source, ConfigImport())
@@ -83,10 +92,24 @@ def analyser(donnees: dict[str, Any], chemin: Path | None = None) -> ConfigLocal
         if not isinstance(temoins, list) or not all(isinstance(q, str) for q in temoins):
             raise ValueError(f"import.{nom}.requetes_temoins : liste de textes attendue")
         imports[nom] = ConfigImport(exclusions, tuple(temoins))
+    blocs = dict(donnees.get("connecteurs") or {})
+    compatibles = blocs.pop("compatibles", [])
+    if not isinstance(compatibles, list) or not all(
+        isinstance(c, dict) and {"id", "nom", "url"} <= set(c) for c in compatibles
+    ):
+        raise ValueError("connecteurs.compatibles : liste de tables avec id, nom et url attendue")
+    tarifs: dict[str, tuple[float, float]] = {}
+    for modele, prix in (donnees.get("tarifs") or {}).items():
+        if not (isinstance(prix, list) and len(prix) == 2 and all(isinstance(x, int | float) for x in prix)):
+            raise ValueError(f"tarifs.{modele} : [prix entrée, prix sortie] en $ par million de jetons attendu")
+        tarifs[str(modele)] = (float(prix[0]), float(prix[1]))
     return ConfigLocale(
         chemin=chemin,
         sujets_exclus=_motifs(confidentialite.get("sujets_exclus"), "confidentialite.sujets_exclus"),
         imports=imports,
+        connecteurs={str(k): dict(v) for k, v in blocs.items() if isinstance(v, dict)},
+        compatibles=tuple(compatibles),
+        tarifs=tarifs,
     )
 
 

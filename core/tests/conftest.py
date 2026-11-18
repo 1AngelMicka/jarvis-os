@@ -37,7 +37,7 @@ async def pool(url_proprio: str, parametres: Parametres) -> AsyncIterator[asyncp
         await conn.execute(
             "TRUNCATE memory_block_versions, memory_blocks, telemetrie, imports, chantiers, creation_donnees,"
             " creation_versions, creations, missions, profil_reponses, messages, conversations, memoires,"
-            " defis_webauthn, cles_acces, demandes, jumelages, appareils RESTART IDENTITY CASCADE"
+            " defis_webauthn, cles_acces, demandes, jumelages, appareils, connecteurs RESTART IDENTITY CASCADE"
         )
         # Le journal d'audit est en ajout seul, même pour les tests : on ne le vide jamais (assertions relatives).
         await conn.execute("UPDATE etat_systeme SET valeur = '{\"actif\": false}' WHERE cle = 'arret_urgence'")

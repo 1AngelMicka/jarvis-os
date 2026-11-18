@@ -31,19 +31,23 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__, memoire
+from .api_connecteurs import routeur as routeur_connecteurs
 from .api_securite import routeur as routeur_securite
 from .config import Parametres
 from .config_locale import charger as charger_config_locale
+from .config_locale import chemin_config
+from .connecteurs import Connecteurs, construire_catalogue
+from .conseil import ServiceConseil
 from .conversations import DepotConversations
 from .db import creer_pool, version_schema
 from .dialogue import ServiceDialogue, SourceMemoire
 from .embeddings import EncodeurFastEmbed
 from .memoire import Expurgateur, ReglagesRecherche
-from .moteurs import construire_moteurs
 from .moteurs.base import ErreurMoteur, Options
 from .moteurs.telemetrie import EnregistreurPostgres, MoteurInstrumente
 from .securite import appareils
 from .securite.actions import creer_registre
+from .securite.coffre import Coffre
 from .securite.permissions import Approbations
 from .securite.urgence import ArretUrgence
 
@@ -65,10 +69,13 @@ class Contexte:
     moteur_defaut: str
     memoire: SourceMemoire | None = None
     urgence: ArretUrgence = field(default_factory=ArretUrgence)
+    connecteurs: Connecteurs | None = None
     approbations: Approbations = field(init=False)
+    conseil: ServiceConseil = field(init=False)
 
     def __post_init__(self) -> None:
         self.approbations = Approbations(self.pool, creer_registre(self.urgence))
+        self.conseil = ServiceConseil(self.service)
 
 
 class DemandeDialogue(BaseModel):
@@ -98,12 +105,16 @@ def sse(evenement: str, donnees: dict[str, Any]) -> bytes:
 async def construire_contexte(p: Parametres) -> Contexte:
     pool = await creer_pool(p.url_base("app"))
     depot = DepotConversations(pool)
-    moteurs = construire_moteurs(p, EnregistreurPostgres(pool))
     locale = charger_config_locale()
+    coffre = Coffre(chemin_config().parent / "coffre.json")
+    connecteurs = Connecteurs(
+        pool, construire_catalogue(p, locale, coffre, EnregistreurPostgres(pool)), coffre, prefere=p.moteur_defaut
+    )
+    moteurs = connecteurs.moteurs
     reglages = ReglagesRecherche(expurgateur=Expurgateur(locale.sujets_exclus))
     memoire = SourceMemoire(pool, EncodeurFastEmbed(p.dossier_modeles, p.modele_embeddings), reglages)
-    service = ServiceDialogue(depot, moteurs, p.moteur_defaut, memoire)
-    return Contexte(pool, depot, moteurs, service, p.moteur_defaut, memoire)
+    service = ServiceDialogue(depot, moteurs, p.moteur_defaut, memoire, connecteurs)
+    return Contexte(pool, depot, moteurs, service, p.moteur_defaut, memoire, connecteurs=connecteurs)
 
 
 async def decrire_moteur(moteur: MoteurInstrumente) -> dict[str, Any]:
@@ -126,6 +137,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         ctx = contexte or await construire_contexte(parametres)
         app.state.ctx = ctx
         await ctx.urgence.charger(ctx.pool)
+        if ctx.connecteurs is not None:
+            await ctx.connecteurs.charger()
         if ctx.urgence.actif:
             journal.warning("Arrêt d'urgence ACTIF (depuis %s) : écritures refusées", ctx.urgence.depuis)
         prechargement = None
@@ -196,8 +209,14 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     @app.get("/v1/etat")
     async def etat(request: Request) -> dict[str, Any]:
         c = ctx(request)
+
+        async def connecteurs_actifs() -> list[dict[str, Any]]:
+            if c.connecteurs is None:
+                return list(await asyncio.gather(*(decrire_moteur(m) for m in c.moteurs.values())))
+            return [carte for carte in await c.connecteurs.decrire() if carte["actif"] and carte["installe"]]
+
         moteurs, conversations, comptes, demandes, nb_cles = await asyncio.gather(
-            asyncio.gather(*(decrire_moteur(m) for m in c.moteurs.values())),
+            connecteurs_actifs(),
             c.depot.lister(limite=50),
             memoire.compter(c.pool),
             c.approbations.lister("en_attente"),
@@ -246,8 +265,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     @app.post("/v1/dialogue")
     async def dialogue(request: Request, demande: DemandeDialogue) -> StreamingResponse:
         c = ctx(request)
-        if (demande.moteur or c.moteur_defaut) not in c.moteurs:
-            raise HTTPException(422, f"Moteur inconnu : « {demande.moteur} »")
+        if demande.moteur not in (None, "auto") and demande.moteur not in c.moteurs:
+            raise HTTPException(422, f"Connecteur inconnu : « {demande.moteur} »")
         if demande.conversation_id and await c.depot.obtenir(demande.conversation_id) is None:
             raise HTTPException(404, "Conversation introuvable")
         options = Options(modele=demande.modele or None, effort=demande.effort or None)
@@ -267,6 +286,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         )
 
     app.include_router(routeur_securite)
+    app.include_router(routeur_connecteurs)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():

@@ -9,7 +9,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncGenerator, Sequence
-from typing import Any, ClassVar
+from typing import Any
 
 import httpx
 
@@ -23,9 +23,11 @@ ROLES = {"systeme": "system", "utilisateur": "user", "assistant": "assistant"}
 
 @MoteurRegistry.register("ollama")
 class MoteurOllama(Moteur):
-    id: ClassVar[str] = "ollama"
-    nom: ClassVar[str] = "Ollama (local)"
-    externe: ClassVar[bool] = False
+    id = "ollama"
+    nom = "Ollama (local)"
+    externe = False
+    famille = "local"
+    installation_url = "https://ollama.com/download"
 
     def __init__(
         self,

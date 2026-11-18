@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator, Sequence
-from typing import ClassVar
 
 import pytest
 
@@ -28,8 +27,8 @@ from jarvis2.registre import MoteurRegistry, RegistryBase
 
 
 class FauxMoteur(Moteur):
-    id: ClassVar[str] = "faux"
-    nom: ClassVar[str] = "Faux"
+    id = "faux"
+    nom = "Faux"
 
     def __init__(self, echec: bool = False, lent: bool = False) -> None:
         self.echec, self.lent = echec, lent

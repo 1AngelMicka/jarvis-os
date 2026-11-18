@@ -6,7 +6,7 @@ import asyncio
 import time
 import uuid
 from collections.abc import AsyncGenerator, Sequence
-from typing import Any, ClassVar
+from typing import Any
 
 import asyncpg
 import httpx
@@ -30,9 +30,9 @@ ORIGINE = "http://localhost:8765"
 class MoteurEspion(Moteur):
     """Garde ce qu'il reçoit ; `lent` : répond un morceau puis attend (pour l'arrêt d'urgence)."""
 
-    id: ClassVar[str] = "espion"
-    nom: ClassVar[str] = "Espion"
-    externe: ClassVar[bool] = True
+    id = "espion"
+    nom = "Espion"
+    externe = True
 
     def __init__(self, lent: bool = False) -> None:
         self.lent = lent
@@ -58,8 +58,8 @@ class MoteurEspion(Moteur):
 
 
 class MoteurLocal(MoteurEspion):
-    id: ClassVar[str] = "local"
-    externe: ClassVar[bool] = False
+    id = "local"
+    externe = False
 
 
 @pytest.fixture

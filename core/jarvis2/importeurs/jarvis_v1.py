@@ -126,8 +126,20 @@ def restaurer_sauvegarde(sauvegarde: Path, conteneur: str, proprio: str) -> None
             ligne for ligne in sommaire if not any(f" {t} " in f"{ligne} " or f" {t}_" in ligne for t in TABLES_EXCLUES)
         ]
         _docker(conteneur, "sh", "-c", f"cat > {liste}", entree="\n".join(gardes).encode())
-        _docker(conteneur, "pg_restore", "-U", proprio, "-d", BASE_ATTENTE, "--no-owner", "--no-privileges",
-                "--exit-on-error", "-L", liste, distant)  # fmt: skip
+        _docker(
+            conteneur,
+            "pg_restore",
+            "-U",
+            proprio,
+            "-d",
+            BASE_ATTENTE,
+            "--no-owner",
+            "--no-privileges",
+            "--exit-on-error",
+            "-L",
+            liste,
+            distant,
+        )
     finally:
         _docker(conteneur, "rm", "-f", distant, liste)
 

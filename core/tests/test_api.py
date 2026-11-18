@@ -107,4 +107,4 @@ async def test_origine_inconnue_refusee(client: httpx.AsyncClient) -> None:
     rep = await client.post("/v1/dialogue", json={"message": "x"}, headers={"Origin": "https://malveillant.example"})
     assert rep.status_code == 403
     ok = await client.get("/v1/sante", headers={"Origin": "http://127.0.0.1:5174"})
-    assert ok.status_code == 200 and ok.json()["base"] is True and ok.json()["schema"] == "004_securite"
+    assert ok.status_code == 200 and ok.json()["base"] is True and ok.json()["schema"] == "005_connecteurs"

@@ -21,7 +21,7 @@ import sys
 import time
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from ..registre import MoteurRegistry
 from .base import Delta, ErreurMoteur, EtatSante, Evenement, Fin, InfoModele, Message, Moteur, Options, Reponse, Usage
@@ -172,10 +172,13 @@ def tuer_arbre(proc: asyncio.subprocess.Process) -> None:
 
 @MoteurRegistry.register("claude_code")
 class MoteurClaudeCode(Moteur):
-    id: ClassVar[str] = "claude_code"
-    nom: ClassVar[str] = "Claude (abonnement)"
-    externe: ClassVar[bool] = True
-    efforts: ClassVar[tuple[str, ...]] = EFFORTS
+    id = "claude_code"
+    nom = "Claude (abonnement)"
+    externe = True
+    famille = "cli"
+    installation_url = "https://code.claude.com/docs/fr/setup"
+    conditions_url = "https://www.anthropic.com/legal/consumer-terms"
+    efforts = EFFORTS
 
     def __init__(
         self,

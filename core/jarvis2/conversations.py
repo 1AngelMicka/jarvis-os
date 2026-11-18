@@ -31,6 +31,8 @@ class Conversation:
     cree_le: datetime
     maj_le: datetime
     nb_messages: int = 0
+    connecteur: str | None = None  # choix imposé pour cette conversation
+    modele: str | None = None
 
     def en_dict(self) -> dict[str, Any]:
         return {
@@ -42,6 +44,8 @@ class Conversation:
             "cree_le": self.cree_le.isoformat(),
             "maj_le": self.maj_le.isoformat(),
             "nb_messages": self.nb_messages,
+            "connecteur": self.connecteur,
+            "modele": self.modele,
         }
 
 
@@ -63,7 +67,7 @@ class MessageStocke:
         }
 
 
-COLONNES = "c.id, c.titre, c.titre_source, c.epinglee, c.archivee, c.cree_le, c.maj_le"
+COLONNES = "c.id, c.titre, c.titre_source, c.epinglee, c.archivee, c.cree_le, c.maj_le, c.connecteur, c.modele"
 NB_MESSAGES = "(SELECT count(*) FROM messages m WHERE m.conversation_id = c.id)::int AS nb_messages"
 
 
@@ -77,6 +81,8 @@ def _conversation(ligne: asyncpg.Record) -> Conversation:
         cree_le=ligne["cree_le"],
         maj_le=ligne["maj_le"],
         nb_messages=ligne.get("nb_messages", 0),
+        connecteur=ligne.get("connecteur"),
+        modele=ligne.get("modele"),
     )
 
 
@@ -145,4 +151,10 @@ class DepotConversations:
     async def renommer(self, conversation_id: UUID, titre: str, source: str = "utilisateur") -> None:
         await self.pool.execute(
             "UPDATE conversations SET titre = $2, titre_source = $3 WHERE id = $1", conversation_id, titre, source
+        )
+
+    async def retenir_connecteur(self, conversation_id: UUID, connecteur: str | None, modele: str | None) -> None:
+        """Connecteur et modèle imposés pour cette conversation (None : le routeur choisit)."""
+        await self.pool.execute(
+            "UPDATE conversations SET connecteur = $2, modele = $3 WHERE id = $1", conversation_id, connecteur, modele
         )
