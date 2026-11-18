@@ -604,3 +604,13 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
 .rapport { padding: var(--e-4); border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-2); background: rgb(var(--c-creux) / .5); font-size: var(--t-corps); line-height: var(--interligne); overflow-wrap: anywhere; }
 .mcp-serveur { display: flex; flex-direction: column; gap: var(--e-3); }
 .bloc-texte { width: 100%; min-height: 84px; padding: var(--e-3) var(--e-4); resize: vertical; font-size: var(--t-corps); line-height: 1.5; }
+
+/* --- Ateliers Claude Code ---------------------------------------------------------------------------------- */
+.carte-attente { border-color: rgb(var(--c-ambre) / .55); background: rgb(var(--c-ambre) / .06); }
+.atelier-detail { display: flex; flex-direction: column; gap: var(--e-3); width: 100%; }
+.atelier-fil { display: flex; flex-direction: column; gap: var(--e-1); max-height: 320px; overflow-y: auto; margin: 0; padding: var(--e-3); list-style: none; border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-2); background: rgb(var(--c-creux) / .5); font: var(--t-mini)/1.45 var(--f-donnees); }
+.atelier-fil li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--e-3); color: var(--texte-2); overflow-wrap: anywhere; white-space: pre-wrap; }
+.atelier-fil li[data-type="texte"], .atelier-fil li[data-type="fin"] { color: var(--texte); }
+.atelier-fil li[data-type="attente"] { color: var(--ambre-texte); }
+.atelier-fil li[data-type="erreur"] { color: var(--rouge-pale); }
+.atelier-heure { color: var(--texte-3); }

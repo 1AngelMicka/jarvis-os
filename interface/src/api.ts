@@ -16,6 +16,9 @@ import type {
   EtatTailscale,
   Jumelage,
   Verification,
+  Atelier,
+  AttenteOutil,
+  EvenementAtelier,
   BlocMemoire,
   EtatMemoire,
   Mission,
@@ -222,3 +225,16 @@ export const ecrireBloc = (label: string, contenu: string, confidentialite?: Blo
   });
 export const noyauEnBlocs = () => envoyer<{ convertis: Record<string, number> }>("/v1/memoire/noyau-en-blocs");
 export const lancerTacheMemoire = (id: string) => envoyer<{ lancee: string }>(`/v1/memoire/taches/${encodeURIComponent(id)}/lancer`);
+// --- Ateliers Claude Code ---
+export const listerAteliers = () =>
+  unSeul("ateliers", () =>
+    appeler<{ projets: { id: string; nom: string }[]; ateliers: Atelier[]; attentes: AttenteOutil[] }>("/v1/ateliers"),
+  );
+export const creerAtelier = (projet: string, nom: string) => envoyer<Atelier>("/v1/ateliers", { projet, nom });
+export const evenementsAtelier = (id: string, apres = 0) =>
+  appeler<{ evenements: EvenementAtelier[]; attentes: AttenteOutil[] }>(`/v1/ateliers/${id}/evenements?apres=${String(apres)}`);
+export const consigneAtelier = (id: string, consigne: string, reprendre = false) =>
+  envoyer<{ lance: boolean }>(`/v1/ateliers/${id}/consigne`, { consigne, reprendre });
+export const arreterAtelier = (id: string) => envoyer<{ arrete: boolean }>(`/v1/ateliers/${id}/arreter`);
+export const abandonnerAtelier = (id: string) => envoyer<{ abandonne: boolean }>(`/v1/ateliers/${id}/abandonner`);
+export const repondreAttente = (id: string, accorde: boolean) => envoyer<{ accorde: boolean }>(`/v1/ateliers/attentes/${id}`, { accorde });

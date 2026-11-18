@@ -4,6 +4,7 @@ import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, lever
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
 import { VueAgents } from "./composants/Agents";
+import { VueAteliers } from "./composants/Ateliers";
 import { VueConnecteurs } from "./composants/Connecteurs";
 import { ListeDemandes } from "./composants/Demandes";
 import { Console, Fil, type MessageAffiche } from "./composants/Dialogue";
@@ -69,7 +70,7 @@ function Hud() {
   const [alerte, setAlerte] = useState(false);
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
-  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents">("dialogue");
+  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers">("dialogue");
   const [conseil, setConseil] = useState(false);
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
   const [annonce, setAnnonce] = useState("");
@@ -384,6 +385,16 @@ function Hud() {
         >
           Agents
         </button>
+        <button
+          type="button"
+          className="btn btn-discret btn-mini btn-connecteurs"
+          aria-pressed={vue === "ateliers"}
+          onClick={() => {
+            setVue((v) => (v === "ateliers" ? "dialogue" : "ateliers"));
+          }}
+        >
+          Ateliers
+        </button>
         <SelecteurTheme className="selecteur-theme--barre" />
         {!urgence && etat && (
           <button type="button" className="btn btn-rouge btn-mini btn-urgence" onClick={declencherUrgence} title="Tout arrêter tout de suite">
@@ -485,6 +496,34 @@ function Hud() {
                 surTermine={() => {
                   setVue("dialogue");
                   rafraichir("JARVIS est prêt.");
+                }}
+              />
+            </div>
+          </Panneau>
+        ) : vue === "ateliers" ? (
+          <Panneau
+            titre="Ateliers"
+            className="panneau-scene"
+            ordre={2}
+            id="ateliers"
+            meta="Claude Code dans vos projets, un worktree par atelier"
+            actions={
+              <button
+                type="button"
+                className="btn btn-mini"
+                onClick={() => {
+                  setVue("dialogue");
+                }}
+              >
+                Retour au dialogue
+              </button>
+            }
+          >
+            <div className="panneau-corps">
+              <VueAteliers
+                surChangement={rafraichir}
+                surAction={(r) => {
+                  suiteAction(r, "Atelier fusionné.");
                 }}
               />
             </div>

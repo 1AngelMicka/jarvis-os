@@ -1,5 +1,13 @@
 # Décisions techniques
 
+## Ateliers Claude Code (phase 9, migration 009)
+
+- **Binaire officiel plutôt que le SDK** : `claude -p --output-format stream-json` dans le worktree, environnement sans clés d'API, réponse refusée si `apiKeySource` ≠ `none` (même règle que le connecteur). Les ateliers exigent l'avertissement Claude Code accepté.
+- **Isolation** : `git worktree add -b jarvis/atelier-<id>` dans `<données>/ateliers/<projet>/`, depuis le HEAD du projet ; le projet n'est touché qu'à la fusion.
+- **Autorisations** (`ateliers/autorisation.py`) : Claude Code appelle avant chaque outil `mcp__jarvis__autoriser` (`--permission-prompt-tool`), servi par `jarvis2 atelier-mcp` (stdio) qui relaie au Core (`POST /v1/ateliers-autorisation`, boucle locale seulement, jeton aléatoire propre à chaque exécution). Écriture : autorisée dans le worktree (chemins résolus), refusée ailleurs, ainsi que dans `.git` et les `.env` ; lecture hors du worktree, commandes, réseau, autres outils : décision de l'utilisateur en direct (refus au bout de 10 minutes). Chaque décision est notée dans le fil de l'atelier.
+- **Fusion** : action 🟡 `atelier.fusionner` — JARVIS commite le worktree (auteur « JARVIS »), puis `merge --no-ff` dans le projet s'il est propre ; en cas de conflit, `merge --abort` (projet inchangé). Abandon : le worktree est retiré, la branche reste.
+- **Projets** : `[[ateliers.projets]]` (id, nom, chemin) de la configuration locale. Limite connue : git refuse un dépôt sur un disque sans propriétaires (exFAT) tant que `safe.directory` ne l'autorise pas.
+
 ## Mémoire v2 (phase 8, migration 008)
 
 - **Classement v2** (`memoire_v2.classer_v2`, défaut ; `ReglagesRecherche.classement = "v1"` pour l'ancien) : par sous-question, score = (0,6 × hybride + 0,4 × RRF normalisé, k = 60) × (0,85 + 0,3 × importance). La recherche renvoie les deux composantes (cosinus, plein texte) pour cela. La récence reste dans la fusion.

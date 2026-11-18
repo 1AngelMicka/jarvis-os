@@ -12,6 +12,7 @@ from .urgence import ArretUrgence
 
 if TYPE_CHECKING:
     from ..agents.mcp import GestionnaireMCP
+    from ..ateliers.gestionnaire import GestionnaireAteliers
 
 
 def _uuid(params: dict[str, Any], cle: str) -> UUID:
@@ -28,7 +29,9 @@ async def _titre(conn: Connexion, conversation: UUID) -> str:
     return titre
 
 
-def creer_registre(urgence: ArretUrgence, mcp: GestionnaireMCP | None = None) -> Registre:
+def creer_registre(
+    urgence: ArretUrgence, mcp: GestionnaireMCP | None = None, ateliers: GestionnaireAteliers | None = None
+) -> Registre:
     registre = Registre()
 
     async def archiver_conversation(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
@@ -95,7 +98,31 @@ def creer_registre(urgence: ArretUrgence, mcp: GestionnaireMCP | None = None) ->
     )
     if mcp is not None:
         _ajouter_mcp(registre, mcp)
+    if ateliers is not None:
+        _ajouter_ateliers(registre, ateliers)
     return registre
+
+
+def _ajouter_ateliers(registre: Registre, ateliers: GestionnaireAteliers) -> None:
+    from ..ateliers.gestionnaire import ErreurAtelier
+
+    async def fusionner(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return await ateliers.fusionner(conn, _uuid(p, "atelier_id"))
+        except ErreurAtelier as exc:
+            raise ErreurAction(str(exc)) from exc
+
+    registre.ajouter(
+        Action(
+            "atelier.fusionner",
+            "jaune",
+            "Fusionner le travail d'un atelier Claude Code dans son projet (commit puis merge --no-ff)",
+            lambda p: (
+                f"Fusionner l'atelier « {p.get('nom') or p.get('atelier_id')} » dans le projet {p.get('projet', '')}"
+            ),
+            fusionner,
+        )
+    )
 
 
 def _ajouter_mcp(registre: Registre, mcp: GestionnaireMCP) -> None:

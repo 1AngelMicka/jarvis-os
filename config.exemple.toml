@@ -15,6 +15,12 @@ sujets_prives = [
   # '\bsant[ée]\b',
 ]
 
+# --- Ateliers Claude Code (facultatif) : projets (dépôts git) où Claude Code peut travailler, un worktree par atelier ---
+# [[ateliers.projets]]
+# id = "monsite"
+# nom = "Mon site"
+# chemin = "C:/Projets/monsite"
+
 # --- Agents (facultatif) ---
 # Recettes planifiées : fichiers YAML dans le dossier « recettes » à côté de ce fichier (exemple : docs/recettes).
 # Recherche web privée des missions : votre instance SearXNG (format JSON activé dans ses réglages).

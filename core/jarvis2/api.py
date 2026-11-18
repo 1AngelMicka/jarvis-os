@@ -39,9 +39,11 @@ from .agents.recettes import Planificateur
 from .agents.recherche_web import RechercheWeb
 from .api_accueil import routeur as routeur_accueil
 from .api_agents import routeur as routeur_agents
+from .api_ateliers import routeur as routeur_ateliers
 from .api_connecteurs import routeur as routeur_connecteurs
 from .api_memoire import routeur as routeur_memoire
 from .api_securite import routeur as routeur_securite
+from .ateliers.gestionnaire import GestionnaireAteliers, Projet
 from .config import Parametres
 from .config_locale import charger as charger_config_locale
 from .config_locale import chemin_config
@@ -92,13 +94,14 @@ class Contexte:
     dossier_recettes: Path | None = None
     dossier_donnees: Path | None = None  # tâches de nuit de la mémoire (export Markdown dans memoire-md/)
     etat_bascule: EtatBascule | None = None
+    ateliers: GestionnaireAteliers | None = None
     approbations: Approbations = field(init=False)
     conseil: ServiceConseil = field(init=False)
     missions: ServiceMissions = field(init=False)
     planificateur: Planificateur | None = field(init=False)
 
     def __post_init__(self) -> None:
-        self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp))
+        self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp, self.ateliers))
         self.conseil = ServiceConseil(self.service)
         self.missions = ServiceMissions(self.pool, self.service, self.recherche, self.urgence)
         taches = (
@@ -122,7 +125,9 @@ class DemandeDialogue(BaseModel):
 
 
 # Sans jeton : santé, état du jumelage, premier appareil (PC seulement), échange d'un code de jumelage
-CHEMINS_PUBLICS = frozenset({"/v1/sante", "/v1/auth/etat", "/v1/appareils/premier", "/v1/jumelage/echanger"})
+CHEMINS_PUBLICS = frozenset(
+    {"/v1/sante", "/v1/auth/etat", "/v1/appareils/premier", "/v1/jumelage/echanger", "/v1/ateliers-autorisation"}
+)  # autorisation des ateliers : jeton propre à chaque exécution, PC seulement
 # Écritures permises pendant l'arrêt d'urgence : ce qui sert à le lever ou à retirer un accès
 ECRITURES_EN_URGENCE = ("/v1/urgence/", "/v1/demandes/", "/v1/cles/", "/v1/appareils/")
 
@@ -149,6 +154,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
     reglages = ReglagesRecherche(expurgateur=Expurgateur(locale.sujets_exclus))
     memoire = SourceMemoire(pool, EncodeurFastEmbed(p.dossier_modeles, p.modele_embeddings), reglages)
     service = ServiceDialogue(depot, moteurs, p.moteur_defaut, memoire, connecteurs, locale.sujets_prives)
+    urgence = ArretUrgence()
     return Contexte(
         pool,
         depot,
@@ -161,6 +167,15 @@ async def construire_contexte(p: Parametres) -> Contexte:
         recherche=RechercheWeb(locale.searxng),
         dossier_recettes=chemin_config().parent / "recettes",
         dossier_donnees=p.dossier_donnees,
+        ateliers=GestionnaireAteliers(
+            pool,
+            [Projet.depuis_config(b) for b in locale.projets_ateliers],
+            p.dossier_donnees / "ateliers",
+            f"http://127.0.0.1:{p.port}",
+            urgence,
+            [p.claude_commande] if p.claude_commande else None,
+        ),
+        urgence=urgence,
     )
 
 
@@ -265,6 +280,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
                     await m.fermer()
                 if ctx.mcp is not None:
                     await ctx.mcp.fermer()
+                if ctx.ateliers is not None:
+                    await ctx.ateliers.fermer()
                 await ctx.pool.close()
 
     app = FastAPI(title="JARVIS 2", version=__version__, lifespan=cycle_de_vie, docs_url=None, redoc_url=None)
@@ -403,6 +420,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_connecteurs)
     app.include_router(routeur_accueil)
     app.include_router(routeur_agents)
+    app.include_router(routeur_ateliers)
     app.include_router(routeur_memoire)
 
     dossier = parametres.dossier_interface

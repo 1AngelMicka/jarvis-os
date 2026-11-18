@@ -272,3 +272,31 @@ export interface EtatMemoire {
   sans_vecteur: number;
   taches: { id: string; nom: string; planification: string; derniere: { debut: string; statut: string; resultat: string | null; erreur: string | null } | null }[];
 }
+
+// --- Ateliers Claude Code (phase 9) ---
+export interface Atelier {
+  id: string;
+  projet: string;
+  nom: string;
+  branche: string;
+  chemin: string;
+  statut: "pret" | "en_cours" | "arrete" | "fusionne" | "abandonne" | "erreur";
+  session: string | null;
+  cree_le: string;
+  actif: boolean;
+}
+
+export interface AttenteOutil {
+  id: string;
+  atelier: string;
+  outil: string;
+  entree: Record<string, unknown>;
+  raison: string;
+}
+
+export interface EvenementAtelier {
+  id: number;
+  horodatage: string;
+  type: string;
+  contenu: Record<string, unknown>;
+}

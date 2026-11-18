@@ -78,6 +78,8 @@ class ConfigLocale:
     serveurs_mcp: tuple[dict[str, Any], ...] = ()
     # Recherche web privée : adresse d'une instance SearXNG ([recherche] searxng = "http://…")
     searxng: str | None = None
+    # Projets ouverts aux ateliers Claude Code ([[ateliers.projets]] : id, nom, chemin d'un dépôt git)
+    projets_ateliers: tuple[dict[str, Any], ...] = ()
 
     def connecteur(self, ident: str) -> dict[str, Any]:
         return self.connecteurs.get(ident, {})
@@ -127,6 +129,7 @@ def analyser(donnees: dict[str, Any], chemin: Path | None = None) -> ConfigLocal
         sujets_prives=_motifs(confidentialite.get("sujets_prives"), "confidentialite.sujets_prives"),
         serveurs_mcp=tuple(serveurs),
         searxng=searxng.rstrip("/") if searxng else None,
+        projets_ateliers=tuple(p for p in (donnees.get("ateliers") or {}).get("projets") or [] if isinstance(p, dict)),
     )
 
 

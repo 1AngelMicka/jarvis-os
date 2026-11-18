@@ -236,7 +236,12 @@ def main(argv: list[str] | None = None) -> int:
     mem.add_argument("action", choices=["banc", "exporter", "noyau-en-blocs", "oublier"])
     mem.add_argument("--fichier", type=Path, default=None, help="banc : questions YAML (question, attendus)")
     mem.add_argument("--dossier", type=Path, default=None, help="exporter : dossier (défaut : données/memoire-md)")
+    sous.add_parser("atelier-mcp", help="(interne) outil d'autorisation des ateliers, lancé par Claude Code")
     args = analyseur.parse_args(argv)
+    if args.commande == "atelier-mcp":  # serveur MCP stdio : aucun journal sur la sortie standard
+        from .ateliers.mcp_autorisation import main as main_mcp
+
+        return main_mcp()
     if args.commande is None:  # `jarvis2` seul : démarrer et ouvrir l'interface
         args = analyseur.parse_args(["serveur", "--ouvrir"])
 
