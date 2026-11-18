@@ -85,6 +85,40 @@ async def _lever_urgence(p: Parametres) -> int:
     return 0
 
 
+async def _copier_stockage(p: Parametres, vers: str, fichier: Path | None) -> int:
+    """Copie le stockage PostgreSQL vers SQLite, ou l'inverse (cible migrée puis vérifiée vide)."""
+    from .db_postgres import BasePostgres, creer_pool
+    from .db_postgres import appliquer_migrations as migrer_pg
+    from .db_sqlite import BaseSQLite
+    from .db_sqlite import appliquer_migrations as migrer_sqlite
+    from .stockage_copie import ErreurCopie, copier
+
+    chemin = fichier or p.chemin_sqlite
+    if vers == "sqlite":
+        await migrer_sqlite(chemin)
+        source: Base = BasePostgres(await creer_pool(p.url_base("app"), max_size=2))
+        cible: Base = await BaseSQLite.ouvrir(chemin)
+    else:
+        await migrer_pg(p.url_base("proprio"))
+        source = await BaseSQLite.ouvrir(chemin)
+        cible = BasePostgres(await creer_pool(p.url_base("proprio"), max_size=2))
+    try:
+        rapport = await copier(source, cible)
+    except ErreurCopie as exc:
+        journal.error("%s", exc)
+        return 2
+    finally:
+        await source.close()
+        await cible.close()
+    print(rapport.texte())
+    if rapport.complet:
+        print(
+            f"Pour utiliser ce stockage : JARVIS2_STOCKAGE={vers}"
+            + (f" (fichier {chemin})" if vers == "sqlite" else "")
+        )
+    return 0 if rapport.complet else 3
+
+
 def main(argv: list[str] | None = None) -> int:
     analyseur = argparse.ArgumentParser(prog="jarvis2", description="JARVIS 2 — Core")
     sous = analyseur.add_subparsers(dest="commande", required=True)
@@ -102,6 +136,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     ver = sous.add_parser("verifier-import", help="même modèle d'embeddings et mêmes résultats de recherche")
     ver.add_argument("source", choices=sorted(SOURCES), help="source d'import")
+    sto = sous.add_parser("stockage", help="stockage : copier PostgreSQL ⇄ SQLite")
+    sto_sous = sto.add_subparsers(dest="action", required=True)
+    cop = sto_sous.add_parser("copier", help="tout copier vers un stockage vide de l'autre moteur (source lue seule)")
+    cop.add_argument("--vers", choices=["sqlite", "postgres"], required=True, help="moteur cible")
+    cop.add_argument("--fichier", type=Path, default=None, help="fichier SQLite (défaut : JARVIS2_SQLITE)")
     args = analyseur.parse_args(argv)
 
     p = parametres()
@@ -153,6 +192,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(verification.texte())
         return 0 if verification.vecteurs_identiques and verification.recherches_identiques else 3
+
+    if args.commande == "stockage":
+        return asyncio.run(_copier_stockage(p, args.vers, args.fichier))
 
     if args.commande == "jumeler":
         return asyncio.run(_jumeler(p, args.adresse))
