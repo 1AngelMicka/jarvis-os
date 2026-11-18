@@ -595,3 +595,11 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
 .selecteur-theme-libelle { font-size: var(--t-mini); color: var(--texte-2); }
 .selecteur-theme--barre { display: none; }
 @media (min-width: 700px) { .selecteur-theme--barre { display: inline-flex; } }
+
+/* --- Agents : missions, recettes, outils MCP -------------------------------------------------------------- */
+.mission-form { display: flex; flex-direction: column; align-items: flex-start; gap: var(--e-3); width: 100%; }
+.mission-form textarea { width: 100%; min-height: 64px; padding: var(--e-3) var(--e-4); resize: vertical; font-size: var(--t-corps); line-height: 1.45; }
+.progression { width: 100%; height: 4px; border-radius: var(--r-pilule); background: var(--voile-3); overflow: hidden; }
+.progression span { display: block; height: 100%; background: var(--degrade-accent); transition: width var(--d-moyen) var(--e-sortie); }
+.rapport { padding: var(--e-4); border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-2); background: rgb(var(--c-creux) / .5); font-size: var(--t-corps); line-height: var(--interligne); overflow-wrap: anywhere; }
+.mcp-serveur { display: flex; flex-direction: column; gap: var(--e-3); }

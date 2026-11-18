@@ -1,5 +1,12 @@
 # Décisions techniques
 
+## Agents (phase 7, migration 007)
+
+- **Recettes** (`agents/recettes.py`) : fichiers YAML (`nom`, `planification` cron à l'heure de Paris, `consigne`, `connecteur`, `livraison` conversation ou mémoire, `active`) dans `recettes/` à côté de la configuration locale ; relus à chaque battement (30 s), donc modifiables sans redémarrer. Une recette jamais exécutée attend sa première heure après le démarrage (pas de rattrapage en rafale). Historique dans `executions_recettes`. Une recette ne fait que demander une réponse : elle ne déclenche aucune action 🟡 ni 🔴, et rien ne tourne pendant l'arrêt d'urgence.
+- **Missions** (`agents/missions.py`, table `missions`) : recherche (plan de requêtes → SearXNG → rapport), brainstorm, revue ; tâche de fond, étapes et progression en base, rapport rangé en mémoire (origine `mission`, privé si le sujet l'est). Les pages web sont transmises entre balises `<donnees>`, déclarées comme données ; la liste des sources est ajoutée par JARVIS, pas par le modèle. Sans SearXNG, le rapport le dit en première ligne.
+- **Sujets privés** : `[confidentialite] sujets_prives` (motifs) ou un souvenir `local_uniquement` qui répond au message → le routeur ne propose que des IA locales ; s'il n'y en a aucune, il refuse (le choix explicite d'une IA reste possible). Distinct de `sujets_exclus`, qui retire le sujet de la mémoire injectée.
+- **MCP** (`agents/mcp.py`) : client stdio (JSON-RPC 2.0, une ligne par message, protocole 2025-06-18), processus lancé à la demande sans les clés d'API de l'environnement. Chaque outil est inactif par défaut (`outils_mcp`) ; un appel est l'action 🟡 `mcp.appeler` (file d'approbations, audit) ; le résultat est une donnée. Limite connue : l'appel s'exécute dans la transaction de la décision, ce qui tient la base SQLite le temps de l'outil (30 s au plus).
+
 ## Stockage : SQLite par défaut, PostgreSQL en option (phase 6)
 
 - **Une interface, deux moteurs** (`db.py`) : le Core n'utilise que `fetch`, `fetchrow`, `fetchval`, `execute`, `acquire` et `transaction` (le sous-ensemble d'asyncpg). `db_postgres.py` enveloppe asyncpg ; `db_sqlite.py` tient **une** connexion sur un fil d'exécution dédié (une requête à la fois, `BEGIN IMMEDIATE` pour les transactions, points de sauvegarde pour les transactions imbriquées, annulation = retour arrière).

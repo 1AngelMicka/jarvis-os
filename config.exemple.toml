@@ -9,6 +9,23 @@
 sujets_exclus = [
   # 'projet[\s_-]*secret',
 ]
+# Sujets PRIVÉS : un message qui les nomme est confié à une IA locale par le routeur (il ne quitte pas le PC).
+# Un souvenir « local_uniquement » qui répond au message a le même effet.
+sujets_prives = [
+  # '\bsant[ée]\b',
+]
+
+# --- Agents (facultatif) ---
+# Recettes planifiées : fichiers YAML dans le dossier « recettes » à côté de ce fichier (exemple : docs/recettes).
+# Recherche web privée des missions : votre instance SearXNG (format JSON activé dans ses réglages).
+# [recherche]
+# searxng = "http://127.0.0.1:8888"
+# Serveurs MCP : chaque outil reste inactif tant que vous ne l'activez pas (vue Agents), et chaque appel
+# attend votre accord (🟡).
+# [[mcp.serveurs]]
+# id = "fichiers"
+# commande = "npx"
+# args = ["-y", "@modelcontextprotocol/server-filesystem", "C:/Documents/partage"]
 
 # --- Connecteurs d'IA (facultatif) ---
 # Modèle par défaut d'un connecteur, ou liste de modèles quand le fournisseur n'en publie pas (Codex).

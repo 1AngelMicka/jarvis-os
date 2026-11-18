@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat } from "./api";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
+import { VueAgents } from "./composants/Agents";
 import { VueConnecteurs } from "./composants/Connecteurs";
 import { ListeDemandes } from "./composants/Demandes";
 import { Console, Fil, type MessageAffiche } from "./composants/Dialogue";
@@ -68,7 +69,7 @@ function Hud() {
   const [alerte, setAlerte] = useState(false);
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
-  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil">("dialogue");
+  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents">("dialogue");
   const [conseil, setConseil] = useState(false);
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
   const [annonce, setAnnonce] = useState("");
@@ -373,6 +374,16 @@ function Hud() {
         >
           Connecteurs
         </button>
+        <button
+          type="button"
+          className="btn btn-discret btn-mini btn-connecteurs"
+          aria-pressed={vue === "agents"}
+          onClick={() => {
+            setVue((v) => (v === "agents" ? "dialogue" : "agents"));
+          }}
+        >
+          Agents
+        </button>
         <SelecteurTheme className="selecteur-theme--barre" />
         {!urgence && etat && (
           <button type="button" className="btn btn-rouge btn-mini btn-urgence" onClick={declencherUrgence} title="Tout arrêter tout de suite">
@@ -474,6 +485,38 @@ function Hud() {
                 surTermine={() => {
                   setVue("dialogue");
                   rafraichir("JARVIS est prêt.");
+                }}
+              />
+            </div>
+          </Panneau>
+        ) : vue === "agents" ? (
+          <Panneau
+            titre="Agents"
+            className="panneau-scene"
+            ordre={2}
+            id="agents"
+            meta="missions, recettes planifiées, outils MCP"
+            actions={
+              <button
+                type="button"
+                className="btn btn-mini"
+                onClick={() => {
+                  setVue("dialogue");
+                }}
+              >
+                Retour au dialogue
+              </button>
+            }
+          >
+            <div className="panneau-corps">
+              <VueAgents
+                surChangement={rafraichir}
+                surOuvrirConversation={(id) => {
+                  setVue("dialogue");
+                  ouvrir(id);
+                }}
+                surAction={(r) => {
+                  suiteAction(r, "Outil appelé.");
                 }}
               />
             </div>

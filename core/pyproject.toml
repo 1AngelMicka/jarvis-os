@@ -1,6 +1,6 @@
 [project]
 name = "jarvis2"
-version = "0.3.0"
+version = "0.4.0"
 description = "JARVIS 2 — Core (API, moteurs, mémoire)"
 requires-python = ">=3.13,<3.14"
 dependencies = [
@@ -17,6 +17,8 @@ dependencies = [
     "segno>=1.6",
     "numpy>=2.5.5",
     "sqlite-vec>=0.1.9",
+    "pyyaml>=6.0.3",
+    "croniter>=7.0.0",
 ]
 
 [project.scripts]
@@ -29,6 +31,8 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "asyncpg-stubs>=0.30",
+    "types-pyyaml>=6.0.12.20261113",
+    "types-croniter>=6.2.4.20261118",
 ]
 
 [build-system]

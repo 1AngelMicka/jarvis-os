@@ -16,6 +16,9 @@ import type {
   EtatTailscale,
   Jumelage,
   Verification,
+  Mission,
+  Recette,
+  ServeurMcp,
   Etat,
   EvenementDialogue,
   ReponseAction,
@@ -140,6 +143,17 @@ export const terminerAccueil = () => envoyer<{ termine: boolean }>("/v1/accueil/
 export const lireDiagnostic = () => unSeul("diagnostic", () => appeler<{ verifications: Verification[] }>("/v1/diagnostic"));
 export const reparer = (id: string) => envoyer<{ verifications: Verification[] }>(`/v1/diagnostic/reparer/${encodeURIComponent(id)}`);
 export const lireTailscale = () => appeler<EtatTailscale>("/v1/tailscale");
+
+// --- Agents : recettes, missions, outils MCP ---
+export const listerRecettes = () =>
+  unSeul("recettes", () => appeler<{ dossier: string | null; recettes: Recette[]; erreurs: string[] }>("/v1/recettes"));
+export const lancerRecette = (id: string) => envoyer<{ lancee: string }>(`/v1/recettes/${encodeURIComponent(id)}/lancer`);
+export const listerMissions = () =>
+  unSeul("missions", () => appeler<{ missions: Mission[]; recherche_web: boolean }>("/v1/missions"));
+export const lancerMission = (type: Mission["type"], objectif: string) => envoyer<{ id: string }>("/v1/missions", { type, objectif });
+export const listerOutilsMcp = () => unSeul("mcp", () => appeler<{ serveurs: ServeurMcp[] }>("/v1/mcp/outils"));
+export const activerOutilMcp = (serveur: string, outil: string, actif: boolean) =>
+  envoyer<{ actif: boolean }>(`/v1/mcp/outils/${encodeURIComponent(serveur)}/${encodeURIComponent(outil)}/actif`, { actif });
 
 /** Conseil multi-IA : mêmes événements que le dialogue, plus un `avis` par expert. */
 export function conseiller(

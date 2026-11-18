@@ -188,10 +188,11 @@ class EtatConnecteur:
         return self.actif and self.sante.disponible
 
 
-def choisir(etats: list[EtatConnecteur], prefere: str | None = None) -> str | None:
+def choisir(etats: list[EtatConnecteur], prefere: str | None = None, local: bool = False) -> str | None:
     """Routeur : le connecteur préféré s'il est utilisable, sinon le premier utilisable par famille
-    (compte > clé d'API > local). Jamais un connecteur à risque : celui-là se choisit à la main."""
-    candidats = [e for e in etats if e.utilisable and not e.risque]
+    (compte > clé d'API > local). Jamais un connecteur à risque : celui-là se choisit à la main.
+    `local` : sujet privé, seules les IA du PC sont candidates."""
+    candidats = [e for e in etats if e.utilisable and not e.risque and (not local or e.famille == "local")]
     for e in candidats:
         if e.id == prefere:
             return e.id
@@ -263,8 +264,8 @@ class Connecteurs:
             for (i, d), s in zip(definitions, sorties, strict=True)
         ]
 
-    async def router(self) -> str | None:
-        return choisir(await self.etats(tous=False), self.prefere)
+    async def router(self, local: bool = False) -> str | None:
+        return choisir(await self.etats(tous=False), self.prefere, local=local)
 
     async def decrire(self, tous: bool = True) -> list[dict[str, Any]]:
         """Cartes de la page Connecteurs (aucune clé : seulement « enregistrée » et un aperçu)."""

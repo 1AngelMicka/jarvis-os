@@ -72,6 +72,12 @@ class ConfigLocale:
     compatibles: tuple[dict[str, Any], ...] = ()
     # Tarifs ($ par million de jetons, entrée et sortie) pour estimer le coût des API sans coût renvoyé
     tarifs: dict[str, tuple[float, float]] = field(default_factory=dict)
+    # Sujets PRIVÉS : un message qui les nomme est confié à une IA locale par le routeur (rien ne sort du PC)
+    sujets_prives: tuple[re.Pattern[str], ...] = ()
+    # Serveurs MCP ([[mcp.serveurs]] : id, commande, args, env, outils autorisés)
+    serveurs_mcp: tuple[dict[str, Any], ...] = ()
+    # Recherche web privée : adresse d'une instance SearXNG ([recherche] searxng = "http://…")
+    searxng: str | None = None
 
     def connecteur(self, ident: str) -> dict[str, Any]:
         return self.connecteurs.get(ident, {})
@@ -103,6 +109,14 @@ def analyser(donnees: dict[str, Any], chemin: Path | None = None) -> ConfigLocal
         if not (isinstance(prix, list) and len(prix) == 2 and all(isinstance(x, int | float) for x in prix)):
             raise ValueError(f"tarifs.{modele} : [prix entrée, prix sortie] en $ par million de jetons attendu")
         tarifs[str(modele)] = (float(prix[0]), float(prix[1]))
+    serveurs = (donnees.get("mcp") or {}).get("serveurs") or []
+    if not isinstance(serveurs, list) or not all(
+        isinstance(s, dict) and {"id", "commande"} <= set(s) for s in serveurs
+    ):
+        raise ValueError("mcp.serveurs : liste de tables avec id et commande attendue")
+    searxng = (donnees.get("recherche") or {}).get("searxng")
+    if searxng is not None and not (isinstance(searxng, str) and searxng.startswith(("http://", "https://"))):
+        raise ValueError("recherche.searxng : adresse http(s) attendue")
     return ConfigLocale(
         chemin=chemin,
         sujets_exclus=_motifs(confidentialite.get("sujets_exclus"), "confidentialite.sujets_exclus"),
@@ -110,6 +124,9 @@ def analyser(donnees: dict[str, Any], chemin: Path | None = None) -> ConfigLocal
         connecteurs={str(k): dict(v) for k, v in blocs.items() if isinstance(v, dict)},
         compatibles=tuple(compatibles),
         tarifs=tarifs,
+        sujets_prives=_motifs(confidentialite.get("sujets_prives"), "confidentialite.sujets_prives"),
+        serveurs_mcp=tuple(serveurs),
+        searxng=searxng.rstrip("/") if searxng else None,
     )
 
 

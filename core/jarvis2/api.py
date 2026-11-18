@@ -23,6 +23,7 @@ import webbrowser
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -32,7 +33,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__, memoire
+from .agents.mcp import GestionnaireMCP
+from .agents.missions import ServiceMissions
+from .agents.recettes import Planificateur
+from .agents.recherche_web import RechercheWeb
 from .api_accueil import routeur as routeur_accueil
+from .api_agents import routeur as routeur_agents
 from .api_connecteurs import routeur as routeur_connecteurs
 from .api_securite import routeur as routeur_securite
 from .config import Parametres
@@ -78,12 +84,23 @@ class Contexte:
     connecteurs: Connecteurs | None = None
     tailscale: EtatTailscale | None = None
     chargement_modele: str | None = None  # None, « en_cours », « termine », « erreur »
+    mcp: GestionnaireMCP | None = None
+    recherche: RechercheWeb = field(default_factory=lambda: RechercheWeb(None))
+    dossier_recettes: Path | None = None
     approbations: Approbations = field(init=False)
     conseil: ServiceConseil = field(init=False)
+    missions: ServiceMissions = field(init=False)
+    planificateur: Planificateur | None = field(init=False)
 
     def __post_init__(self) -> None:
-        self.approbations = Approbations(self.pool, creer_registre(self.urgence))
+        self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp))
         self.conseil = ServiceConseil(self.service)
+        self.missions = ServiceMissions(self.pool, self.service, self.recherche, self.urgence)
+        self.planificateur = (
+            Planificateur(self.pool, self.service, self.dossier_recettes, self.urgence)
+            if self.dossier_recettes is not None
+            else None
+        )
 
 
 class DemandeDialogue(BaseModel):
@@ -121,8 +138,19 @@ async def construire_contexte(p: Parametres) -> Contexte:
     moteurs = connecteurs.moteurs
     reglages = ReglagesRecherche(expurgateur=Expurgateur(locale.sujets_exclus))
     memoire = SourceMemoire(pool, EncodeurFastEmbed(p.dossier_modeles, p.modele_embeddings), reglages)
-    service = ServiceDialogue(depot, moteurs, p.moteur_defaut, memoire, connecteurs)
-    return Contexte(pool, depot, moteurs, service, p.moteur_defaut, memoire, connecteurs=connecteurs)
+    service = ServiceDialogue(depot, moteurs, p.moteur_defaut, memoire, connecteurs, locale.sujets_prives)
+    return Contexte(
+        pool,
+        depot,
+        moteurs,
+        service,
+        p.moteur_defaut,
+        memoire,
+        connecteurs=connecteurs,
+        mcp=GestionnaireMCP.depuis_config(locale.serveurs_mcp),
+        recherche=RechercheWeb(locale.searxng),
+        dossier_recettes=chemin_config().parent / "recettes",
+    )
 
 
 async def decrire_moteur(moteur: MoteurInstrumente) -> dict[str, Any]:
@@ -180,6 +208,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         if ctx.memoire is not None:  # modèle d'embeddings chargé en tâche de fond : le 1er message n'attend pas
             taches.append(asyncio.create_task(precharger_modele(ctx)))
         taches.append(asyncio.create_task(detecter_tailscale(ctx, parametres.port, autorisees)))
+        if ctx.planificateur is not None:  # recettes planifiées
+            taches.append(asyncio.create_task(ctx.planificateur.boucle()))
         journal.info("JARVIS 2 prêt — moteurs : %s", ", ".join(ctx.moteurs))
         if parametres.ouvrir_navigateur:
             adresse = f"http://localhost:{parametres.port}/"
@@ -194,6 +224,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             if contexte is None:
                 for m in ctx.moteurs.values():
                     await m.fermer()
+                if ctx.mcp is not None:
+                    await ctx.mcp.fermer()
                 await ctx.pool.close()
 
     app = FastAPI(title="JARVIS 2", version=__version__, lifespan=cycle_de_vie, docs_url=None, redoc_url=None)
@@ -331,6 +363,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_securite)
     app.include_router(routeur_connecteurs)
     app.include_router(routeur_accueil)
+    app.include_router(routeur_agents)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():

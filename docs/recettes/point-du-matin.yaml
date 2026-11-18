@@ -1,0 +1,13 @@
+# Exemple de recette JARVIS 2 : copiez ce fichier dans le dossier « recettes » à côté de votre config.toml
+# (%APPDATA%\JARVIS2\recettes sous Windows, ~/.config/jarvis2/recettes ailleurs). Le nom du fichier est l'identifiant.
+nom: Point du matin
+# cron : minute heure jour-du-mois mois jour-de-semaine (heure de Paris) — ici 7 h 30 du lundi au vendredi
+planification: "30 7 * * 1-5"
+consigne: |
+  Fais-moi le point du jour en cinq lignes : ce qui m'attend, ce que j'ai laissé en suspens,
+  et une suggestion pour bien commencer.
+# auto (routeur) ou l'identifiant d'un connecteur : claude_code, ollama…
+connecteur: auto
+# conversation (une conversation par exécution) ou memoire (rangé dans la mémoire)
+livraison: conversation
+active: true

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections import Counter
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
@@ -100,12 +101,25 @@ class ServiceDialogue:
         moteur_defaut: str,
         memoire: SourceMemoire | None = None,
         connecteurs: Connecteurs | None = None,
+        sujets_prives: tuple[re.Pattern[str], ...] = (),
     ) -> None:
         self.depot = depot
         self.moteurs = moteurs
         self.moteur_defaut = moteur_defaut
         self.memoire = memoire
         self.connecteurs = connecteurs
+        self.sujets_prives = sujets_prives
+
+    async def est_prive(self, texte: str | None) -> bool:
+        """Sujet privé : il nomme un sujet privé de l'utilisateur, ou des souvenirs privés y répondent."""
+        if not texte:
+            return False
+        if any(m.search(texte) for m in self.sujets_prives):
+            return True
+        if self.memoire is None:
+            return False
+        contexte = await self.memoire.contexte(texte, externe=False)
+        return any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs)
 
     async def consignes(self, texte: str, externe: bool) -> tuple[str, ContexteMemoire]:
         contexte = (
@@ -115,8 +129,11 @@ class ServiceDialogue:
         )
         return CONSIGNES_SYSTEME.format(maintenant=maintenant_paris(), memoire=contexte.bloc()), contexte
 
-    async def choisir_moteur(self, moteur: str | None, conversation: Conversation | None = None) -> MoteurInstrumente:
-        """Choix explicite > choix imposé pour la conversation > routeur (jamais un connecteur à risque)."""
+    async def choisir_moteur(
+        self, moteur: str | None, conversation: Conversation | None = None, texte: str | None = None
+    ) -> MoteurInstrumente:
+        """Choix explicite > choix imposé pour la conversation > routeur (jamais un connecteur à risque ; une IA
+        locale seulement pour un sujet privé)."""
         cle = moteur if moteur and moteur != "auto" else None
         if cle is None and moteur is None and conversation is not None and conversation.connecteur:
             cle = conversation.connecteur
@@ -124,7 +141,13 @@ class ServiceDialogue:
                 cle = None  # le connecteur imposé a été désactivé depuis : le routeur reprend la main
         if cle is None:
             if self.connecteurs is not None:
-                cle = await self.connecteurs.router()
+                prive = await self.est_prive(texte)
+                cle = await self.connecteurs.router(local=prive)
+                if cle is None and prive:
+                    raise ErreurMoteur(
+                        "Sujet privé : aucune IA locale n'est disponible, et ce message ne quitte pas le PC. "
+                        "Lancez Ollama ou un autre modèle local (Connecteurs), ou choisissez une IA à la main."
+                    )
                 if cle is None:
                     raise ErreurMoteur("Aucun connecteur d'IA disponible : ouvrez l'onglet Connecteurs")
             else:
@@ -187,7 +210,7 @@ class ServiceDialogue:
         if not message:
             raise ValueError("Message vide")
         conversation, titre = await self.ouvrir(message, conversation_id)
-        instance = await self.choisir_moteur(moteur, conversation)
+        instance = await self.choisir_moteur(moteur, conversation, message)
         if moteur == "auto":
             await self.depot.retenir_connecteur(conversation.id, None, None)
         elif moteur:  # choix explicite : il devient celui de la conversation

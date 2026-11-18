@@ -202,3 +202,55 @@ export interface Jumelage {
   local: boolean;
   tailscale: boolean;
 }
+
+// --- Agents (phase 7) ---
+export interface ExecutionRecette {
+  id: number;
+  declencheur: "planification" | "manuel";
+  debut: string;
+  fin: string | null;
+  statut: "en_cours" | "ok" | "erreur" | "ignoree";
+  conversation_id: string | null;
+  resultat: string | null;
+  erreur: string | null;
+}
+
+export interface Recette {
+  id: string;
+  nom: string;
+  planification: string;
+  consigne: string;
+  connecteur: string | null;
+  livraison: "conversation" | "memoire";
+  active: boolean;
+  prochaine: string | null;
+  en_cours: boolean;
+  derniere: ExecutionRecette | null;
+}
+
+export interface Mission {
+  id: string;
+  type: "recherche" | "brainstorm" | "revue";
+  objectif: string;
+  statut: "en_file" | "en_cours" | "terminee" | "echec" | "annulee";
+  progression: number;
+  etapes: { nom: string; le: string }[];
+  resultat: { rapport: string; sources: { titre: string; url: string }[]; souvenir_id: string | null; moteur: string } | null;
+  erreur: string | null;
+  cree_le: string;
+  termine_le: string | null;
+}
+
+export interface OutilMcp {
+  nom: string;
+  description: string;
+  schema: Record<string, unknown>;
+  actif: boolean;
+}
+
+export interface ServeurMcp {
+  serveur: string;
+  disponible: boolean;
+  erreur?: string;
+  outils: OutilMcp[];
+}
