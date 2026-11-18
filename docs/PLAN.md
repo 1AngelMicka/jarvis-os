@@ -66,7 +66,7 @@ Importeur générique à sources (première source : `jarvis_v1`, depuis une sau
 Permissions 🟢🟡🔴, file d'approbations, journal d'audit en ajout seul (rôle séparé du propriétaire), arrêt d'urgence, filtre secrets / données personnelles avant tout fournisseur externe, authentification, jetons par appareil, clés d'accès.
 **Terminé quand** : une action 🔴 ne s'exécute qu'après approbation, le rôle applicatif ne peut ni modifier ni effacer l'audit (test), l'arrêt d'urgence coupe tout en moins d'une seconde, un secret factice n'atteint jamais un fournisseur externe (test).
 
-### 5. Connecteurs d'IA
+### 5. Connecteurs d'IA ✅
 Page Connecteurs et cartes par fournisseur ; connecteurs par CLI officielle (Claude Code fait, OpenAI Codex CLI, Google Antigravity CLI désactivé par défaut avec avertissement et badge « risque ») ; connecteurs par clé d'API (Anthropic, OpenAI, Gemini / Vertex, OpenRouter, compatible OpenAI) avec coffre local et coûts ; modèles locaux (Ollama, LM Studio, llama.cpp, vLLM) avec détection et recommandation selon le matériel ; routeur avec choix imposable par conversation ; conseil multi-IA sur les connecteurs choisis. Cadre : section « Connecteurs d'IA » ci-dessus.
 **Terminé quand** : chaque famille a au moins un connecteur qui répond en flux depuis l'interface ; aucun fichier d'identifiants d'une CLI n'est lu (test) et aucune clé n'apparaît dans les journaux ni dans la base en clair (test) ; le connecteur Google ne s'active qu'après la case cochée par l'utilisateur et n'est jamais choisi par le routeur (test) ; un serveur local compatible OpenAI est détecté ; le conseil réunit au moins deux connecteurs et une synthèse.
 

@@ -15,6 +15,40 @@ export interface InfoMoteur {
   modeles: InfoModele[];
   efforts: string[];
   effort_defaut: string | null;
+  famille?: "cli" | "api" | "local";
+  risque?: boolean;
+}
+
+/** Carte de la page Connecteurs. */
+export interface Connecteur extends InfoMoteur {
+  famille: "cli" | "api" | "local";
+  statut: "disponible" | "non_connecte" | "non_installe" | "desactive";
+  actif: boolean;
+  risque: boolean;
+  installe: boolean;
+  connecte: boolean | null;
+  dans_conseil: boolean;
+  installation_url: string | null;
+  conditions_url: string | null;
+  cle: { requise: boolean; enregistree: boolean; apercu: string | null; url: string | null } | null;
+  conditions: { version: string; texte: string; url: string } | null;
+  conditions_acceptees: boolean;
+}
+
+export interface AvisExpert {
+  connecteur: string;
+  nom: string;
+  modele: string | null;
+  texte: string;
+  erreur: string | null;
+  duree_ms: number;
+}
+
+export interface Materiel {
+  ram_go: number | null;
+  vram_go: number | null;
+  carte: string | null;
+  recommandations: { taille: string; ou: string; exemples: string[]; raison: string }[];
 }
 
 export interface ResumeConversation {
@@ -26,6 +60,8 @@ export interface ResumeConversation {
   cree_le: string;
   maj_le: string;
   nb_messages: number;
+  connecteur?: string | null;
+  modele?: string | null;
 }
 
 export interface Appareil {
@@ -102,6 +138,7 @@ export interface MetaMessage {
   memoire_consultee?: boolean;
   masques?: Record<string, number>;
   prive?: boolean;
+  conseil?: AvisExpert[];
 }
 
 export interface MessageStocke {
@@ -129,4 +166,5 @@ export type EvenementDialogue =
   | { type: "debut"; donnees: { conversation_id: string; titre: string; moteur: string; modele: string | null } }
   | { type: "delta"; donnees: { texte: string } }
   | { type: "fin"; donnees: MetaMessage & { message_id: number; texte: string } }
-  | { type: "erreur"; donnees: { message: string; conversation_id?: string } };
+  | { type: "erreur"; donnees: { message: string; conversation_id?: string } }
+  | { type: "avis"; donnees: AvisExpert };

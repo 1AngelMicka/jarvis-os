@@ -121,7 +121,7 @@ def construire_catalogue(
             cle_url,
         )
     # Modèles locaux
-    ajouter(ollama.MoteurOllama(url=p.ollama_url))
+    ajouter(ollama.MoteurOllama(url=p.ollama_url, modele=locale.connecteur("ollama").get("modele")))
     locaux = {
         "lmstudio": ("LM Studio (local)", "http://127.0.0.1:1234/v1", "https://lmstudio.ai/download"),
         "llamacpp": ("llama.cpp (local)", "http://127.0.0.1:8080/v1", "https://github.com/ggml-org/llama.cpp"),
@@ -226,8 +226,12 @@ class Connecteurs:
         except TimeoutError:
             return EtatSante(False, "ne répond pas")
 
-    async def etats(self) -> list[EtatConnecteur]:
-        sorties = await asyncio.gather(*(self.sante(i) for i in self.definitions))
+    async def etats(self, tous: bool = True) -> list[EtatConnecteur]:
+        """État de chaque connecteur. `tous=False` : seulement les connecteurs actifs (démarrage, routeur) — un
+        connecteur désactivé n'est jamais sondé, il ne ralentit donc rien."""
+        idents = [i for i in self.definitions if tous or self.actif(i)]
+        sorties = await asyncio.gather(*(self.sante(i) for i in idents))
+        definitions = [(i, self.definitions[i]) for i in idents]
         return [
             EtatConnecteur(
                 i,
@@ -238,15 +242,15 @@ class Connecteurs:
                 self.dans_conseil(i),
                 self._version_acceptee(i),
             )
-            for (i, d), s in zip(self.definitions.items(), sorties, strict=True)
+            for (i, d), s in zip(definitions, sorties, strict=True)
         ]
 
     async def router(self) -> str | None:
-        return choisir(await self.etats(), self.prefere)
+        return choisir(await self.etats(tous=False), self.prefere)
 
-    async def decrire(self) -> list[dict[str, Any]]:
+    async def decrire(self, tous: bool = True) -> list[dict[str, Any]]:
         """Cartes de la page Connecteurs (aucune clé : seulement « enregistrée » et un aperçu)."""
-        etats = await self.etats()
+        etats = await self.etats(tous)
         modeles = await asyncio.gather(*(self._modeles(e) for e in etats))
         cartes = []
         for e, liste in zip(etats, modeles, strict=True):

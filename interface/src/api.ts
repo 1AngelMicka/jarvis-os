@@ -6,6 +6,8 @@ import { EVENEMENT_NON_AUTORISE, ecrireJeton, lireJeton } from "./auth";
 import { LecteurSSE } from "./sse";
 import type {
   Appareil,
+  Connecteur,
+  Materiel,
   DemandeAction,
   DemandeDialogue,
   DetailConversation,
@@ -114,15 +116,47 @@ export const leverUrgence = () => envoyer<ReponseAction>("/v1/urgence/lever");
 export const lireAudit = (limite = 12) =>
   appeler<{ entrees: EntreeAudit[]; rompue_a: number | null }>(`/v1/audit?limite=${String(limite)}`);
 
+// --- Connecteurs d'IA ---
+export const listerConnecteurs = () => appeler<{ connecteurs: Connecteur[] }>("/v1/connecteurs");
+export const testerConnecteur = (id: string) =>
+  envoyer<{ disponible: boolean; detail: string; modeles: number }>(`/v1/connecteurs/${id}/tester`);
+export const activerConnecteur = (id: string, accepte = false, version?: string) =>
+  envoyer<{ ok: boolean }>(`/v1/connecteurs/${id}/activer`, { accepte, ...(version ? { version } : {}) });
+export const desactiverConnecteur = (id: string) => envoyer<{ ok: boolean }>(`/v1/connecteurs/${id}/desactiver`);
+export const inclureAuConseil = (id: string, inclus: boolean) =>
+  envoyer<{ ok: boolean }>(`/v1/connecteurs/${id}/conseil`, { inclus });
+export const enregistrerCleApi = (id: string, cle: string) =>
+  appeler<{ ok: boolean }>(`/v1/connecteurs/${id}/cle`, { methode: "PUT", corps: { cle } });
+export const supprimerCleApi = (id: string) => appeler<{ ok: boolean }>(`/v1/connecteurs/${id}/cle`, { methode: "DELETE" });
+export const lireMateriel = () => unSeul("materiel", () => appeler<Materiel>("/v1/materiel"));
+
+/** Conseil multi-IA : mêmes événements que le dialogue, plus un `avis` par expert. */
+export function conseiller(
+  demande: { question: string; conversation_id?: string },
+  surEvenement: (ev: EvenementDialogue) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  return diffuser("/v1/conseil", demande, surEvenement, signal);
+}
+
 /** Envoie un message et transmet chaque événement du flux à `surEvenement`. */
-export async function dialoguer(
+export function dialoguer(
   demande: DemandeDialogue,
+  surEvenement: (ev: EvenementDialogue) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  return diffuser("/v1/dialogue", demande, surEvenement, signal);
+}
+
+async function diffuser(
+  chemin: string,
+  demande: unknown,
   surEvenement: (ev: EvenementDialogue) => void,
   signal: AbortSignal,
 ): Promise<void> {
   let rep: Response;
   try {
-    rep = await fetch("/v1/dialogue", {
+    rep = await fetch(chemin, {
       method: "POST",
       headers: entetes({ "Content-Type": "application/json", Accept: "text/event-stream" }),
       body: JSON.stringify(demande),

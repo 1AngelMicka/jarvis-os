@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { arreterUrgence, demanderAction, dialoguer, ErreurApi, leverUrgence, lireConversation, lireEtat } from "./api";
+import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireConversation, lireEtat } from "./api";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
+import { VueConnecteurs } from "./composants/Connecteurs";
 import { ListeDemandes } from "./composants/Demandes";
 import { Console, Fil, type MessageAffiche } from "./composants/Dialogue";
 import { ListeConversations } from "./composants/Historique";
@@ -10,7 +11,7 @@ import { Panneau } from "./composants/Panneau";
 import { type EtatNoyau, Reacteur } from "./composants/Reacteur";
 import { PanneauSecurite } from "./composants/Securite";
 import { ecrirePreferences, lirePreferences } from "./preferences";
-import type { Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
+import type { AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
 
 let compteur = 0;
 const nouvelleCle = () => `m${String(++compteur)}`;
@@ -65,6 +66,9 @@ function Hud() {
   const [alerte, setAlerte] = useState(false);
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
+  const [vue, setVue] = useState<"dialogue" | "connecteurs">("dialogue");
+  const [conseil, setConseil] = useState(false);
+  const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
   const [annonce, setAnnonce] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
   const controleur = useRef<AbortController | null>(null);
@@ -87,8 +91,8 @@ function Hud() {
         setConversations(e.conversations);
         if (!initial) return;
         const prefs = lirePreferences();
-        const choisi = e.moteurs.find((m) => m.id === prefs.moteur) ?? e.moteurs.find((m) => m.id === e.moteur_defaut);
-        setMoteur(choisi?.id ?? e.moteurs[0]?.id ?? "");
+        // « auto » : le routeur choisit ; un choix mémorisé n'est repris que s'il existe encore
+        setMoteur(prefs.moteur && e.moteurs.some((m) => m.id === prefs.moteur) ? prefs.moteur : "auto");
         setModeles(Object.fromEntries(e.moteurs.map((m) => [m.id, modeleParDefaut(m, prefs.modeles?.[m.id])])));
         const claude = e.moteurs.find((m) => m.efforts.length);
         setEffort(prefs.effort && claude?.efforts.includes(prefs.effort) ? prefs.effort : (claude?.effort_defaut ?? ""));
@@ -143,6 +147,10 @@ function Hud() {
     lireConversation(id)
       .then((d) => {
         setMessages(d.messages.map(depuisStocke));
+        // Choix imposé pour cette conversation (sinon le routeur)
+        const impose = d.conversation.connecteur;
+        setMoteur(impose ?? "auto");
+        if (impose && d.conversation.modele) setModeles((ms) => ({ ...ms, [impose]: d.conversation.modele ?? "" }));
       })
       .catch((err: unknown) => {
         setMessages([{ cle: nouvelleCle(), role: "erreur", texte: err instanceof Error ? err.message : "Lecture impossible." }]);
@@ -222,10 +230,16 @@ function Hud() {
     controleur.current = ctrl;
     const moteurInfo = etat?.moteurs.find((m) => m.id === moteur);
 
+    const avis: AvisExpert[] = [];
     const surEvenement = (ev: EvenementDialogue) => {
       switch (ev.type) {
+        case "avis":
+          avis.push(ev.donnees);
+          setAvisEnCours((a) => (a ? { ...a, recus: a.recus + 1 } : a));
+          break;
         case "debut": {
-          const d = ev.donnees;
+          const d = ev.donnees as typeof ev.donnees & { experts?: { id: string }[] };
+          if (d.experts) setAvisEnCours({ attendus: d.experts.length, recus: 0 });
           setActive(d.conversation_id);
           setConversations((cs) => {
             const existante = cs.find((c) => c.id === d.conversation_id);
@@ -242,7 +256,7 @@ function Hud() {
           setMessages((ms) => {
             const dernier = ms.at(-1);
             if (dernier?.cle === cleJarvis) return [...ms.slice(0, -1), { ...dernier, texte: dernier.texte + ev.donnees.texte }];
-            return [...ms, { cle: cleJarvis, role: "jarvis", texte: ev.donnees.texte, enCours: true }];
+            return [...ms, { cle: cleJarvis, role: "jarvis", texte: ev.donnees.texte, enCours: true, ...(avis.length ? { meta: { conseil: [...avis] } } : {}) }];
           });
           break;
         case "fin":
@@ -264,10 +278,13 @@ function Hud() {
       message: texte,
       ...(active ? { conversation_id: active } : {}),
       moteur,
-      ...(modeles[moteur] ? { modele: modeles[moteur] } : {}),
+      ...(moteur !== "auto" && modeles[moteur] ? { modele: modeles[moteur] } : {}),
       ...(moteurInfo?.efforts.length && effort ? { effort } : {}),
     };
-    dialoguer(demande, surEvenement, ctrl.signal)
+    const appel = conseil
+      ? conseiller({ question: texte, ...(active ? { conversation_id: active } : {}) }, surEvenement, ctrl.signal)
+      : dialoguer(demande, surEvenement, ctrl.signal);
+    appel
       .catch((err: unknown) => {
         const message = err instanceof ErreurApi || err instanceof Error ? err.message : "Réponse impossible.";
         setMessages((ms) => [...ms, { cle: nouvelleCle(), role: "erreur", texte: message }]);
@@ -279,6 +296,7 @@ function Hud() {
           setMessages((ms) => ms.map((m) => (m.cle === cleJarvis && m.enCours ? { ...m, enCours: false, meta: { ...m.meta, interrompu: true } } : m)));
         }
         setEnCours(false);
+        setAvisEnCours(null);
         if (controleur.current === ctrl) controleur.current = null;
       });
   };
@@ -335,6 +353,16 @@ function Hud() {
           <span className="point-etat" data-ok={erreurEtat ? false : etat ? !urgence : undefined} aria-hidden="true" />
           <span className="barre-etat-texte">{erreurEtat ? "Core hors ligne" : etat ? (urgence ? "Arrêt d'urgence" : "Core en ligne") : "Connexion…"}</span>
         </div>
+        <button
+          type="button"
+          className="btn btn-discret btn-mini btn-connecteurs"
+          aria-pressed={vue === "connecteurs"}
+          onClick={() => {
+            setVue((v) => (v === "connecteurs" ? "dialogue" : "connecteurs"));
+          }}
+        >
+          Connecteurs
+        </button>
         {!urgence && etat && (
           <button type="button" className="btn btn-rouge btn-mini btn-urgence" onClick={declencherUrgence} title="Tout arrêter tout de suite">
             <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
@@ -412,42 +440,75 @@ function Hud() {
       </aside>
 
       <main className="scene">
-        <Panneau titre="Dialogue" className="panneau-scene" ordre={2} id="dialogue" meta={titreActif ?? "Nouvelle conversation"} actions={actionsDialogue}>
-          {erreurEtat ? (
-            <div className="vide">
-              <p className="vide-titre">Le Core ne répond pas</p>
-              <p>{erreurEtat}</p>
+        {vue === "connecteurs" ? (
+          <Panneau
+            titre="Connecteurs"
+            className="panneau-scene"
+            ordre={2}
+            id="connecteurs"
+            meta="vos IA : comptes, clés d'API, modèles locaux"
+            actions={
               <button
                 type="button"
-                className="btn btn-principal"
+                className="btn btn-mini"
                 onClick={() => {
-                  charger();
+                  setVue("dialogue");
                 }}
               >
-                Réessayer
+                Retour au dialogue
               </button>
+            }
+          >
+            <div className="panneau-corps">
+              <VueConnecteurs surChangement={rafraichir} />
             </div>
-          ) : (
-            <>
-              <Fil messages={messages} moteurs={moteurs} reflexion={enCours && !premierMorceau} chargement={chargement || !etat} />
-              <Console
+          </Panneau>
+        ) : (
+        <Panneau titre="Dialogue" className="panneau-scene" ordre={2} id="dialogue" meta={titreActif ?? "Nouvelle conversation"} actions={actionsDialogue}>
+            {erreurEtat ? (
+              <div className="vide">
+                <p className="vide-titre">Le Core ne répond pas</p>
+                <p>{erreurEtat}</p>
+                <button
+                  type="button"
+                  className="btn btn-principal"
+                  onClick={() => {
+                    charger();
+                  }}
+                >
+                  Réessayer
+                </button>
+              </div>
+            ) : (
+              <>
+                <Fil
+                messages={messages}
                 moteurs={moteurs}
-                moteur={moteur}
-                modele={modeles[moteur] ?? ""}
-                effort={effort}
-                enCours={enCours}
-                bloquee={urgence}
-                surMoteur={setMoteur}
-                surModele={(id) => {
-                  setModeles((ms) => ({ ...ms, [moteur]: id }));
-                }}
-                surEffort={setEffort}
-                surEnvoyer={envoyer}
-                surArreter={arreter}
+                reflexion={enCours && !premierMorceau}
+                chargement={chargement || !etat}
+                {...(avisEnCours ? { etapeReflexion: `Conseil : ${String(avisEnCours.recus)} avis sur ${String(avisEnCours.attendus)}…` } : {})}
               />
-            </>
-          )}
-        </Panneau>
+                <Console
+                  moteurs={moteurs}
+                  moteur={moteur}
+                  modele={modeles[moteur] ?? ""}
+                  effort={effort}
+                  enCours={enCours}
+                  bloquee={urgence}
+                conseil={conseil}
+                surConseil={setConseil}
+                  surMoteur={setMoteur}
+                  surModele={(id) => {
+                    setModeles((ms) => ({ ...ms, [moteur]: id }));
+                  }}
+                  surEffort={setEffort}
+                  surEnvoyer={envoyer}
+                  surArreter={arreter}
+                />
+              </>
+            )}
+          </Panneau>
+        )}
       </main>
 
       <aside className="colonne-droite" data-ouvert={lateralOuvert || undefined}>

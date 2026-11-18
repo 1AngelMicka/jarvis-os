@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { TexteRiche } from "../texte";
-import type { InfoMoteur, MetaMessage } from "../types";
+import type { AvisExpert, InfoMoteur, MetaMessage } from "../types";
 
 export interface MessageAffiche {
   cle: string;
@@ -23,7 +23,7 @@ function nomModele(moteurs: InfoMoteur[], meta: MetaMessage | undefined): string
   if (!meta?.moteur) return "";
   const moteur = moteurs.find((m) => m.id === meta.moteur);
   const modele = moteur?.modeles.find((x) => x.id === meta.modele)?.nom ?? meta.modele ?? "";
-  return [moteur?.id === "claude_code" ? "Claude" : "Local", modele, meta.effort ? NOMS_EFFORT[meta.effort] : ""]
+  return [moteur?.nom ?? meta.moteur, modele, meta.effort ? NOMS_EFFORT[meta.effort] : ""]
     .filter(Boolean)
     .join(" · ");
 }
@@ -32,8 +32,30 @@ function nbMasques(meta: MetaMessage): number {
   return Object.values(meta.masques ?? {}).reduce((a, b) => a + b, 0);
 }
 
+function Avis({ avis }: { avis: AvisExpert[] }) {
+  return (
+    <details className="msg-avis">
+      <summary>
+        Avis des experts ({avis.length}) · {avis.filter((a) => !a.erreur).length} réponse
+        {avis.filter((a) => !a.erreur).length > 1 ? "s" : ""}
+      </summary>
+      <ul>
+        {avis.map((a) => (
+          <li key={a.connecteur} className="avis" data-erreur={a.erreur ? true : undefined}>
+            <span className="avis-nom">
+              {a.nom}
+              {a.modele ? ` · ${a.modele}` : ""} · {(a.duree_ms / 1000).toFixed(1)} s
+            </span>
+            {a.erreur ? <p className="avis-erreur">{a.erreur}</p> : <TexteRiche source={a.texte} />}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
-  const local = m.meta?.moteur === "ollama";
+  const local = moteurs.find((x) => x.id === m.meta?.moteur)?.famille === "local";
   return (
     <article className={`msg msg--${m.role}`} data-interlocuteur={m.role === "jarvis" ? (local ? "local" : "jarvis") : undefined} aria-busy={m.enCours || undefined}>
       <span className="msg-auteur">{m.role === "utilisateur" ? "Vous" : m.role === "erreur" ? "Incident" : "JARVIS"}</span>
@@ -41,6 +63,7 @@ function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
         {m.role === "jarvis" ? <TexteRiche source={m.texte} /> : m.texte}
         {m.enCours && <span className="curseur-flux" aria-hidden="true" />}
       </div>
+      {m.meta?.conseil && m.meta.conseil.length > 0 && <Avis avis={m.meta.conseil} />}
       {m.role === "jarvis" && !m.enCours && m.meta && (
         <div className="msg-pied">
           <span className="msg-meta">{nomModele(moteurs, m.meta)}</span>
@@ -56,7 +79,8 @@ function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
               {nbMasques(m.meta)} élément{nbMasques(m.meta) > 1 ? "s" : ""} masqué{nbMasques(m.meta) > 1 ? "s" : ""} avant envoi
             </span>
           )}
-          {m.meta.moteur === "claude_code" && m.meta.source_auth === "none" && <span className="msg-meta msg-meta--ok">abonnement · 0 $</span>}
+          {(m.meta.source_auth === "none" || m.meta.source_auth === "compte") && <span className="msg-meta msg-meta--ok">compte · 0 $</span>}
+          {m.meta.cout_usd ? <span className="msg-meta">{m.meta.cout_usd.toFixed(4)} $</span> : null}
           {m.meta.interrompu && <span className="msg-meta msg-meta--ambre">interrompue</span>}
         </div>
       )}
@@ -69,9 +93,10 @@ interface FilProps {
   moteurs: InfoMoteur[];
   reflexion: boolean;
   chargement: boolean;
+  etapeReflexion?: string;
 }
 
-export function Fil({ messages, moteurs, reflexion, chargement }: FilProps) {
+export function Fil({ messages, moteurs, reflexion, chargement, etapeReflexion }: FilProps) {
   const zone = useRef<HTMLDivElement>(null);
   const collee = useRef(true);
 
@@ -129,7 +154,7 @@ export function Fil({ messages, moteurs, reflexion, chargement }: FilProps) {
               <i />
               <i />
             </span>
-            JARVIS réfléchit…
+            {etapeReflexion ?? "JARVIS réfléchit…"}
           </div>
         )}
       </div>
@@ -145,6 +170,8 @@ interface ConsoleProps {
   enCours: boolean;
   /** Arrêt d'urgence : rien ne part. */
   bloquee?: boolean;
+  conseil: boolean;
+  surConseil: (actif: boolean) => void;
   surMoteur: (id: string) => void;
   surModele: (id: string) => void;
   surEffort: (e: string) => void;
@@ -155,7 +182,9 @@ interface ConsoleProps {
 export function Console(p: ConsoleProps) {
   const [texte, setTexte] = useState("");
   const champ = useRef<HTMLTextAreaElement>(null);
-  const moteurActif = p.moteurs.find((m) => m.id === p.moteur);
+  const auto = p.moteur === "auto";
+  const moteurActif = auto ? undefined : p.moteurs.find((m) => m.id === p.moteur);
+  const pret = auto ? p.moteurs.some((m) => m.disponible && !m.risque) : Boolean(moteurActif?.disponible);
 
   useEffect(() => {
     const el = champ.current;
@@ -180,7 +209,7 @@ export function Console(p: ConsoleProps) {
 
   const envoyer = () => {
     const t = texte.trim();
-    if (!t || p.enCours || p.bloquee || !moteurActif?.disponible) return;
+    if (!t || p.enCours || p.bloquee || !pret) return;
     p.surEnvoyer(t);
     setTexte("");
   };
@@ -195,26 +224,36 @@ export function Console(p: ConsoleProps) {
       }}
     >
       <div className="console-reglages">
-        <div className="segment" role="radiogroup" aria-label="Cerveau">
-          {p.moteurs.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              role="radio"
-              className="segment-btn"
-              aria-checked={m.id === p.moteur}
-              data-indispo={!m.disponible || undefined}
-              aria-label={`${m.nom}${m.disponible ? "" : " (indisponible)"}`}
-              title={m.disponible ? m.detail : `${m.nom} : ${m.detail}`}
-              onClick={() => {
-                p.surMoteur(m.id);
-              }}
-            >
-              <span className="point-etat" data-ok={m.disponible} aria-hidden="true" />
-              {m.id === "claude_code" ? "Claude" : "Local"}
-            </button>
-          ))}
-        </div>
+        <label className="reglage-compact reglage-cerveau">
+          <span className="reglage-libelle">Cerveau</span>
+          <select
+            className="select select--compact"
+            value={p.moteur}
+            onChange={(e) => {
+              p.surMoteur(e.target.value);
+            }}
+          >
+            <option value="auto">Auto (routeur)</option>
+            {p.moteurs.map((m) => (
+              <option key={m.id} value={m.id} disabled={!m.disponible}>
+                {m.nom}
+                {m.risque ? " ⚠ risque" : ""}
+                {m.disponible ? "" : " — indisponible"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="segment-btn bouton-conseil"
+          aria-pressed={p.conseil}
+          title="Conseil multi-IA : plusieurs connecteurs donnent leur avis, puis une synthèse"
+          onClick={() => {
+            p.surConseil(!p.conseil);
+          }}
+        >
+          Conseil
+        </button>
         {moteurActif && moteurActif.modeles.length > 0 && (
           <label className="reglage-compact">
             <span className="visuellement-cache">Modèle</span>
@@ -257,6 +296,11 @@ export function Console(p: ConsoleProps) {
           Arrêt d'urgence actif : JARVIS n'envoie plus rien tant qu'il n'est pas levé.
         </p>
       )}
+      {moteurActif?.risque && (
+        <p className="console-alerte" role="status">
+          Connecteur à risque choisi : vos conditions d'utilisation chez ce fournisseur l'interdisent peut-être.
+        </p>
+      )}
       {moteurActif && !moteurActif.disponible && (
         <p className="console-alerte" role="status">
           {moteurActif.nom} indisponible : {moteurActif.detail}.
@@ -271,7 +315,7 @@ export function Console(p: ConsoleProps) {
           ref={champ}
           rows={1}
           value={texte}
-          placeholder="Écrire à JARVIS…"
+          placeholder={p.conseil ? "Question pour le conseil…" : "Écrire à JARVIS…"}
           autoComplete="off"
           onChange={(e) => {
             setTexte(e.target.value);
@@ -287,7 +331,7 @@ export function Console(p: ConsoleProps) {
           type="submit"
           className="envoyer-btn"
           data-arreter={p.enCours || undefined}
-          disabled={!p.enCours && (!texte.trim() || !moteurActif?.disponible || p.bloquee)}
+          disabled={!p.enCours && (!texte.trim() || !pret || p.bloquee)}
           aria-label={p.enCours ? "Arrêter la réponse" : "Envoyer"}
           title={p.enCours ? "Arrêter (Échap)" : "Envoyer (Entrée)"}
         >

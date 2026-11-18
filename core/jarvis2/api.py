@@ -213,7 +213,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         async def connecteurs_actifs() -> list[dict[str, Any]]:
             if c.connecteurs is None:
                 return list(await asyncio.gather(*(decrire_moteur(m) for m in c.moteurs.values())))
-            return [carte for carte in await c.connecteurs.decrire() if carte["actif"] and carte["installe"]]
+            return [carte for carte in await c.connecteurs.decrire(tous=False) if carte["disponible"]]
 
         moteurs, conversations, comptes, demandes, nb_cles = await asyncio.gather(
             connecteurs_actifs(),

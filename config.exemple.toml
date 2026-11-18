@@ -10,6 +10,23 @@ sujets_exclus = [
   # 'projet[\s_-]*secret',
 ]
 
+# --- Connecteurs d'IA (facultatif) ---
+# Modèle par défaut d'un connecteur, ou liste de modèles quand le fournisseur n'en publie pas (Codex).
+# [connecteurs.ollama]
+# modele = "qwen3.5:2b"
+# [connecteurs.codex]
+# modeles = ["<modèle de votre compte>"]
+# Point d'accès compatible OpenAI supplémentaire (clé : nom dans le coffre ; local = true pour un serveur du PC).
+# [[connecteurs.compatibles]]
+# id = "monserveur"
+# nom = "Mon serveur"
+# url = "http://192.168.1.20:8000/v1"
+# local = true
+
+# Tarifs ($ par million de jetons : entrée, sortie) pour estimer le coût des API qui ne le renvoient pas.
+# [tarifs]
+# "claude-sonnet-5-5" = [3.0, 15.0]
+
 # Une section par source d'import (ici : JARVIS v1).
 [import.jarvis_v1]
 # Souvenirs dont la SOURCE correspond : jamais importés (ex. données de tiers).

@@ -472,6 +472,65 @@ html.en-urgence {
   #dialogue .panneau-meta { display: none; }
 }
 
+/* ---------- Connecteurs d'IA ---------- */
+.btn-connecteurs[aria-pressed="true"] { color: var(--cyan-vif); border-color: var(--cyan); background: rgb(var(--c-cyan) / .12); }
+.connecteurs { display: flex; flex-direction: column; gap: var(--e-7); max-width: var(--colonne-lecture); margin: 0 auto; padding: var(--e-3) 0 var(--e-6); }
+.famille-co { display: flex; flex-direction: column; gap: var(--e-3); }
+.cartes-co { list-style: none; margin: var(--e-2) 0 0; padding: 0; display: grid; gap: var(--e-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.carte-co {
+  display: flex; flex-direction: column; gap: var(--e-3); padding: var(--e-4) var(--e-5);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); background: rgb(var(--c-verre-bas) / .7);
+}
+.carte-co[data-statut="disponible"] { border-color: color-mix(in srgb, var(--vert) 35%, var(--ligne)); }
+.carte-co[data-statut="non_installe"], .carte-co[data-statut="desactive"] { background: rgb(var(--c-creux) / .45); }
+.carte-co[data-risque] { border-style: dashed; }
+.carte-co-tete { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2) var(--e-3); }
+.carte-co-nom { flex: 1 1 auto; min-width: 0; margin: 0; font: 600 var(--t-base)/1.3 var(--f-ui); color: var(--texte-fort); }
+.badge-co { padding: 3px 8px; border-radius: var(--r-pilule); font: var(--t-micro)/1 var(--f-donnees); border: var(--l-fin) solid var(--ligne); color: var(--texte-2); white-space: nowrap; }
+.badge-co[data-ton="ok"] { color: var(--vert); border-color: rgb(var(--c-vert) / .5); background: rgb(var(--c-vert) / .08); }
+.badge-co[data-ton="attention"] { color: var(--ambre-texte); border-color: rgb(var(--c-ambre) / .5); background: rgb(var(--c-ambre) / .08); }
+.badge-co[data-ton="risque"] { color: var(--rouge-clair); border-color: var(--rouge); background: rgb(var(--c-rouge) / .14); }
+.carte-co-detail { margin: 0; font: var(--t-mini)/1.4 var(--f-donnees); color: var(--texte-3); overflow-wrap: anywhere; }
+.carte-co-cle { display: flex; flex-wrap: wrap; gap: var(--e-2); }
+.carte-co-cle input {
+  flex: 1 1 160px; min-width: 0; min-height: 32px; padding: 0 var(--e-3); font: var(--t-mini)/1 var(--f-mono);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); background: rgb(var(--c-creux) / .7); color: var(--texte);
+}
+.carte-co-cle input:focus { outline: none; border-color: var(--cyan); }
+.carte-co-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2); margin-top: auto; }
+.carte-co-actions a.btn { text-decoration: none; }
+.carte-co-message { margin: 0; font-size: var(--t-mini); color: var(--texte-2); }
+.carte-co-case { display: flex; align-items: flex-start; gap: var(--e-3); font-size: var(--t-mini); color: var(--texte); cursor: pointer; }
+.carte-co-case input { margin: 2px 0 0; accent-color: var(--cyan); width: 16px; height: 16px; flex: none; }
+.carte-co-case--ligne { align-items: center; margin-right: auto; color: var(--texte-2); }
+.carte-co-case--ligne input { margin: 0; }
+.carte-co-avertissement {
+  display: flex; flex-direction: column; gap: var(--e-3); padding: var(--e-4);
+  border: var(--l-fin) solid var(--rouge); border-radius: var(--r-2); background: rgb(var(--c-rouge) / .08);
+  font-size: var(--t-mini); line-height: 1.5; color: var(--texte);
+}
+.carte-co-avertissement p { margin: 0; }
+.carte-co-avertissement-titre { font: 600 var(--t-petit)/1.3 var(--f-ui); color: var(--rouge-clair); }
+.materiel { padding: var(--e-3) var(--e-4); border-left: var(--l-fort) solid var(--i-local); background: color-mix(in srgb, var(--i-local) 6%, transparent); }
+.materiel-liste { margin: var(--e-2) 0 0; padding-left: var(--e-5); font-size: var(--t-mini); color: var(--texte-2); }
+.materiel-liste b { color: var(--texte); font-weight: 600; }
+
+/* Console : cerveau et conseil */
+.reglage-cerveau { align-items: center; gap: var(--e-2); }
+.reglage-libelle { font: var(--t-micro)/1 var(--f-ui); letter-spacing: calc(.08em * var(--chasse-k)); text-transform: var(--casse); color: var(--texte-3); }
+.reglage-cerveau .select { max-width: 220px; }
+.bouton-conseil { border: var(--l-fin) solid var(--ligne); }
+.bouton-conseil[aria-pressed="true"] { color: var(--sur-ambre); background: var(--i-conseil); border-color: var(--i-conseil); }
+
+/* Avis des experts sous une réponse du conseil */
+.msg-avis { margin: var(--e-2) 0 0; font-size: var(--t-mini); color: var(--texte-2); }
+.msg-avis summary { cursor: pointer; padding: var(--e-2) 0; font: var(--t-mini)/1.3 var(--f-ui); color: color-mix(in srgb, var(--i-conseil) 80%, var(--texte-2)); }
+.msg-avis ul { list-style: none; margin: var(--e-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-3); }
+.avis { padding: var(--e-3) var(--e-4); border-left: var(--l-fort) solid var(--i-conseil); background: color-mix(in srgb, var(--i-conseil) 6%, transparent); }
+.avis[data-erreur] { border-left-color: var(--ambre); }
+.avis-nom { display: block; margin-bottom: var(--e-2); font: var(--t-micro)/1.2 var(--f-donnees); color: var(--texte-3); }
+.avis-erreur { margin: 0; color: var(--ambre-texte); }
+
 /* ---------- Tactile : cibles de 44 px ---------- */
 @media (pointer: coarse) {
   .btn-mini, .segment-btn, .select { min-height: var(--cible); }

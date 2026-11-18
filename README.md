@@ -1,6 +1,6 @@
 # JARVIS 2
 
-Assistant personnel local d'abord : mémoire à long terme, conversation en flux avec le modèle de votre choix (Claude Code avec votre propre abonnement, modèles locaux via Ollama), interface HUD.
+Assistant personnel local d'abord : mémoire à long terme, conversation en flux avec les IA de votre choix, interface HUD. Connecteurs : vos comptes par les programmes officiels (Claude Code, OpenAI Codex, Google Antigravity avec avertissement), vos clés d'API (Anthropic, OpenAI, Gemini, OpenRouter, tout service compatible OpenAI), vos modèles locaux (Ollama, LM Studio, llama.cpp, vLLM) ; routeur automatique et conseil multi-IA.
 
 Plan : [docs/PLAN.md](docs/PLAN.md) · décisions : [docs/DECISIONS.md](docs/DECISIONS.md) · design : [interface/DESIGN.md](interface/DESIGN.md).
 

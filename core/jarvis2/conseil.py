@@ -83,7 +83,7 @@ class ServiceConseil:
             return [moteurs[i] for i in demandes][:MAX_EXPERTS]
         if c is None:
             return list(moteurs.values())[:MAX_EXPERTS]
-        etats = [e for e in await c.etats() if e.utilisable]
+        etats = [e for e in await c.etats(tous=False) if e.utilisable]
         choisis = [e for e in etats if e.dans_conseil]
         if len(choisis) < 2:
             choisis = [e for e in etats if not e.risque]

@@ -27,6 +27,18 @@ export function EcranJumelage({ surAutorise }: { surAutorise: () => void }) {
   const [enCours, setEnCours] = useState(false);
 
   useEffect(() => {
+    // Lien de jumelage ouvert alors que la page l'était déjà : seule l'ancre change
+    const surAncre = () => {
+      const lu = codeDansAdresse();
+      if (lu) setCode(lu);
+    };
+    window.addEventListener("hashchange", surAncre);
+    return () => {
+      window.removeEventListener("hashchange", surAncre);
+    };
+  }, []);
+
+  useEffect(() => {
     etatAuth()
       .then((e) => {
         setPremier(e.premier_possible);
