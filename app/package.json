@@ -1,0 +1,14 @@
+{
+  "name": "jarvis2-app",
+  "private": true,
+  "version": "0.8.0",
+  "description": "Application de bureau de JARVIS 2 (Tauri 2)",
+  "scripts": {
+    "tauri": "tauri",
+    "icones": "tauri icon ../interface/public/icone-512.png",
+    "construire": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

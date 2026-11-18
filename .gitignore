@@ -41,3 +41,8 @@ coffre.json
 jarvis2.env
 core/jarvis2/web/
 
+
+# Application de bureau (Tauri)
+app/node_modules/
+app/src-tauri/target/
+app/src-tauri/gen/

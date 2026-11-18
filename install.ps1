@@ -35,16 +35,22 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
 }
 
-# 2. Source : roue (.whl), URL, ou le dépôt où se trouve ce script (interface compilée requise)
+# 2. Source : roue (.whl) ou URL indiquée ; sinon le dépôt où se trouve ce script ; sinon la dernière version
+#    publiée sur GitHub (installation en une ligne : irm https://raw.githubusercontent.com/1AngelMicka/jarvis-os/main/install.ps1 | iex)
 if (-not $Source) {
     $depot = $PSScriptRoot
-    if (-not (Test-Path (Join-Path $depot 'core\pyproject.toml'))) {
-        throw "Indiquez la source : -Source <fichier .whl ou URL de la version à installer>"
+    if ($depot -and (Test-Path (Join-Path $depot 'core\pyproject.toml'))) {
+        if (-not (Test-Path (Join-Path $depot 'interface\dist\index.html'))) {
+            throw "Interface non compilée dans ce dépôt : cd interface ; npm install ; npm run build (ou -Source <roue .whl>)"
+        }
+        $Source = Join-Path $depot 'core'
+    } else {
+        Etape "Recherche de la dernière version publiée de JARVIS 2"
+        $version = Invoke-RestMethod -Uri 'https://api.github.com/repos/1AngelMicka/jarvis-os/releases/latest' -Headers @{ 'User-Agent' = 'jarvis2-installation' }
+        $Source = ($version.assets | Where-Object { $_.name -like '*.whl' } | Select-Object -First 1).browser_download_url
+        if (-not $Source) { throw "Aucune version publiée trouvée : indiquez -Source <fichier .whl>" }
+        Write-Host "Version $($version.tag_name)"
     }
-    if (-not (Test-Path (Join-Path $depot 'interface\dist\index.html'))) {
-        throw "Interface non compilée dans ce dépôt : cd interface ; npm install ; npm run build (ou -Source <roue .whl>)"
-    }
-    $Source = Join-Path $depot 'core'
 }
 Etape "Installation de JARVIS 2 ($Source)"
 uv tool install --force --python 3.13 $Source

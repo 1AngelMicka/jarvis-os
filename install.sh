@@ -45,17 +45,25 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 # 2. Source : roue (.whl), URL, ou le dépôt où se trouve ce script (interface compilée requise)
+# Sinon : le dépôt où se trouve ce script, ou la dernière version publiée sur GitHub
+# (installation en une ligne : curl -LsSf https://raw.githubusercontent.com/1AngelMicka/jarvis-os/main/install.sh | sh)
 if [ -z "$SOURCE" ]; then
-    DEPOT=$(cd "$(dirname "$0")" && pwd)
-    if [ ! -f "$DEPOT/core/pyproject.toml" ]; then
-        echo "Indiquez la source : --source <fichier .whl ou URL de la version à installer>" >&2
-        exit 1
+    DEPOT=$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)
+    if [ -n "$DEPOT" ] && [ -f "$DEPOT/core/pyproject.toml" ]; then
+        if [ ! -f "$DEPOT/interface/dist/index.html" ]; then
+            echo "Interface non compilée : cd interface && npm install && npm run build (ou --source <roue .whl>)" >&2
+            exit 1
+        fi
+        SOURCE="$DEPOT/core"
+    else
+        etape "Recherche de la dernière version publiée de JARVIS 2"
+        SOURCE=$(curl -LsSf -H "User-Agent: jarvis2-installation" https://api.github.com/repos/1AngelMicka/jarvis-os/releases/latest \
+            | grep -o '"browser_download_url": *"[^"]*\.whl"' | head -n 1 | sed 's/.*"\(http[^"]*\)"/\1/')
+        if [ -z "$SOURCE" ]; then
+            echo "Aucune version publiée trouvée : indiquez --source <fichier .whl>" >&2
+            exit 1
+        fi
     fi
-    if [ ! -f "$DEPOT/interface/dist/index.html" ]; then
-        echo "Interface non compilée : cd interface && npm install && npm run build (ou --source <roue .whl>)" >&2
-        exit 1
-    fi
-    SOURCE="$DEPOT/core"
 fi
 etape "Installation de JARVIS 2 ($SOURCE)"
 uv tool install --force --python 3.13 "$SOURCE"

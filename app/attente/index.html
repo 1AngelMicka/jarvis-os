@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JARVIS</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid; place-items: center; background: #02070c; color: #c4f7ff;
+        font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; text-align: center;
+      }
+      .coeur { width: 72px; height: 72px; margin: 0 auto 20px; border-radius: 50%; border: 3px solid #6be6ff;
+        box-shadow: 0 0 24px rgb(107 230 255 / .45); animation: respire 2.4s ease-in-out infinite; }
+      @keyframes respire { 50% { transform: scale(1.08); opacity: .7; } }
+      .echec { display: none; max-width: 46ch; color: #ffd08a; }
+      body[data-etat="echec"] .echec { display: block; }
+      body[data-etat="echec"] .attente { display: none; }
+      code { color: #6be6ff; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="coeur" aria-hidden="true"></div>
+      <p class="attente">Démarrage de JARVIS…</p>
+      <p class="echec">
+        Le Core de JARVIS ne répond pas. Installez-le avec le script d'installation (<code>install.ps1</code> ou
+        <code>install.sh</code>), ou lancez <code>jarvis2</code> dans un terminal, puis rouvrez l'application.
+      </p>
+    </main>
+  </body>
+</html>
