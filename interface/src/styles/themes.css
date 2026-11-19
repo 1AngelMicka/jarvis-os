@@ -161,3 +161,46 @@ html[data-theme="console"] {
   --i-jarvis: var(--cyan);
   --degrade-accent: linear-gradient(135deg, var(--cyan-vif), var(--cyan-vif));
 }
+
+/* ---------- Présence : nuit profonde, JARVIS en orbe de particules (Orbe.tsx), accent aqua pâle, verre léger ---------- */
+html[data-theme="presence"] {
+  --c-vide: 5 6 14;
+  --c-creux: 3 4 10;
+  --c-verre: 16 20 36;
+  --c-verre-bas: 9 11 22;
+  --c-voile-fond: 2 2 8;
+  --c-cyan: 110 236 214;       /* accent principal : aqua pâle */
+  --c-cyan-vif: 206 252 244;
+  --c-bleu: 92 140 255;
+  --c-aurore: 176 136 255;
+  --c-ambre: 255 186 80;
+  --c-rouge: 255 84 104;
+  --c-vert: 96 228 160;
+  --vide-2: #0b0d1a;
+  --vide-3: #111426;
+  --texte: #eaf1f6;
+  --texte-2: #b3bfcd;
+  --texte-3: #919db0;
+  --texte-fort: #ffffff;
+  --ligne: rgb(var(--c-neutre) / .08);
+  --ligne-faible: rgb(var(--c-neutre) / .05);
+  --ligne-forte: rgb(var(--c-cyan) / .5);
+  --voile: rgb(var(--c-neutre) / .025);
+  --voile-2: rgb(var(--c-neutre) / .04);
+  --voile-3: rgb(var(--c-cyan) / .12);
+  --verre: rgb(var(--c-verre) / .62);
+  --verre-bas: rgb(var(--c-verre-bas) / .7);
+  --lueur-k: .6;
+  --grille-k: 0;
+  --aurore-k: .45;
+  --arete-k: .35;
+  --casse: none;
+  --chasse-k: .3;
+  --g-affiche: 500;
+  --chasse-titre: .03em;
+  --f-affiche: "Segoe UI Variable Display", "SF Pro Display", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --f-ui: var(--f-texte);
+  --r-2: 12px;
+  --r-3: 20px;
+  --i-jarvis: var(--cyan);
+}

@@ -157,6 +157,11 @@
   --h-onglets: 58px;
   --colonne-lecture: 880px;
   --colonne-reglages: 248px; /* catégories de la vue Réglages (large écran) */
+  --orbe: calc(212px * var(--k));            /* orbe du thème Présence dans le panneau Noyau */
+  --orbe-compact: 36px;     /* orbe dans la barre (téléphone) */
+  --jauge-micro: 112px;     /* largeur de la jauge du niveau du micro */
+  --jauge-micro-h: 4px;
+  --flou-fond: 5px;         /* verre des panneaux quand l'orbe est en fond d'écran (il doit transparaître) */
   --cible: 44px;             /* cible tactile minimale */
   --vignette: 64px;          /* miniature d'une image jointe (saisie) */
   --vignette-fil: 112px;     /* miniature d'une image jointe (fil du dialogue) */

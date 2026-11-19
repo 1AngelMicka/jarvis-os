@@ -1,0 +1,52 @@
+/* =====================================================================
+   Thème « Présence » : orbe de particules (composants/Orbe.tsx). Jetons : tokens.css et themes.css.
+   ===================================================================== */
+
+.presence { display: flex; flex-direction: column; align-items: center; gap: var(--e-3); min-width: 0; }
+.presence-orbe { position: relative; width: var(--orbe); height: var(--orbe); flex: none; }
+.presence[data-mode="compact"] { flex-direction: row; gap: var(--e-2); }
+.presence[data-mode="compact"] .presence-orbe { width: var(--orbe-compact); height: var(--orbe-compact); }
+.orbe-toile { position: relative; display: block; width: 100%; height: 100%; }
+/* Halo central : la lueur qui donne sa présence à l'orbe (éteinte si le thème coupe les lueurs) */
+.presence-orbe::before, .orbe-fond::before {
+  content: ""; position: absolute; inset: 22%; border-radius: var(--r-rond);
+  background: radial-gradient(circle, rgb(var(--c-cyan) / calc(.28 * var(--lueur-k))) 0, rgb(var(--c-aurore) / calc(.1 * var(--lueur-k))) 45%, transparent 70%);
+  transition: background var(--d-lent) var(--e-sortie);
+}
+.orbe-fond::before { inset: auto; left: 50%; top: 50%; width: 46vmin; height: 46vmin; transform: translate(-50%, -50%); }
+.presence[data-etat="reflexion"] .presence-orbe::before { background: radial-gradient(circle, rgb(var(--c-bleu) / calc(.3 * var(--lueur-k))) 0, rgb(var(--c-aurore) / calc(.12 * var(--lueur-k))) 45%, transparent 70%); }
+.presence[data-etat="compactage"] .presence-orbe::before { background: radial-gradient(circle, rgb(var(--c-aurore) / calc(.32 * var(--lueur-k))) 0, transparent 60%); }
+.presence[data-alerte] .presence-orbe::before { background: radial-gradient(circle, rgb(var(--c-rouge) / calc(.3 * var(--lueur-k))) 0, transparent 65%); }
+/* Repli sans WebGL : le noyau SVG prend la taille de l'orbe */
+.presence-orbe > .noyau { --taille: 100%; }
+
+.presence-etat {
+  font: var(--t-mini)/1 var(--f-ui); letter-spacing: calc(.16em * var(--chasse-k)); text-transform: var(--casse);
+  color: var(--texte-2); white-space: nowrap;
+}
+.presence[data-etat="ecoute"] .presence-etat, .presence[data-etat="parole"] .presence-etat { color: var(--cyan-vif); }
+.presence[data-alerte] .presence-etat { color: var(--rouge); }
+
+/* Niveau du micro : la barre est mise à l'échelle à chaque image (transform seulement) */
+.jauge-micro { display: inline-flex; align-items: center; gap: var(--e-2); font: var(--t-micro)/1 var(--f-ui); color: var(--texte-3); }
+.jauge-micro[data-ouvert] { color: var(--texte-2); }
+.jauge-micro-piste {
+  position: relative; width: var(--jauge-micro); height: var(--jauge-micro-h); overflow: hidden;
+  border-radius: var(--r-pilule); background: var(--voile-2); box-shadow: inset 0 0 0 1px var(--ligne);
+}
+.jauge-micro-barre {
+  position: absolute; inset: 0; transform: scaleX(0); transform-origin: left center;
+  background: var(--degrade-accent); will-change: transform;
+}
+.jauge-micro[data-compacte] .jauge-micro-piste { width: var(--jauge-micro-h); height: var(--orbe-compact); }
+.jauge-micro[data-compacte] .jauge-micro-barre { transform: scaleY(0); transform-origin: center bottom; }
+
+/* HUD en fond d'écran : l'orbe occupe toute la fenêtre derrière des panneaux plus transparents */
+.orbe-fond { position: absolute; inset: 0; }
+.orbe-fond .noyau { position: absolute; left: 50%; top: 50%; --taille: min(60vw, 60vh); transform: translate(-50%, -50%); opacity: .5; }
+.hud[data-orbe-fond] { --verre: rgb(var(--c-verre) / .4); --verre-bas: rgb(var(--c-verre-bas) / .48); --flou: var(--flou-fond); }
+.hud[data-orbe-fond] .zone-noyau { padding-block: var(--e-4); }
+
+@media (min-width: 900px) {
+  .barre-marque .presence { display: none; }
+}
