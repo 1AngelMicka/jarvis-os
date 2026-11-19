@@ -63,6 +63,11 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
             'UPDATE etat_systeme SET valeur = \'{"actif": false, "voix": false, "notification": true}\''
             " WHERE cle = 'veille_claude_code'"
         )
+        await conn.execute(
+            "UPDATE etat_systeme SET valeur = "
+            '\'{"jeu": "automatique", "mode": "normal", "avant": null, "modifies": []}\''
+            " WHERE cle = 'pc'"
+        )
     finally:
         await conn.close()
     return BasePostgres(await creer_pool(parametres.url_base("app", BASE_TEST), max_size=4))

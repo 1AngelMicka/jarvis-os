@@ -88,6 +88,9 @@ class ConfigLocale:
     # Veille des sessions Claude Code ([veille_claude_code] dossier = dossier `sessions` de Claude Code, si ce
     # n'est pas celui par défaut) ; l'activation se règle dans l'interface (désactivée par défaut)
     dossier_veille_claude: Path | None = None
+    # Ressources et contrôle du PC ([pc] : jeux = ["…exe"] détectés en plus des dossiers connus, plan_jeu =
+    # identifiant du plan d'alimentation du mode jeu, ollama_inactivite_min = arrêt d'Ollama après inactivité)
+    pc: dict[str, Any] = field(default_factory=dict)
 
     def connecteur(self, ident: str) -> dict[str, Any]:
         return self.connecteurs.get(ident, {})
@@ -144,6 +147,7 @@ def analyser(donnees: dict[str, Any], chemin: Path | None = None) -> ConfigLocal
         projets_ateliers=tuple(p for p in (donnees.get("ateliers") or {}).get("projets") or [] if isinstance(p, dict)),
         matin=dict(donnees.get("matin") or {}),
         dossier_veille_claude=_dossier_veille(donnees.get("veille_claude_code")),
+        pc=dict(donnees.get("pc") or {}),
     )
 
 

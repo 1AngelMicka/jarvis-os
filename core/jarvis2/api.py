@@ -52,6 +52,7 @@ from .api_matin import routeur as routeur_matin
 from .api_medias import routeur as routeur_medias
 from .api_medias import routeur_pages as routeur_creations
 from .api_memoire import routeur as routeur_memoire
+from .api_pc import routeur as routeur_pc
 from .api_pilotage import routeur as routeur_pilotage
 from .api_profil import routeur as routeur_profil
 from .api_securite import routeur as routeur_securite
@@ -76,6 +77,10 @@ from .memoire_v2 import EtatBascule, basculer, modele_actif, modele_majoritaire
 from .moteurs.base import ErreurMoteur, Options
 from .moteurs.telemetrie import EnregistreurBase, MoteurInstrumente
 from .nuit import taches_memoire
+from .ocr import LecteurOCR
+from .ocr import choisir as choisir_ocr
+from .pc import ServicePC
+from .pc import construire as construire_pc
 from .pilotage import ServicePilotage
 from .securite import appareils
 from .securite.actions import creer_registre
@@ -113,6 +118,7 @@ class Contexte:
     chargement_modele: str | None = None  # None, « absent », « en_cours », « termine », « erreur »
     mcp: GestionnaireMCP | None = None
     maison: GestionnaireMaison | None = None  # Hue, OBS : connecteurs facultatifs, désactivés par défaut
+    pc: ServicePC | None = None  # ressources et contrôle du PC, Ollama à la demande, mode jeu (lot J)
     recherche: RechercheWeb = field(default_factory=lambda: RechercheWeb(None))
     scientifique: SourcesScientifiques | None = None  # bases scientifiques publiques des missions de recherche
     dossier_recettes: Path | None = None
@@ -123,6 +129,7 @@ class Contexte:
     transcripteur: Transcripteur | None = None
     url_ollama: str = "http://127.0.0.1:11434"
     modele_vision: str | None = None
+    ocr: LecteurOCR | None = None  # lecture du texte des images avant le modèle de vision (None : directement)
     sans_ecran: bool = False  # serveur sans écran : capture, clics et contrôle de l'écran refusés (voir ecran.py)
     meteo: ServiceMeteo = field(default_factory=ServiceMeteo)
     matin_locale: dict[str, Any] = field(default_factory=dict)  # [matin] de la configuration locale (privé)
@@ -135,7 +142,11 @@ class Contexte:
     commandes: ServiceCommandes = field(init=False)
 
     def __post_init__(self) -> None:
-        self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp, self.ateliers, self.maison))
+        if self.pc is not None:
+            self.pc.sans_ecran = lambda: self.sans_ecran  # le mode peut être fixé au lancement (cycle de vie)
+        self.approbations = Approbations(
+            self.pool, creer_registre(self.urgence, self.mcp, self.ateliers, self.maison, self.pc)
+        )
         self.conseil = ServiceConseil(self.service)
         expurgateur = self.memoire.reglages.expurgateur if self.memoire is not None else None
         ateliers = self.ateliers
@@ -161,6 +172,9 @@ class Contexte:
             if self.dossier_recettes is not None
             else None
         )
+        if self.planificateur is not None and self.pc is not None:
+            jeu = self.pc.jeu
+            self.planificateur.en_pause = lambda: jeu.en_veille
         self.service.ce_qui_tourne = self.ce_qui_tourne
 
     async def ce_qui_tourne(self) -> str:
@@ -235,6 +249,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
     memoire = SourceMemoire(pool, EncodeurFastEmbed(p.dossier_modeles, p.modele_embeddings), reglages)
     service = ServiceDialogue(depot, moteurs, p.moteur_defaut, memoire, connecteurs, locale.sujets_prives)
     urgence = ArretUrgence()
+    pc = construire_pc(pool, urgence, p.ollama_url, locale.pc, p.dossier_donnees)
     return Contexte(
         pool,
         depot,
@@ -245,6 +260,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
         connecteurs=connecteurs,
         mcp=GestionnaireMCP.depuis_config(locale.serveurs_mcp),
         maison=GestionnaireMaison(pool, coffre),
+        pc=pc,
         recherche=RechercheWeb(locale.searxng),
         scientifique=SourcesScientifiques() if locale.scientifique else None,
         dossier_recettes=chemin_config().parent / "recettes",
@@ -267,6 +283,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
         transcripteur=TranscripteurWhisper(p.dossier_modeles, p.modele_voix),
         url_ollama=p.ollama_url,
         modele_vision=locale.connecteur("ollama").get("modele_vision"),
+        ocr=choisir_ocr(),
         sans_ecran=p.sans_ecran,
         matin_locale=locale.matin,
     )
@@ -352,6 +369,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             await ctx.connecteurs.charger()
         if ctx.maison is not None:
             await ctx.maison.charger()
+        if ctx.pc is not None:
+            await ctx.pc.charger()
         if ctx.urgence.actif:
             journal.warning("Arrêt d'urgence ACTIF (depuis %s) : écritures refusées", ctx.urgence.depuis)
         app.state.parametres = parametres
@@ -363,6 +382,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             taches.append(asyncio.create_task(ctx.veille.boucle()))
         if ctx.planificateur is not None:  # recettes planifiées et tâches de nuit de la mémoire
             taches.append(asyncio.create_task(ctx.planificateur.boucle()))
+        if ctx.pc is not None:  # mesures (seulement si la vue est ouverte), Ollama inactif, détection des jeux
+            taches.extend(asyncio.create_task(b) for b in ctx.pc.boucles())
         if contexte is None:
             bascule = await preparer_bascule(ctx, parametres)
             if bascule is not None:
@@ -379,6 +400,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             yield
         finally:
             ctx.telechargeur.arreter()  # fichiers partiels gardés : reprise au prochain accord
+            if ctx.pc is not None and contexte is None:  # l'Ollama démarré par JARVIS s'arrête avec lui
+                await ctx.pc.ollama.fermer()
             for tache in taches:
                 if not tache.done():
                     tache.cancel()
@@ -598,6 +621,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_telechargements)
     app.include_router(routeur_donnees)
     app.include_router(routeur_pilotage)
+    app.include_router(routeur_pc)
 
     dossier = parametres.dossier_interface
     if (dossier / "index.html").is_file():

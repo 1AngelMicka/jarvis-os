@@ -76,3 +76,14 @@ exclure_contenus = []
 requetes_temoins = [
   # "Quels sont mes objectifs ?",
 ]
+
+# Ressources et contrôle du PC (phase 13, lot J). Tout est facultatif.
+[pc]
+# Jeux détectés en plus des dossiers connus (Steam, Epic, Riot, Ubisoft, EA, GOG, Xbox) : nom de l'exécutable.
+jeux = [
+  # "monjeu.exe",
+]
+# Plan d'alimentation du mode Jeu (identifiant de `powercfg /list`) ; sinon le plan Performances de Windows.
+# plan_jeu = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+# Arrêt de l'Ollama démarré par JARVIS après ce nombre de minutes sans modèle chargé.
+ollama_inactivite_min = 20

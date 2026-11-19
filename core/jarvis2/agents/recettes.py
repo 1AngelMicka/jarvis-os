@@ -137,6 +137,7 @@ class Planificateur:
         self.taches = list(taches)
         self.depart = datetime.now(UTC)  # une recette jamais exécutée attend sa première heure après le démarrage
         self.en_cours: set[str] = set()
+        self.en_pause: Callable[[], bool] = lambda: False  # veille stricte du mode jeu (pc/jeu.py)
 
     def recettes(self) -> tuple[list[Recette], list[str]]:
         return charger(self.dossier)
@@ -212,7 +213,8 @@ class Planificateur:
     async def boucle(self) -> None:
         while True:
             try:
-                await self.battement()
+                if not self.en_pause():  # mode jeu (veille stricte) : les recettes attendent la fin de la partie
+                    await self.battement()
             except Exception:  # une recette en échec ne doit jamais arrêter les autres
                 journal.exception("Battement du planificateur en échec")
             await asyncio.sleep(self.intervalle)

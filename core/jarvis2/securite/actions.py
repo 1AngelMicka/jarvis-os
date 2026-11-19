@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from ..agents.mcp import GestionnaireMCP
     from ..ateliers.gestionnaire import GestionnaireAteliers
     from ..maison import GestionnaireMaison
+    from ..pc import ServicePC
 
 
 def _uuid(params: dict[str, Any], cle: str) -> UUID:
@@ -35,6 +36,7 @@ def creer_registre(
     mcp: GestionnaireMCP | None = None,
     ateliers: GestionnaireAteliers | None = None,
     maison: GestionnaireMaison | None = None,
+    pc: ServicePC | None = None,
 ) -> Registre:
     registre = Registre()
 
@@ -108,6 +110,8 @@ def creer_registre(
         _ajouter_ateliers(registre, ateliers)
     if maison is not None:
         _ajouter_maison(registre, maison, urgence)
+    if pc is not None:  # contrôle du PC, Ollama à la demande, mode jeu (lot J)
+        pc.declarer(registre)
     return registre
 
 
