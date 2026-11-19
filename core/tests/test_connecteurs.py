@@ -19,7 +19,6 @@ from jarvis2.conseil import ServiceConseil
 from jarvis2.conversations import DepotConversations
 from jarvis2.db import Base
 from jarvis2.dialogue import TEXTE_MASQUE, ServiceDialogue
-from jarvis2.materiel import Materiel, recommander
 from jarvis2.moteurs.anthropic_api import MoteurAnthropic, preparer
 from jarvis2.moteurs.base import (
     Delta,
@@ -180,11 +179,6 @@ def test_routeur() -> None:
     assert choisir([etat("antigravity", "cli", risque=True)]) is None
     assert choisir([etat("antigravity", "cli", risque=True)], prefere="antigravity") is None
     assert choisir([etat("x", "api", actif=False)]) is None
-
-
-def test_recommandation_materiel() -> None:
-    assert recommander(Materiel(64, 24, "RX 7900 XTX"))[0]["taille"].startswith("24 à 32")
-    assert recommander(Materiel(16, None, None))[0]["ou"].startswith("processeur")
 
 
 # --- Gestion des connecteurs, en base --------------------------------------------------------------------
@@ -351,7 +345,7 @@ async def test_conseil_demande_deux_connecteurs(systeme: dict[str, Any]) -> None
 
 async def test_route_materiel(systeme: dict[str, Any]) -> None:
     rep = (await systeme["client"].get("/v1/materiel")).json()
-    assert rep.get("recommandations")
+    assert rep.get("conseils") and rep.get("resume")
 
 
 def test_enregistreur_memoire_inutilise() -> None:
