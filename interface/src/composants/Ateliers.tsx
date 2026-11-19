@@ -205,11 +205,23 @@ function Detail({ a, surChangement, surAction }: { a: Atelier; surChangement: ()
 }
 
 /** Ateliers Claude Code : une session par worktree git, autorisations en direct, fusion approuvée. */
-export function VueAteliers({ surChangement, surAction }: { surChangement: (m?: string) => void; surAction: (r: ReponseAction) => void }) {
+export function VueAteliers({
+  surChangement,
+  surAction,
+  initial,
+}: {
+  surChangement: (m?: string) => void;
+  surAction: (r: ReponseAction) => void;
+  /** Atelier à ouvrir à l'arrivée (clic dans le panneau Activité) */
+  initial?: string | undefined;
+}) {
   const [donnees, setDonnees] = useState<{ projets: { id: string; nom: string }[]; ateliers: Atelier[]; attentes: AttenteOutil[] } | null>(null);
   const [projet, setProjet] = useState("");
   const [nom, setNom] = useState("");
-  const [ouvert, setOuvert] = useState<string | null>(null);
+  const [ouvert, setOuvert] = useState<string | null>(initial ?? null);
+  useEffect(() => {
+    if (initial) setOuvert(initial);
+  }, [initial]);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const charger = useCallback(() => {

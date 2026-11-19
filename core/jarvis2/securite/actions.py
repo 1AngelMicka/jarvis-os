@@ -96,11 +96,48 @@ def creer_registre(
             lever_urgence,
         )
     )
+    _ajouter_chantiers(registre)
     if mcp is not None:
         _ajouter_mcp(registre, mcp)
     if ateliers is not None:
         _ajouter_ateliers(registre, ateliers)
     return registre
+
+
+def _ajouter_chantiers(registre: Registre) -> None:
+    from .. import chantiers
+
+    async def abandonner(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
+        try:
+            c = await chantiers.abandonner(conn, _uuid(p, "chantier_id"), p.get("motif"))
+        except chantiers.ErreurChantier as exc:
+            raise ErreurAction(str(exc)) from exc
+        return {"chantier_id": c["id"], "titre": c["titre"]}  # réversible : « Rouvrir »
+
+    async def supprimer(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return await chantiers.supprimer(conn, _uuid(p, "chantier_id"))
+        except chantiers.ErreurChantier as exc:
+            raise ErreurAction(str(exc)) from exc
+
+    registre.ajouter(
+        Action(
+            "chantier.abandonner",
+            "jaune",
+            "Abandonner un chantier (réversible : il peut être rouvert)",
+            lambda p: f"Abandonner le chantier « {p.get('titre') or p.get('chantier_id')} »",
+            abandonner,
+        )
+    )
+    registre.ajouter(
+        Action(
+            "chantier.supprimer",
+            "rouge",
+            "Supprimer définitivement un chantier",
+            lambda p: f"Supprimer DÉFINITIVEMENT le chantier « {p.get('titre') or p.get('chantier_id')} »",
+            supprimer,
+        )
+    )
 
 
 def _ajouter_ateliers(registre: Registre, ateliers: GestionnaireAteliers) -> None:

@@ -25,13 +25,20 @@ const EXECUTION: Record<string, { texte: string; ton?: string }> = {
   en_cours: { texte: "En cours", ton: "attention" },
 };
 
-function Missions({ surChangement }: { surChangement: (m?: string) => void }) {
+function Missions({ surChangement, initiale }: { surChangement: (m?: string) => void; initiale?: string | undefined }) {
   const [liste, setListe] = useState<Mission[] | null>(null);
   const [web, setWeb] = useState(false);
   const [type, setType] = useState<Mission["type"]>("recherche");
   const [objectif, setObjectif] = useState("");
-  const [ouverte, setOuverte] = useState<string | null>(null);
+  const [ouverte, setOuverte] = useState<string | null>(initiale ?? null);
   const [erreur, setErreur] = useState<string | null>(null);
+
+  // Ouverte depuis le panneau Activité : la mission est dépliée et amenée à l'écran
+  useEffect(() => {
+    if (!initiale || !liste) return;
+    setOuverte(initiale);
+    document.getElementById(`mission-${initiale}`)?.scrollIntoView({ block: "center" });
+  }, [initiale, liste]);
 
   const charger = useCallback(() => {
     listerMissions()
@@ -125,7 +132,7 @@ function Missions({ surChangement }: { surChangement: (m?: string) => void }) {
           {liste.map((m) => {
             const s = STATUTS[m.statut];
             return (
-              <li key={m.id} className="carte-co">
+              <li key={m.id} id={`mission-${m.id}`} className="carte-co" data-cible={initiale === m.id || undefined}>
                 <div className="carte-co-tete">
                   <h4 className="carte-co-nom">{m.objectif}</h4>
                   <span className="badge-co">{TYPES.find((t) => t.id === m.type)?.nom}</span>
@@ -375,15 +382,17 @@ interface Props {
   surChangement: (message?: string) => void;
   surOuvrirConversation: (id: string) => void;
   surAction: (r: ReponseAction) => void;
+  /** Élément à ouvrir à l'arrivée (clic dans le panneau Activité) */
+  cible?: { type: "mission" | "creation"; id: string } | null | undefined;
 }
 
 /** Agents : missions de fond, recettes planifiées, outils MCP sous approbation. */
-export function VueAgents({ surChangement, surOuvrirConversation, surAction }: Props) {
+export function VueAgents({ surChangement, surOuvrirConversation, surAction, cible }: Props) {
   return (
     <div className="connecteurs">
-      <Missions surChangement={surChangement} />
+      <Missions surChangement={surChangement} initiale={cible?.type === "mission" ? cible.id : undefined} />
       <Recettes surChangement={surChangement} surOuvrir={surOuvrirConversation} />
-      <SectionCreations surChangement={surChangement} />
+      <SectionCreations surChangement={surChangement} initiale={cible?.type === "creation" ? cible.id : undefined} />
       <OutilsMcp surAction={surAction} />
     </div>
   );

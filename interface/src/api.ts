@@ -5,6 +5,10 @@
 import { EVENEMENT_NON_AUTORISE, ecrireJeton, lireJeton } from "./auth";
 import { LecteurSSE } from "./sse";
 import type {
+  Activite,
+  Chantier,
+  EtapeChantier,
+  StatutChantier,
   Appareil,
   Connecteur,
   Demande,
@@ -284,3 +288,13 @@ export const listerCreations = () =>
 export const creerCreation = (titre: string, demande: string) => envoyer<{ id: string; version: number }>("/v1/creations", { titre, demande });
 export const modifierCreation = (id: string, demande: string) => envoyer<{ id: string; version: number }>(`/v1/creations/${id}/modifier`, { demande });
 export const lienCreation = (id: string) => appeler<{ url: string; version: number }>(`/v1/creations/${id}/lien`);
+// --- Chantiers et activité (phase 13, lot C) ---
+export const lireActivite = () => unSeul("activite", () => appeler<Activite>("/v1/activite"));
+export const listerChantiers = (statut: "ouverts" | "termines" | "abandonnes" | "tous" = "ouverts") =>
+  appeler<{ chantiers: Chantier[] }>(`/v1/chantiers?statut=${statut}`);
+export const creerChantier = (titre: string, etapes: EtapeChantier[] = []) =>
+  envoyer<{ chantier: Chantier; cree: boolean }>("/v1/chantiers", { titre, etapes });
+export const modifierChantier = (id: string, modif: { etapes?: EtapeChantier[]; progression?: number; statut?: StatutChantier; titre?: string }) =>
+  appeler<Chantier>(`/v1/chantiers/${id}`, { methode: "PATCH", corps: modif });
+export const terminerChantier = (id: string) => envoyer<{ chantier: Chantier; doublons_abandonnes: number }>(`/v1/chantiers/${id}/terminer`);
+export const rouvrirChantier = (id: string) => envoyer<Chantier>(`/v1/chantiers/${id}/rouvrir`);

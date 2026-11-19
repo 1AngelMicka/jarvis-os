@@ -11,7 +11,7 @@ interface CreationListe {
 }
 
 /** Créations : petites pages générées par JARVIS, ouvertes dans un bac à sable (origine isolée, aucun réseau). */
-export function SectionCreations({ surChangement }: { surChangement: (m?: string) => void }) {
+export function SectionCreations({ surChangement, initiale }: { surChangement: (m?: string) => void; initiale?: string | undefined }) {
   const [liste, setListe] = useState<CreationListe[] | null>(null);
   const [titre, setTitre] = useState("");
   const [demande, setDemande] = useState("");
@@ -31,15 +31,20 @@ export function SectionCreations({ surChangement }: { surChangement: (m?: string
   }, []);
   useEffect(charger, [charger]);
 
-  const ouvrir = (id: string) => {
+  const ouvrir = useCallback((id: string) => {
     lienCreation(id)
       .then((l) => {
         setOuverte({ id, url: l.url, version: l.version });
+        document.getElementById(`creation-${id}`)?.scrollIntoView({ block: "start" });
       })
       .catch((e: unknown) => {
         setErreur(e instanceof Error ? e.message : "Ouverture impossible.");
       });
-  };
+  }, []);
+  // Ouverte depuis le panneau Activité
+  useEffect(() => {
+    if (initiale) ouvrir(initiale);
+  }, [initiale, ouvrir]);
 
   const agir = (appel: Promise<{ id: string }>, message: string) => {
     setOccupe(true);
@@ -108,7 +113,7 @@ export function SectionCreations({ surChangement }: { surChangement: (m?: string
       {liste && liste.length > 0 && (
         <ul className="cartes-co">
           {liste.map((c) => (
-            <li key={c.id} className="carte-co">
+            <li key={c.id} id={`creation-${c.id}`} className="carte-co">
               <div className="carte-co-tete">
                 <h4 className="carte-co-nom">{c.titre}</h4>
                 <span className="badge-co">v{c.version_courante}</span>
