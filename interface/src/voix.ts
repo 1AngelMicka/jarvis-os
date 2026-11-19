@@ -1,6 +1,8 @@
 // Voix de JARVIS : lecture à voix haute avec les voix LOCALES du système (jamais une voix en ligne), phrase par
 // phrase pendant la réponse ; enregistrement du micro (à la demande ou mains libres) pour la transcription sur le PC.
 
+import { impulsionVoix, publierNiveauMicro, signalerMicro, signalerParole } from "./presence";
+
 const FIN_DE_PHRASE = /[^.!?…\n]+[.!?…]+["»)]*\s+|[^\n]+\n+/g;
 
 function voixFrancaiseLocale(): SpeechSynthesisVoice | null {
@@ -28,9 +30,14 @@ export class LecteurVocal {
     enonce.lang = voix.lang;
     enonce.onstart = () => {
       this.parle = true;
+      signalerParole(true);
+    };
+    enonce.onboundary = () => {
+      impulsionVoix(); // chaque mot dit fait vibrer l'orbe du thème Présence
     };
     enonce.onend = () => {
       this.parle = window.speechSynthesis.speaking;
+      signalerParole(this.parle);
     };
     window.speechSynthesis.speak(enonce);
   }
@@ -60,6 +67,7 @@ export class LecteurVocal {
     this.tampon = "";
     if (this.disponible) window.speechSynthesis.cancel();
     this.parle = false;
+    signalerParole(false);
   }
 }
 
@@ -102,11 +110,20 @@ function typeAudio(): string {
   return "";
 }
 
+/** Niveau efficace (RMS) d'un extrait audio. */
+function niveauEfficace(donnees: Float32Array): number {
+  let somme = 0;
+  for (const x of donnees) somme += x * x;
+  return Math.sqrt(somme / Math.max(1, donnees.length));
+}
+
 /** Enregistrement à la demande : `demarrer` puis `arreter` renvoie l'audio. */
 export class Enregistreur {
   private flux: MediaStream | null = null;
   private rec: MediaRecorder | null = null;
   private morceaux: Blob[] = [];
+  private contexte: AudioContext | null = null;
+  private minuterie: number | undefined;
 
   async demarrer(): Promise<void> {
     this.flux = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
@@ -116,6 +133,25 @@ export class Enregistreur {
       if (e.data.size) this.morceaux.push(e.data);
     };
     this.rec.start();
+    this.mesurer(this.flux);
+  }
+
+  /** Niveau du micro pour l'affichage, sur son propre minuteur (jamais lié au rendu). */
+  private mesurer(flux: MediaStream): void {
+    try {
+      this.contexte = new AudioContext();
+      const analyseur = this.contexte.createAnalyser();
+      analyseur.fftSize = 1024;
+      this.contexte.createMediaStreamSource(flux).connect(analyseur);
+      const donnees = new Float32Array(analyseur.fftSize);
+      signalerMicro(true);
+      this.minuterie = window.setInterval(() => {
+        analyseur.getFloatTimeDomainData(donnees);
+        publierNiveauMicro(niveauEfficace(donnees));
+      }, 50);
+    } catch {
+      /* pas d'analyse possible : l'enregistrement continue sans jauge */
+    }
   }
 
   arreter(): Promise<Blob> {
@@ -125,6 +161,10 @@ export class Enregistreur {
         resoudre(new Blob());
         return;
       }
+      window.clearInterval(this.minuterie);
+      void this.contexte?.close();
+      this.contexte = null;
+      signalerMicro(false);
       rec.onstop = () => {
         this.flux?.getTracks().forEach((p) => {
           p.stop();
@@ -159,11 +199,11 @@ export class EcouteMainsLibres {
     analyseur.fftSize = 1024;
     this.contexte.createMediaStreamSource(this.flux).connect(analyseur);
     const donnees = new Float32Array(analyseur.fftSize);
+    signalerMicro(true);
     this.minuterie = window.setInterval(() => {
       analyseur.getFloatTimeDomainData(donnees);
-      let somme = 0;
-      for (const x of donnees) somme += x * x;
-      const niveau = Math.sqrt(somme / donnees.length);
+      const niveau = niveauEfficace(donnees);
+      publierNiveauMicro(niveau);
       const maintenant = performance.now();
       if (this.enPause()) {
         if (this.rec?.state === "recording") this.couper(false);
@@ -202,6 +242,7 @@ export class EcouteMainsLibres {
 
   arreter(): void {
     window.clearInterval(this.minuterie);
+    signalerMicro(false);
     this.couper(false);
     this.flux?.getTracks().forEach((p) => {
       p.stop();
