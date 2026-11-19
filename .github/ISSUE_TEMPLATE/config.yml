@@ -9,7 +9,6 @@ contact_links:
   - name: Contribuer
     url: https://github.com/1AngelMicka/jarvis-os/blob/main/CONTRIBUTING.md
     about: Préparer l'environnement, vérifications, conventions.
-  # À décommenter quand les Discussions seront activées sur le dépôt (voir docs/GITHUB_A_FAIRE.md) :
-  # - name: Questions et échanges
-  #   url: https://github.com/1AngelMicka/jarvis-os/discussions
-  #   about: Pour une question d'utilisation ou une idée encore floue.
+  - name: Questions et échanges
+    url: https://github.com/1AngelMicka/jarvis-os/discussions
+    about: Pour une question d'utilisation ou une idée encore floue.
