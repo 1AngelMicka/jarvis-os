@@ -1,6 +1,6 @@
 # Étendre JARVIS : commandes rapides, recettes, skills
 
-Ce guide décrit les formats que le code attend réellement. Deux extensions existent aujourd'hui : les **commandes rapides** et les **recettes**. Les **skills** n'existent pas encore (voir la dernière section).
+Ce guide décrit les formats que le code attend réellement. Trois extensions existent : les **commandes rapides**, les **recettes** et les **skills** au format `SKILL.md`, plus les serveurs MCP.
 
 ## Commandes rapides
 
@@ -186,9 +186,53 @@ Un fichier invalide est ignoré et son erreur est affichée dans la vue Agents, 
 
 ## Skills
 
-**Les skills n'existent pas encore dans JARVIS 2.** Aucun code ne charge de fichier `SKILL.md` ni de dossier de compétences : il n'y a donc pas de format à suivre aujourd'hui. Ils sont prévus par le plan (compétences au format SKILL.md importables, avec niveaux de confiance, capacités dangereuses bloquées sans revue, empreinte du dossier vérifiée à l'approbation, exécution confinée) : voir [FEUILLE_DE_ROUTE.md](FEUILLE_DE_ROUTE.md) et [PLAN.md](PLAN.md) (phase 14, point 12).
+Un skill est un **dossier** qui contient un fichier `SKILL.md` (format agentskills.io) et, parfois, des scripts. Il vient d'ailleurs : JARVIS le traite comme une **donnée**, jamais comme une consigne. Code : `core/jarvis2/agents/skills.py`, routes `core/jarvis2/api_skills.py`, interface : vue Agents, section Skills.
 
-En attendant, les points d'extension disponibles en plus des commandes rapides et des recettes sont :
+### Écrire un `SKILL.md`
+
+En-tête YAML obligatoire `name` et `description`, `allowed-tools` facultatif, puis le texte des instructions :
+
+```markdown
+---
+name: resume-reunion
+description: Résumer les notes d'une réunion en décisions et actions.
+---
+
+Lis les notes fournies, puis rends trois listes : décisions, actions (avec la personne), questions ouvertes.
+```
+
+Scripts possibles dans le dossier : `.py`, `.ps1`, `.sh`, `.js`, `.mjs`. Limites à l'import : 1 Mo par fichier, 5 Mo et 200 fichiers au total ; liens symboliques et chemins qui sortent du dossier refusés.
+
+### Importer
+
+- depuis un **dossier local** que vous choisissez (`POST /v1/skills/importer/dossier`, corps `{"chemin": "…"}`) ;
+- depuis une **archive `.zip`** (`POST /v1/skills/importer/archive?nom=…`, corps brut).
+
+La source est lue en lecture seule et copiée dans `<données>/skills/<id>/`. Un skill importé est `non_fiable` : inutilisable tant qu'il n'est pas revu.
+
+### Revue et capacités dangereuses
+
+À l'import, JARVIS repère trois capacités dangereuses : **shell** (`allowed-tools` : `Bash`, `PowerShell`…, scripts, motifs), **réseau** (`WebFetch`, `WebSearch`…) et **écriture** (`Write`, `Edit`…). Elles restent **bloquées** tant que vous ne les cochez pas une à une pendant la revue (vous pouvez lire chaque fichier du skill dans l'interface). Résultat de la revue :
+
+- `instructions` : approuvé, son texte peut être donné au modèle, aucune capacité dangereuse ;
+- `capacites` : approuvé avec les capacités cochées.
+
+L'approbation est l'action 🟡 `skill.approuver`, jamais « toujours autorisée », liée à l'empreinte exacte que vous avez revue, et inscrite au journal d'audit.
+
+### Empreinte
+
+L'empreinte SHA-256 du dossier est enregistrée à l'approbation, puis **recalculée à chaque usage** : un fichier ajouté, retiré ou modifié bloque le skill (`statut = bloque`) jusqu'à une nouvelle revue.
+
+### Utilisation
+
+Les skills approuvés (empreinte intacte) sont candidats, avec les outils MCP activés, aux outils proposés au modèle à chaque tour (`agents/outils_tour.py` : moins de 12, choisis par le sens). Le modèle ne lance rien lui-même :
+
+- `skill.lire` (🟢) : lire les instructions d'un skill approuvé, rendues comme une donnée ;
+- `skill.executer` (🟡, jamais « toujours autorisée ») : lancer un script du skill. Exige la capacité « shell » acceptée ; le dossier courant est celui du skill, l'environnement est sans clés d'API ni secrets de JARVIS, l'écriture va dans un dossier de sortie à part, la durée est bornée (60 s) et la sortie aussi.
+
+Ce n'est pas un bac à sable du système : le réseau n'est pas coupé au niveau du système, d'où la capacité « réseau » à cocher pour un script qui y touche.
+
+## Autres points d'extension
 
 - les **serveurs MCP** (transport stdio), déclarés dans `config.toml` ; chaque outil reste inactif tant que vous ne l'activez pas (vue Agents), et chaque appel est une action 🟡 :
 
@@ -198,6 +242,8 @@ En attendant, les points d'extension disponibles en plus des commandes rapides e
   commande = "npx"
   args = ["-y", "@modelcontextprotocol/server-filesystem", "C:/Documents/partage"]
   ```
+
+  Réglages, sessions, relance et recherche d'outils : `/v1/mcp/reglages`, `/v1/mcp/sessions`, `/v1/mcp/serveurs/{id}/relancer`, `/v1/mcp/outils/chercher`.
 
 - les **points d'accès compatibles OpenAI** (`[[connecteurs.compatibles]]`, voir [INSTALLATION.md](INSTALLATION.md#serveurs-compatibles-openai)) ;
 - dans le code, un **nouveau moteur** (contrat `core/jarvis2/moteurs/base.py`) ou une **nouvelle source d'import** (`core/jarvis2/importeurs/`) : voir [CONTRIBUTING.md](../CONTRIBUTING.md).

@@ -91,7 +91,7 @@ NVIDIA (CUDA) et Apple Silicon (mémoire unifiée) sont aussi détectés.
 
 ### JARVIS peut-il agir sans me demander ?
 
-Seulement pour les actions 🟢 (lecture, protection). Une action 🟡 attend votre clic, une action 🔴 (suppression, extinction du PC, démarrer un direct…) votre **clé d'accès**. Après une lecture de contenu externe (page web, fichier, capture…), plus aucune action n'est possible jusqu'à la fin du tour. Le bouton **Arrêt d'urgence** coupe tout, tout de suite. Voir [SECURITE.md](SECURITE.md).
+Seulement pour les actions 🟢 (lecture, protection). Une action 🟡 attend votre clic, une action 🔴 (suppression, extinction du PC, démarrer un direct, serrure…) votre **clé d'accès**, et votre clic vaut pour le plan exact affiché. Après une lecture de contenu externe (page web, fichier, capture…), plus aucune action n'est possible jusqu'à la fin du tour. Le bouton **Arrêt d'urgence** coupe tout, tout de suite. Voir [SECURITE.md](SECURITE.md).
 
 ### Puis-je automatiser des choses ?
 
@@ -99,7 +99,15 @@ Oui : les **commandes rapides** (une phrase reconnue sans IA déclenche une acti
 
 ### Y a-t-il des skills ou des plugins ?
 
-Pas encore : les skills (format SKILL.md) sont prévus par le plan mais ne sont pas implémentés. Les serveurs MCP (stdio) sont déjà utilisables, outil par outil, chaque appel soumis à votre accord. Voir [EXTENSIONS.md](EXTENSIONS.md#skills) et la [feuille de route](FEUILLE_DE_ROUTE.md).
+Oui. Les **skills** au format `SKILL.md` s'importent depuis un dossier ou une archive `.zip` ; ils sont inutilisables tant que vous ne les avez pas revus, leurs capacités dangereuses (shell, réseau, écriture) restent bloquées tant que vous ne les cochez pas, et l'empreinte de leur dossier est vérifiée à chaque usage. Les **serveurs MCP** (stdio) sont utilisables outil par outil, chaque appel soumis à votre accord. À chaque message, JARVIS ne propose au modèle que quelques outils choisis par le sens. Voir [EXTENSIONS.md](EXTENSIONS.md#skills).
+
+### Puis-je annuler une action ?
+
+Oui, quand elle est réversible : chaque action 🟡 dit si elle s'annule et comment. Une action réversible exécutée reste annulable 24 heures (« Annuler » dans l'interface ou par commande rapide). Et ce que vous approuvez est exactement ce qui s'exécute : l'approbation est liée à l'empreinte du plan affiché. Voir [SECURITE.md](SECURITE.md#pile-dannulation).
+
+### JARVIS marche-t-il avec Home Assistant ?
+
+Oui, en option (désactivé par défaut) : le PC reste le cerveau, Home Assistant exécute, sur votre réseau local seulement. Lumières, prises et média sont des actions 🟡 ; serrures, alarme et portail sont 🔴 et demandent votre clé d'accès **et** votre voix reconnue. JARVIS peut aussi prêter sa transcription et sa voix à Home Assistant et à des satellites dans les pièces (protocole Wyoming). Voir [HOME_ASSISTANT.md](HOME_ASSISTANT.md).
 
 ### Comment utiliser JARVIS depuis mon téléphone ?
 

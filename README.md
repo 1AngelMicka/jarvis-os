@@ -39,6 +39,7 @@ No Docker, no Node. Details and options [below](#installation-details) and in [d
 **Conversation with the AI of your choice**
 - Streaming replies, stored history, titles and dated summaries of each conversation.
 - Connectors: your accounts through the providers' official programs (Claude Code, OpenAI Codex, Google Antigravity with a warning), your API keys (Anthropic, OpenAI, Gemini, OpenRouter, any OpenAI-compatible service), your local models (Ollama, LM Studio, llama.cpp, vLLM).
+- Task-type router (code, reasoning, quick, private) by a local classifier, each route scored on real measurements and demoted when it fails; a private route never goes to an external AI.
 - Automatic router, and a multi-AI council: several connectors answer in parallel, then one writes the synthesis.
 - Costs per connector (day, month), spending caps, Claude Code subscription gauges; each reply shows the engine that answered.
 
@@ -50,7 +51,8 @@ No Docker, no Node. Details and options [below](#installation-details) and in [d
 - Import from JARVIS v1 (read-only).
 
 **Agents and workshops**
-- Scheduled recipes, background missions (research with cited web and scientific sources, brainstorm, review) whose report goes into memory, MCP tools.
+- Scheduled recipes, background missions (research with cited web and scientific sources, brainstorm, review) whose report goes into memory.
+- MCP tools (persistent sessions) and imported `SKILL.md` skills: unusable until you review them, dangerous capabilities (shell, network, write) blocked until ticked, folder fingerprint checked on every use. Each turn the model is offered fewer than 12 tools, chosen by meaning.
 - Claude Code workshops: each one works in its own git worktree and branch, and JARVIS decides on every tool it asks to use; pause, resume, close.
 - Read-only watch of your own Claude Code sessions.
 - Continuous improvement: a suggestion becomes a workshop, then a tested preview, then a deployment request you approve, with a way back.
@@ -63,18 +65,20 @@ No Docker, no Node. Details and options [below](#installation-details) and in [d
 
 **Your PC and home**
 - Windows PC control: volume, brightness, windows, media, lock, shutdown, power plan, notification banners and dark mode, game mode; live CPU, RAM, GPU and VRAM readings.
-- Optional home connectors: Philips Hue (local bridge API) and OBS Studio.
+- Optional home connectors, off by default: Philips Hue (local bridge API), OBS Studio, and Home Assistant on your local network (🟡 lights, plugs, media; 🔴 locks, alarm, gate, which need your passkey and your recognised voice). See [docs/HOME_ASSISTANT.md](docs/HOME_ASSISTANT.md).
+- Wyoming server: JARVIS's transcription and voice offered to Home Assistant and to voice satellites in each room (one key per device, only audio after the wake word, per-room presence, volume caps, per-person profiles).
 - Quick commands without any AI: a recognised phrase triggers a declared action, editable by you.
 
 **Security**
 - Permission levels: 🟢 read (free), 🟡 change (you approve; "always allow" is possible), 🔴 destroy, money, publish, send (explicit confirmation, with a passkey).
+- Approval bound to the exact plan shown (SHA-256 fingerprint, checked again right before running) and an undo stack: a reversible action stays undoable for 24 hours.
 - Append-only audit log chained with SHA-256 hashes, emergency stop, local vault for API keys, secret and personal-data filter on everything sent to an external provider.
 - Per-turn injection barrier (after reading untrusted content, no more actions in that turn) and a detector for replies that claim an action that never happened.
 - A "Where does my data go" page generated from your actual configuration (see below).
 
 **Everywhere**
 - Phone: installable web app, Web Push notifications, "Share to JARVIS", reachable through Tailscale.
-- Desktop app (own window, tray icon, `jarvis://` links), headless home-server mode, morning greeting with weather, sandboxed generated pages, five themes.
+- Desktop app (own window, tray icon, `jarvis://` links), headless home-server mode, morning greeting with weather, sandboxed generated pages, five themes, HUD widgets generated on request (weather, timer, list…) validated against closed lists, never rendered raw, and pinnable.
 - Encrypted backup verified by a real restore; SQLite by default, PostgreSQL + pgvector optional.
 
 ## Runs locally / What leaves your machine
@@ -98,6 +102,8 @@ The in-app page "Où partent mes données" (Where does my data go) builds this m
 | Phone through Tailscale | 🟡 Your private network | All phone–PC traffic, end-to-end encrypted; Tailscale only sees your device list | Only if you set up `tailscale serve` |
 | Core open to the local network | 🟡 Your network | Exchanges with paired devices (one token per device) | Only if `JARVIS2_OUVERTURE_RESEAU` is set |
 | MCP tools | Depends on the program (it may itself reach the Internet) | Parameters of each tool call, after your 🟡 approval | Only servers you declared and enabled |
+| Home Assistant | 🟡 Your network (an Internet address is refused) | Actions you approve (target entity and service) and state reads; never your conversations, memory or files, nor the alarm code except to disarm | Only if you enabled and configured it |
+| Wyoming server (Home Assistant, voice satellites) | 🟢 Your PC, or 🟡 your network if you choose another address | Transcribed text and JARVIS's voice, sent back only to the device that spoke; audio before the wake word is discarded unread, audio and text are never kept | Only if you turned it on |
 
 Memory privacy levels, towards an external AI:
 
@@ -132,27 +138,27 @@ Model names are examples to check in the Ollama catalogue. Ollama is never start
 
 ## How it compares
 
-JARVIS 2 takes ideas from several personal-assistant projects. **None is installed or required**: each idea kept is reimplemented, and code is reused only from projects with a permissive licence, credited in [NOTICE](NOTICE). The table lists what JARVIS 2 takes from each one; some of these ideas are already in, others are on the [plan](docs/PLAN.md). Full list and licences: [docs/INSPIRATIONS.md](docs/INSPIRATIONS.md).
+JARVIS 2 takes ideas from several personal-assistant projects. **None is installed or required**: each idea kept is reimplemented, and code is reused only from projects with a permissive licence, credited in [NOTICE](NOTICE). The table lists what JARVIS 2 takes from each one and whether it is built in the code today; what is not yet built is on the [plan](docs/PLAN.md). Full list and licences: [docs/INSPIRATIONS.md](docs/INSPIRATIONS.md).
 
-| Project | Licence | What JARVIS 2 takes from it |
-|---|---|---|
-| OpenJarvis | Apache-2.0 | Installer resume and a single hardware → model table; subscription gauges and reply footer; skills with trust and confinement; extended secret masking, privacy levels, recall gate (ideas, reimplemented); install presets |
-| TopMyster/jarvis | MIT | pipx entry point |
-| ASDprogrammer521/jarvis | MIT | Per-turn injection barrier, approval bound to the exact plan, undo stack; PC control and modes that really change Windows |
-| lancejames221b/jarvis | MIT | Follow-up without wake word, active / standby states; owner voice recognition, closed for 🟡🔴 when unavailable |
-| akshayaggarwal99/jarvis | MIT | Robust transcription; global dictation on Windows |
-| sosoj92/jarvis | MIT | French hallucination filter; "always allow" for 🟡, never 🔴 remotely without a key |
-| b1-loop | MIT | Barge-in; step-by-step latency measurement |
-| microsoft/JARVIS (HuggingGPT) | MIT | Brainstorm → spec → plan → execution; missions as a graph |
-| DonJyde/jarvis | MIT | Filtered generated widgets |
-| livekit-rtc | Apache-2.0 | Echo cancellation (possible dependency) |
-| Dodaios | Apache-2.0 | End of turn, early transcription (idea) |
-| isair/jarvis | Non-commercial | Two-stage wake word (idea only) |
-| NeyorDEV/jarvis | GPL | Persistent MCP, tools chosen by meaning (idea only) |
-| amanimran786/jarvis-ai | AGPL | Workshops in a real sandbox (taken the other way round: refuse when unavailable) |
-| Jarvis.sh | No clear licence | Quick commands without an LLM (idea only, without `eval`) |
-| jarvis799 | No clear licence | Actions verified by re-reading the state (idea only) |
-| hasibjaan | No clear licence | HUD separated from the audio thread (idea only) |
+| Project | Licence | What JARVIS 2 takes from it | Status |
+|---|---|---|---|
+| OpenJarvis | Apache-2.0 | Installer resume and a single hardware → model table; subscription gauges and reply footer; skills with trust and confinement; extended secret masking, privacy levels, recall gate (ideas, reimplemented); install presets | Built |
+| TopMyster/jarvis | MIT | pipx entry point | Built |
+| ASDprogrammer521/jarvis | MIT | Per-turn injection barrier, approval bound to the exact plan, undo stack; PC control and modes that really change Windows | Built |
+| lancejames221b/jarvis | MIT | Follow-up without wake word, active / standby states; owner voice recognition, closed for 🟡🔴 when unavailable | Built |
+| akshayaggarwal99/jarvis | MIT | Robust transcription; global dictation on Windows | Built |
+| sosoj92/jarvis | MIT | French hallucination filter; "always allow" for 🟡, never 🔴 remotely without a key | Built |
+| b1-loop | MIT | Barge-in; step-by-step latency measurement | Built |
+| microsoft/JARVIS (HuggingGPT) | MIT | Brainstorm → spec → plan → execution; missions as a graph | In part: brainstorm missions; spec → plan → execution and the mission graph are planned |
+| DonJyde/jarvis | MIT | Filtered generated widgets | Built |
+| livekit-rtc | Apache-2.0 | Echo cancellation (possible dependency) | Built, when the optional `livekit` package is installed |
+| Dodaios | Apache-2.0 | End of turn, early transcription (idea) | Built |
+| isair/jarvis | Non-commercial | Two-stage wake word (idea only) | Built |
+| NeyorDEV/jarvis | GPL | Persistent MCP, tools chosen by meaning (idea only) | Built |
+| amanimran786/jarvis-ai | AGPL | Workshops in a real sandbox (taken the other way round: refuse when unavailable) | Planned |
+| Jarvis.sh | No clear licence | Quick commands without an LLM (idea only, without `eval`) | Built |
+| jarvis799 | No clear licence | Actions verified by re-reading the state (idea only) | Built (PC settings are read back) |
+| hasibjaan | No clear licence | HUD separated from the audio thread (idea only) | Built (Présence theme) |
 
 JARVIS 2's own focus: local first, your own accounts through the providers' official programs, permissions and audit built before any access is given, and a data-flow map generated from the real configuration.
 
@@ -266,7 +272,7 @@ Code comments, documentation and commit messages are in French. Contributing: [C
 ## Documentation
 
 - [Installation](docs/INSTALLATION.md) · [Troubleshooting](docs/DEPANNAGE.md) · [FAQ](docs/FAQ.md)
-- [Architecture](docs/ARCHITECTURE.md) · [Security and permissions](docs/SECURITE.md) · [Writing a skill, command or recipe](docs/EXTENSIONS.md) · [Home server](docs/SERVEUR.md)
+- [Architecture](docs/ARCHITECTURE.md) · [Security and permissions](docs/SECURITE.md) · [Writing a skill, command or recipe](docs/EXTENSIONS.md) · [Home server](docs/SERVEUR.md) · [Home Assistant and satellites](docs/HOME_ASSISTANT.md)
 - [Roadmap](docs/FEUILLE_DE_ROUTE.md) · [Plan](docs/PLAN.md) · [Decisions](docs/DECISIONS.md) · [Inspirations](docs/INSPIRATIONS.md) · [Interface design](interface/DESIGN.md)
 - [Changelog](CHANGELOG.md) · [Reporting a vulnerability](SECURITY.md)
 
