@@ -12,6 +12,9 @@
 //   Ctrl+Alt+Impr) passent par le même protocole (`jarvis://ecouter`, `jarvis://ecran`).
 // - Gadget de bureau : petite fenêtre toujours au premier plan, en bas à droite, sur la même interface
 //   (`/?mode=gadget`) ; ses boutons sont des liens `jarvis://` interceptés ici.
+// - Mise à jour automatique (module `mises_a_jour`) : vérifiée en fond, annoncée par une boîte de dialogue native et
+//   le menu de l'icône, installée seulement après un clic ; désactivée et signalée si la clé publique de signature
+//   n'est pas configurée.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::net::{SocketAddr, TcpStream};
@@ -21,7 +24,7 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::webview::NewWindowResponse;
 use tauri::{
@@ -29,6 +32,9 @@ use tauri::{
 };
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+mod mises_a_jour;
+use mises_a_jour::MisesAJour;
 
 /// Le Core lancé par l'application (None : il tournait déjà, on n'y touche pas).
 struct Core(Mutex<Option<Child>>);
@@ -140,6 +146,15 @@ fn ouvrir_dehors(url: &Url) {
     #[cfg(all(unix, not(target_os = "macos")))]
     let resultat = Command::new("xdg-open").arg(adresse).spawn();
     let _ = resultat;
+}
+
+/// Arrête le Core lancé par l'application (à la sortie, avant un redémarrage ou une installation) ; un Core qui
+/// tournait déjà n'est jamais touché.
+pub(crate) fn arreter_core(app: &AppHandle) {
+    if let Some(mut enfant) = app.state::<Core>().0.lock().unwrap().take() {
+        let _ = enfant.kill();
+        let _ = enfant.wait();
+    }
 }
 
 fn montrer(app: &AppHandle) {
@@ -261,6 +276,9 @@ fn main() {
         // le reçoit (fonction « deep-link » du greffon) et la seconde s'arrête.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _dossier| montrer(app)))
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, sc, ev| {
@@ -289,6 +307,7 @@ fn main() {
         )
         .manage(Core(Mutex::new(None)))
         .manage(Etat { prete: Mutex::new(false), en_attente: Mutex::new(None) })
+        .manage(MisesAJour::default())
         .setup(move |app| {
             let port = port();
             if !core_pret(port) {
@@ -356,13 +375,22 @@ fn main() {
             let ouvrir = MenuItem::with_id(app, "ouvrir", "Ouvrir JARVIS 2", true, None::<&str>)?;
             let gadget = MenuItem::with_id(app, "gadget", "Gadget de bureau", true, None::<&str>)?;
             let quitter = MenuItem::with_id(app, "quitter", "Quitter", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&ouvrir, &gadget, &quitter])?;
+            let (quotidienne, maj) = mises_a_jour::entrees_menu(app.handle())?;
+            let separateur = PredefinedMenuItem::separator(app)?;
+            let separateur_fin = PredefinedMenuItem::separator(app)?;
+            let mut entrees: Vec<&dyn IsMenuItem<_>> = vec![&ouvrir, &gadget, &separateur];
+            if let Some(case) = &quotidienne {
+                entrees.push(case);
+            }
+            entrees.extend([&maj as &dyn IsMenuItem<_>, &separateur_fin, &quitter]);
+            let menu = Menu::with_items(app, &entrees)?;
+            mises_a_jour::demarrer(app.handle(), menu.clone(), quotidienne);
             let mut icone = TrayIconBuilder::new().menu(&menu).tooltip("JARVIS 2").on_menu_event(|app, ev| {
                 match ev.id().as_ref() {
                     "ouvrir" => montrer(app),
                     "gadget" => basculer_gadget(app),
                     "quitter" => app.exit(0),
-                    _ => {}
+                    autre => mises_a_jour::sur_menu(app, autre),
                 }
             });
             if let Some(image) = app.default_window_icon() {
@@ -389,9 +417,7 @@ fn main() {
 
     app.run(|app, ev| {
         if let RunEvent::Exit = ev {
-            if let Some(mut enfant) = app.state::<Core>().0.lock().unwrap().take() {
-                let _ = enfant.kill(); // seulement le Core que l'application a lancé
-            }
+            arreter_core(app); // seulement le Core que l'application a lancé
         }
     });
 }

@@ -293,7 +293,8 @@ const BRUTES: readonly SectionBrute[] = [
   {
     id: "version",
     categorie: "appareils",
-    motsCles: ["mise a jour", "numero", "a propos"],
+    motsCles: ["mise a jour", "mises a jour", "mettre a jour", "nouvelle version", "version", "numero", "a propos", "github", "notes de version"],
+    alias: ["mises-a-jour", "mise-a-jour"],
   },
 ];
 

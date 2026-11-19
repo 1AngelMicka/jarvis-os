@@ -994,3 +994,18 @@ export interface EtatControlePC {
   modes: { id: string; titre: string; description: string }[];
   extinction_dans_s: number | null;
 }
+
+/** Indicateur « nouvelle version » (`GET /v1/mises-a-jour`) : vérifié au plus une fois par jour, si actif. */
+export interface EtatMisesAJour {
+  active: boolean;
+  installee: string;
+  derniere: string | null;
+  nouvelle: boolean;
+  /** Notes de version en texte brut (jamais interprétées) */
+  notes: string | null;
+  url: string | null;
+  publiee_le: string | null;
+  verifie_le: string | null;
+  erreur: string | null;
+  commande: string;
+}

@@ -3,7 +3,9 @@
 # tant que le propriétaire du dépôt ne la publie pas depuis GitHub.
 #
 # Signatures (facultatives : sans elles, les installeurs sont construits mais non signés) :
-# - TAURI_SIGNING_PRIVATE_KEY (+ _PASSWORD) : signe les mises à jour de l'application (clé `tauri signer generate`) ;
+# - TAURI_SIGNING_PRIVATE_KEY (+ _PASSWORD) : signe les mises à jour de l'application (clé `tauri signer generate`,
+#   créée par le propriétaire du dépôt sur son poste, jamais versionnée) ; la clé PUBLIQUE correspondante va dans
+#   `plugins.updater.pubkey` de app/src-tauri/tauri.conf.json, ou dans la variable de dépôt TAURI_UPDATER_PUBKEY ;
 # - WINDOWS_CERTIFICATE / WINDOWS_CERTIFICATE_PASSWORD : certificat de signature de code Windows (PFX en base64) ;
 # - APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID :
 #   signature et notarisation macOS.
@@ -90,11 +92,46 @@ jobs:
               { echo "$v<<FIN_SECRET"; echo "${!v}"; echo "FIN_SECRET"; } >> "$GITHUB_ENV"
             fi
           done
+      # Mise à jour automatique. `bundle.createUpdaterArtifacts` reste à false dans tauri.conf.json : à true, la
+      # construction ÉCHOUE sans TAURI_SIGNING_PRIVATE_KEY (« A public key has been found, but no private key »), ce
+      # qui casserait `npm run construire` en local et la CI sans secret. On ne l'active ici, par un fichier de
+      # configuration fusionné (`--config`), que si la clé privée ET une clé publique existent. La clé publique est
+      # prise dans tauri.conf.json, sinon dans la variable de dépôt TAURI_UPDATER_PUBKEY (injectée par le même
+      # fichier, même sans clé privée, pour que le binaire publié sache vérifier les versions suivantes).
+      - name: Mise à jour automatique (latest.json signé)
+        shell: bash
+        env:
+          CLE_PUBLIQUE_DEPOT: ${{ vars.TAURI_UPDATER_PUBKEY }}
+        run: |
+          fichier="$GITHUB_WORKSPACE/app/src-tauri/tauri.maj.conf.json"
+          cle_fichier=$(node -p "require('./app/src-tauri/tauri.conf.json').plugins.updater.pubkey || ''")
+          cle="${cle_fichier:-$CLE_PUBLIQUE_DEPOT}"
+          signer=false
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && [ -n "$cle" ]; then
+            signer=true
+          elif [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::notice::TAURI_SIGNING_PRIVATE_KEY absent : pas de latest.json, la mise à jour automatique ne verra pas cette version"
+          else
+            echo "::warning::Clé publique de mise à jour absente (tauri.conf.json et vars.TAURI_UPDATER_PUBKEY) : pas de latest.json, la mise à jour automatique ne verra pas cette version"
+          fi
+          if [ "$signer" = true ] || { [ -z "$cle_fichier" ] && [ -n "$cle" ]; }; then
+            CLE="$cle" SIGNER="$signer" node -e '
+              const c = { plugins: { updater: { pubkey: process.env.CLE } } };
+              if (process.env.SIGNER === "true") c.bundle = { createUpdaterArtifacts: true };
+              require("fs").writeFileSync(process.argv[1], JSON.stringify(c));
+            ' "$fichier"
+            echo "ARGS_TAURI=--config $fichier" >> "$GITHUB_ENV"
+          fi
+          echo "MAJ_SIGNEE=$signer" >> "$GITHUB_ENV"
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: app
+          args: ${{ env.ARGS_TAURI }}
+          # latest.json (version, notes, adresse et signature par plateforme) déposé dans la version brouillon :
+          # seulement quand les artefacts de mise à jour signés existent.
+          includeUpdaterJson: ${{ env.MAJ_SIGNEE == 'true' }}
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: "JARVIS ${{ github.ref_name }}"
           releaseDraft: true

@@ -193,6 +193,8 @@ On first launch, the PC's browser pairs in one click, then the **setup assistant
 
 Useful commands: `jarvis2` (start and open the interface), `jarvis2 docteur` (diagnosis; `--json`, `--reparer`), `jarvis2 materiel` (PC hardware and suggested models, read-only), `jarvis2 jumeler` (pairing link for a device), `jarvis2 verifier-audit`, `jarvis2 lever-urgence` (recovery if the passkey is lost), `jarvis2 serveur --sans-ecran` (headless home server: see [docs/SERVEUR.md](docs/SERVEUR.md)).
 
+Updating: `jarvis2 mettre-a-jour` (nothing is installed without your consent); see [docs/MISES_A_JOUR.md](docs/MISES_A_JOUR.md), also for the desktop app.
+
 Optional, detected but never installed by JARVIS:
 
 - [Claude Code](https://code.claude.com), signed in to **your** account (`claude /login`), to use your Claude subscription. A warning (personal use) must be read and ticked once.

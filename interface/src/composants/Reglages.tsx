@@ -33,6 +33,7 @@ import { VueRoutes } from "./Routes";
 import { ReglagesEveil } from "./Eveil";
 import { FluxDonnees } from "./FluxDonnees";
 import { ReglagesMatin } from "./Matin";
+import { MisesAJour } from "./MisesAJour";
 import { SectionMemoire } from "./Memoire";
 import { ControlePC, ModeJeuPC, RessourcesDuPC } from "./PC";
 import { AutorisationsPermanentes, CommandesRapides, ReglagePilotage, ReglesProtection } from "./Pilotage";
@@ -544,10 +545,13 @@ export function VueReglages(p: Props) {
         return <ControlePC surNotifier={p.surNotifier} surChangement={p.surChangement} surDemandes={p.surDemandes} />;
       case "version":
         return (
-          <ul className="reglage-lignes">
-            <Ligne nom="JARVIS-Core">{p.etat ? `v${p.etat.version}` : "…"}</Ligne>
-            <Ligne nom="Cet appareil">{INSTALLEE ? "application installée" : "dans le navigateur"}</Ligne>
-          </ul>
+          <>
+            <ul className="reglage-lignes">
+              <Ligne nom="JARVIS-Core">{p.etat ? `v${p.etat.version}` : "…"}</Ligne>
+              <Ligne nom="Cet appareil">{INSTALLEE ? "application installée" : "dans le navigateur"}</Ligne>
+            </ul>
+            <MisesAJour />
+          </>
         );
       default:
         return null;

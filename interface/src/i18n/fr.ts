@@ -196,7 +196,7 @@ export const fr = {
   "reglages.cat.securite.nom": "Sécurité",
   "reglages.cat.securite.description": "Arrêt d'urgence, clés d'accès, données, audit",
   "reglages.cat.appareils.nom": "Appareils",
-  "reglages.cat.appareils.description": "Appareils autorisés, téléphone, version",
+  "reglages.cat.appareils.description": "Appareils autorisés, téléphone, version et mises à jour",
 
   "reglages.section.apercu.titre": "État des systèmes",
   "reglages.section.apercu.description": "Core, mémoire, IA disponibles, demandes en attente",
@@ -274,8 +274,8 @@ export const fr = {
   "reglages.section.controle-pc.description": "Volume, luminosité, média en cours, fenêtres, modes de Windows, verrouillage, extinction",
   "reglages.section.veille-claude.titre": "Veille de vos sessions Claude Code",
   "reglages.section.veille-claude.description": "Être prévenu quand une session vous attend ou attend une permission (lecture seule)",
-  "reglages.section.version.titre": "Version",
-  "reglages.section.version.description": "Version du Core et de l'interface",
+  "reglages.section.version.titre": "Version et mises à jour",
+  "reglages.section.version.description": "Version du Core, nouvelle version disponible, vérification quotidienne",
 
   // --- Réglages : Vue d'ensemble et Interface & apparence ------------------------------------------------------
   "reglages.voix": "Voix",

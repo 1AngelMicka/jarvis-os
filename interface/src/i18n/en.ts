@@ -198,7 +198,7 @@ export const en: Record<Cle, string> = {
   "reglages.cat.securite.nom": "Security",
   "reglages.cat.securite.description": "Emergency stop, passkeys, data, audit",
   "reglages.cat.appareils.nom": "Devices",
-  "reglages.cat.appareils.description": "Authorized devices, phone, version",
+  "reglages.cat.appareils.description": "Authorized devices, phone, version and updates",
 
   "reglages.section.apercu.titre": "System status",
   "reglages.section.apercu.description": "Core, memory, available AIs, pending requests",
@@ -276,8 +276,8 @@ export const en: Record<Cle, string> = {
   "reglages.section.controle-pc.description": "Volume, brightness, current media, windows, Windows modes, lock, shutdown",
   "reglages.section.veille-claude.titre": "Watching your Claude Code sessions",
   "reglages.section.veille-claude.description": "Be told when a session is waiting for you or for a permission (read only)",
-  "reglages.section.version.titre": "Version",
-  "reglages.section.version.description": "Version of the Core and the interface",
+  "reglages.section.version.titre": "Version and updates",
+  "reglages.section.version.description": "Core version, new version available, daily check",
 
   // --- Settings: Overview and Interface & appearance
   "reglages.voix": "Voice",

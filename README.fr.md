@@ -193,6 +193,8 @@ Au premier lancement, le navigateur du PC s'associe d'un clic, puis l'**assistan
 
 Commandes utiles : `jarvis2` (démarrer et ouvrir l'interface), `jarvis2 docteur` (diagnostic ; `--json`, `--reparer`), `jarvis2 materiel` (matériel du PC et modèles conseillés, lecture seule), `jarvis2 jumeler` (lien d'association d'un appareil), `jarvis2 verifier-audit`, `jarvis2 lever-urgence` (secours si la clé d'accès est perdue), `jarvis2 serveur --sans-ecran` (serveur domestique sans écran : voir [docs/SERVEUR.md](docs/SERVEUR.md)).
 
+Mettre à jour : `jarvis2 mettre-a-jour` (rien n'est installé sans votre accord) ; voir [docs/MISES_A_JOUR.md](docs/MISES_A_JOUR.md), aussi pour l'application de bureau.
+
 Facultatif, détecté mais jamais installé par JARVIS :
 
 - [Claude Code](https://code.claude.com), connecté à **votre** compte (`claude /login`), pour utiliser votre abonnement Claude. Un avertissement (usage personnel) est à lire et à cocher une fois.
