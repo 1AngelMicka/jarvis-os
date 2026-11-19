@@ -38,6 +38,11 @@ export function ListeDemandes({ demandes, nbCles, surChangement }: Props) {
       })
       .catch((e: unknown) => {
         const message = e instanceof Error ? e.message : "Échec.";
+        // Demande close entre-temps (refusée, expirée, traitée ailleurs) : la file est rechargée, la carte disparaît
+        if (/déjà traitée|introuvable|expirée/i.test(message)) {
+          surChangement(message);
+          return;
+        }
         setErreurs((x) => ({ ...x, [d.id]: message.includes("NotAllowedError") ? "Approbation annulée." : message }));
       })
       .finally(() => {

@@ -30,6 +30,15 @@ EMOJI = {"vert": "🟢", "jaune": "🟡", "rouge": "🔴"}
 Executeur = Callable[[Connexion, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
+STATUTS_LISIBLES = {
+    "approuvee": "approuvée",
+    "refusee": "refusée",
+    "executee": "exécutée",
+    "expiree": "expirée",
+    "echec": "en échec",
+}
+
+
 class ErreurAction(Exception):
     """Message en français, affichable tel quel."""
 
@@ -186,7 +195,7 @@ class Approbations:
                     raise ErreurAction("Demande introuvable")
                 demande = _demande(ligne)
                 if demande.statut != "en_attente":
-                    raise ErreurAction(f"Demande déjà traitée ({demande.statut})")
+                    raise ErreurAction(f"Demande déjà traitée ({STATUTS_LISIBLES.get(demande.statut, demande.statut)})")
                 if await conn.fetchval("SELECT expire_le < now() FROM demandes WHERE id = $1", demande_id):
                     await conn.execute("UPDATE demandes SET statut = 'expiree' WHERE id = $1", demande_id)
                     raise ErreurAction("Demande expirée : relancez l'action")
