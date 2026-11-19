@@ -32,6 +32,7 @@ class Options:
     modele: str | None = None
     effort: str | None = None
     temperature: float | None = None
+    rapide: bool = False  # petite tâche utilitaire (titre, résumé) : pas de réflexion longue, réponse courte
 
 
 @dataclass(slots=True)

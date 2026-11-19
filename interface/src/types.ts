@@ -167,7 +167,8 @@ export type EvenementDialogue =
   | { type: "delta"; donnees: { texte: string } }
   | { type: "fin"; donnees: MetaMessage & { message_id: number; texte: string } }
   | { type: "erreur"; donnees: { message: string; conversation_id?: string } }
-  | { type: "avis"; donnees: AvisExpert };
+  | { type: "avis"; donnees: AvisExpert }
+  | { type: "titre"; donnees: { conversation_id: string; titre: string } };
 
 // --- Premier lancement ---
 export interface Verification {

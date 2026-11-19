@@ -196,6 +196,7 @@ async def test_dialogue_injecte_noyau_et_souvenirs(pool: Base, externe: bool, mo
     depot = DepotConversations(pool)
     moteurs = {"capteur": MoteurInstrumente(capteur, EnregistreurMemoire())}
     service = ServiceDialogue(depot, moteurs, "capteur", SourceMemoire(pool, EncodeurFactice()))
+    service.titre_auto = False  # le capteur ne garde que le dernier envoi : celui de la réponse
     evenements = [ev async for ev in service.repondre("Que sais-tu du garage ?")]
     consignes = capteur.recus[0].contenu
     assert capteur.recus[0].role == "systeme"

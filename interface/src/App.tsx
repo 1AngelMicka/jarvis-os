@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat, listerDemandes, sonderCore } from "./api";
+import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat, listerDemandes, resumerConversation, sonderCore } from "./api";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
 import { VueAgents } from "./composants/Agents";
@@ -249,6 +249,31 @@ function Hud() {
       });
   };
 
+  const resumer = () => {
+    if (!active) return;
+    notifier("Résumé en cours…");
+    resumerConversation(active)
+      .then((r) => {
+        notifier(
+          r.statut === "ok"
+            ? `Résumé ajouté à la mémoire${r.prive ? " (privé : IA locale)" : ""}.`
+            : `Pas de résumé : ${r.raison ?? "rien à résumer"}.`,
+        );
+      })
+      .catch((e: unknown) => {
+        notifier(e instanceof Error ? e.message : "Résumé impossible.");
+      });
+  };
+
+  const mettreAJourConversation = useCallback((conv: ResumeConversation) => {
+    setConversations((cs) => {
+      const autres = cs.filter((c) => c.id !== conv.id);
+      if (conv.archivee) return autres;
+      const liste = cs.some((c) => c.id === conv.id) ? cs.map((c) => (c.id === conv.id ? conv : c)) : [conv, ...autres];
+      return [...liste].sort((a, b) => Number(b.epinglee) - Number(a.epinglee) || b.maj_le.localeCompare(a.maj_le));
+    });
+  }, []);
+
   const declencherUrgence = () => {
     controleur.current?.abort();
     arreterUrgence()
@@ -316,6 +341,9 @@ function Hud() {
           setConversations((cs) => cs.map((c, i) => (i === 0 ? { ...c, nb_messages: c.nb_messages + 1 } : c)));
           setAnnonce("Réponse de JARVIS terminée.");
           break;
+        case "titre":
+          setConversations((cs) => cs.map((c) => (c.id === ev.donnees.conversation_id ? { ...c, titre: ev.donnees.titre, titre_source: "auto" } : c)));
+          break;
         case "erreur":
           setMessages((ms) => [
             ...ms.map((m) => (m.cle === cleJarvis ? { ...m, enCours: false, meta: { ...m.meta, interrompu: true } } : m)),
@@ -367,6 +395,9 @@ function Hud() {
     <div className="panneau-actions">
       {active && (
         <>
+          <button type="button" className="btn btn-discret btn-mini" title="Résumer cette conversation dans la mémoire (sinon chaque nuit)" onClick={resumer}>
+            Résumer
+          </button>
           <button type="button" className="btn btn-discret btn-mini" title="Archiver (🟡, demande votre accord)" onClick={() => { agirSurConversation("conversation.archiver"); }}>
             Archiver
           </button>
@@ -724,7 +755,7 @@ function Hud() {
             </button>
           </header>
           <div className="panneau-corps" role="tabpanel" id={`vue-${onglet}`} aria-labelledby={`onglet-${onglet}`}>
-            {onglet === "conversations" && <ListeConversations conversations={conversations} active={active} surChoisir={ouvrir} />}
+            {onglet === "conversations" && <ListeConversations conversations={conversations} active={active} surChoisir={ouvrir} surMiseAJour={mettreAJourConversation} surErreur={notifier} />}
             {onglet === "demandes" && <ListeDemandes demandes={etat?.demandes ?? []} nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />}
             {onglet === "securite" && <PanneauSecurite nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />}
           </div>

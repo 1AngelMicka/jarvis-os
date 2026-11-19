@@ -231,7 +231,7 @@ class MoteurClaudeCode(Moteur):
     async def stream(self, messages: Sequence[Message], options: Options | None = None) -> AsyncGenerator[Evenement]:
         options = options or Options()
         modele = resoudre_modele(options.modele) or self.modele
-        effort = options.effort if options.effort in EFFORTS else self.effort
+        effort = options.effort if options.effort in EFFORTS else ("low" if options.rapide else self.effort)
         prompt = construire_prompt(messages)
         env = environnement_propre(self._env_source if self._env_source is not None else os.environ)
         cwd: Path | None = None

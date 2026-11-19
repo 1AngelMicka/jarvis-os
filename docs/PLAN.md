@@ -105,6 +105,28 @@ Pour l'utilisateur qui vient de JARVIS v1 : sauvegarde hors site testée, rattra
 **Terminé quand** : une restauration depuis la sauvegarde hors site a été testée, le rattrapage ne laisse aucun écart, l'utilisateur a décidé de la suite.
 Fait : `jarvis2 sauvegarde creer --dossier <hors du PC>` (archive chiffrée AES-256-GCM, phrase de passe, base + configuration + recettes + manifeste, rotation des 7 dernières) et `jarvis2 sauvegarde verifier --fichier …` (restauration réelle dans une base temporaire, mêmes lignes, chaîne d'audit intacte). Vérifié sur l'installation réelle (PostgreSQL : 1 408 souvenirs, 151 conversations) : sauvegarde de 4,8 Mo restaurée et validée en 7 s. Rattrapage essayé sur une COPIE de la base réelle avec la dernière sauvegarde de JARVIS v1 : complet, aucun écart, rejouable sans doublon (aucun nouveau souvenir aujourd'hui : même sauvegarde que l'import du matin). **À l'utilisateur** : choisir le dossier hors site (disque externe, dossier synchronisé) et garder la phrase de passe ; lancer le rattrapage sur la vraie base quand JARVIS v1 a appris du nouveau ; décider de l'arrêt de JARVIS v1.
 
+### 13. Tout JARVIS v1, en mieux
+Reprendre chaque capacité de JARVIS v1 absente de la v2, en plus propre : mêmes garde-fous (🟢🟡🔴, arrêt d'urgence, audit), données personnelles dans la configuration locale, rien de propre à un utilisateur dans le dépôt. Lots, dans l'ordre :
+
+- **A. Historique** : chercher, renommer, épingler, archiver, supprimer (🔴) ; titre écrit par l'IA après le premier échange ; résumé daté de chaque conversation en mémoire (privé : IA locale).
+- **B. Mémoire visible** : vue Mémoire (recherche, filtres par origine, chronologie « Nouveautés »), « Nouveautés de ta mémoire » dans le contexte, notification « JARVIS a appris ».
+- **C. Chantiers et activité** : tâches suivies avec progression, sans doublon, « C'est fait » ; panneau Activité en direct (missions, ateliers, chantiers).
+- **D. Profil** : questionnaire guidé par sections, réponses en mémoire (privées : locales), entretien vocal.
+- **E. Dialogue avancé** : images jointes (coller, glisser, trombone), palette Ctrl+K, commandes « / », raccourcis.
+- **F. JARVIS pilote l'interface** : bloc d'actions validé par le Core (naviguer, ouvrir, proposer une mission…), lancements toujours proposés ; registre de règles de protection.
+- **G. Réglages** : vue Système par catégories, recherche, adresses directes.
+- **H. Connaissances** : domaines (carte, fiches, questions de contrôle, score), extraction après les missions, révision ; sources scientifiques (OpenAlex, arXiv, PubMed, Europe PMC).
+- **I. Ateliers** : pause / reprise, clôture avec notes, relance après échec, choix du modèle, conflits de fichiers entre ateliers, résumé de ce qui tourne dans le contexte.
+- **J. Ressources du PC** : CPU, RAM, GPU, VRAM ; Ollama démarré seulement sur demande, arrêt après inactivité, déchargement ; mode jeu (veille stricte).
+- **K. Voix** : voix de synthèse au choix (navigateur, ElevenLabs avec la clé de l'utilisateur), commandes vocales (silence, stop), « Dis Jarvis » en fond dans l'application de bureau, mémoire d'ambiance (désactivée par défaut).
+- **L. Accueil du matin** : salutation, météo Open-Meteo (ville privée), points d'attention.
+- **M. Bureau** : protocole `jarvis://` (liste blanche), raccourcis globaux voix et écran, gadget de bureau.
+- **N. Coûts** : suivi par connecteur et plafond de dépenses.
+- **O. Amélioration continue** : suggestions, amélioration réalisée en atelier, aperçu, mise en service et retour arrière.
+- **P. Thème « Présence »** : JARVIS en nuée de particules.
+
+**Terminé quand** : chaque capacité de la liste de JARVIS v1 existe dans la v2 et a été vérifiée en vrai.
+
 Plus tard, facultatif : passerelle de messagerie (Telegram / Signal, avec jumelage des expéditeurs inconnus), application mobile native.
 
 ## Corrections intégrées dès le départ (retours sur JARVIS v1)

@@ -61,6 +61,8 @@ class MoteurOllama(Moteur):
         }
         if options.temperature is not None:
             corps["options"] = {"temperature": options.temperature}
+        if options.rapide:
+            corps["think"] = False  # modèle « qui réfléchit » : pas de raisonnement pour une petite tâche
         morceaux: list[str] = []
         final: dict[str, Any] = {}
         try:

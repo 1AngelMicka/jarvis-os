@@ -51,8 +51,10 @@ async def test_dialogue_complet(client: httpx.AsyncClient, pool: Base) -> None:
     rep = await client.post("/v1/dialogue", json={"message": "Bonjour JARVIS"})
     assert rep.status_code == 200 and rep.headers["content-type"].startswith("text/event-stream")
     evenements = lire_sse(rep.text)
-    assert [e for e, _ in evenements] == ["debut", "delta", "fin"]
-    debut, fin = evenements[0][1], evenements[-1][1]
+    # Premier échange : l'IA écrit ensuite un vrai titre (« titre »)
+    assert [e for e, _ in evenements] == ["debut", "delta", "fin", "titre"]
+    debut, fin = evenements[0][1], evenements[2][1]
+    assert evenements[3][1]["titre"] == "A"
     assert debut["titre"] == "Bonjour JARVIS" and debut["moteur"] == "faux"
     assert fin["texte"] == "a" and fin["cout_usd"] == 0.0 and fin["source_auth"] == "none"
 
@@ -66,7 +68,24 @@ async def test_dialogue_complet(client: httpx.AsyncClient, pool: Base) -> None:
     assert (await client.get(f"/v1/conversations/{debut['conversation_id']}")).json()["conversation"][
         "nb_messages"
     ] == 4
-    assert await pool.fetchval("SELECT count(*) FROM telemetrie WHERE statut = 'ok'") == 2
+    assert await pool.fetchval("SELECT count(*) FROM telemetrie WHERE statut = 'ok'") == 3  # 2 réponses + le titre
+    assert (await client.get(f"/v1/conversations/{debut['conversation_id']}")).json()["conversation"][
+        "titre_source"
+    ] == "auto"
+
+
+async def test_historique_chercher_renommer_epingler(client: httpx.AsyncClient) -> None:
+    debut = lire_sse((await client.post("/v1/dialogue", json={"message": "Parlons du potager"})).text)[0][1]
+    lire_sse((await client.post("/v1/dialogue", json={"message": "Autre sujet : la voiture"})).text)
+    ident = debut["conversation_id"]
+    trouvees = (await client.get("/v1/conversations", params={"q": "POTAGER"})).json()["conversations"]
+    assert [c["id"] for c in trouvees] == [ident]
+    rep = await client.patch(f"/v1/conversations/{ident}", json={"titre": "  Mon   potager ", "epinglee": True})
+    conv = rep.json()["conversation"]
+    assert conv["titre"] == "Mon potager" and conv["titre_source"] == "utilisateur" and conv["epinglee"]
+    assert (await client.get("/v1/conversations")).json()["conversations"][0]["id"] == ident  # épinglée en tête
+    assert (await client.patch(f"/v1/conversations/{ident}", json={"archivee": True})).status_code == 422
+    assert (await client.patch(f"/v1/conversations/{ident}", json={"titre": "   "})).status_code == 422
 
 
 async def test_dialogue_erreur_moteur(client: httpx.AsyncClient, pool: Base) -> None:
@@ -85,7 +104,7 @@ async def test_etat_en_un_appel(client: httpx.AsyncClient) -> None:
     assert etat["moteur_defaut"] == "faux"
     assert {m["id"] for m in etat["moteurs"]} == {"faux"}  # deux instances du même faux moteur
     assert etat["moteurs"][0]["modeles"] == [{"id": "faux-1", "nom": "Faux 1", "defaut": True}]
-    assert [c["titre"] for c in etat["conversations"]] == ["premier"]
+    assert [c["titre"] for c in etat["conversations"]] == ["A"]  # titre écrit par l'IA (faux moteur : « a »)
 
 
 async def test_validations(client: httpx.AsyncClient) -> None:

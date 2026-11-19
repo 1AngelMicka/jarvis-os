@@ -28,6 +28,7 @@ import type {
   Etat,
   EvenementDialogue,
   ReponseAction,
+  ResumeConversation,
 } from "./types";
 
 export class ErreurApi extends Error {
@@ -103,6 +104,14 @@ export const lireEtat = () => unSeul("etat", () => appeler<Etat>("/v1/etat"));
 /** Le Core répond-il ? (route publique, légère : surveillance de la connexion) */
 export const sonderCore = () => appeler<{ statut: string }>("/v1/sante");
 /** Demandes en attente seules (léger : rafraîchit la file sans relire tout l'état) */
+export const chercherConversations = (q: string, archivees = false) =>
+  appeler<{ conversations: ResumeConversation[] }>(
+    `/v1/conversations?${new URLSearchParams({ ...(q ? { q } : {}), ...(archivees ? { archivees: "true" } : {}) }).toString()}`,
+  );
+export const modifierConversation = (id: string, changement: { titre?: string; epinglee?: boolean; archivee?: false }) =>
+  appeler<{ conversation: ResumeConversation }>(`/v1/conversations/${encodeURIComponent(id)}`, { methode: "PATCH", corps: changement });
+export const resumerConversation = (id: string) =>
+  envoyer<{ statut: string; prive?: boolean; raison?: string }>(`/v1/conversations/${encodeURIComponent(id)}/resumer`);
 export const listerDemandes = () => appeler<{ demandes: Demande[] }>("/v1/demandes");
 export const lireConversation = (id: string) =>
   unSeul(`conversation:${id}`, () => appeler<DetailConversation>(`/v1/conversations/${encodeURIComponent(id)}`));

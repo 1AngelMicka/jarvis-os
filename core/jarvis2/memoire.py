@@ -358,6 +358,22 @@ async def _rechercher_sqlite(
     return resultats[:limite]
 
 
+DIMENSION_COLONNE_PG = 384  # memoires.embedding : vector(384), le modèle d'origine (migration 001)
+
+
+async def _va_dans_colonne(conn: Executant, modele: str | None, dimension: int) -> bool:
+    """Le vecteur rejoint la colonne s'il vient du modèle qui la remplit déjà (ou si elle est vide)."""
+    if conn.dialecte != "sqlite" and dimension != DIMENSION_COLONNE_PG:
+        return False
+    if modele is None:
+        return True
+    majoritaire = await conn.fetchval(
+        "SELECT embedding_model FROM memoires WHERE embedding_model IS NOT NULL"
+        " GROUP BY embedding_model ORDER BY count(*) DESC LIMIT 1"
+    )
+    return majoritaire is None or majoritaire == modele
+
+
 async def ajouter(
     conn: Executant,
     contenu: str,
@@ -371,7 +387,39 @@ async def ajouter(
     modele: str | None = None,
     importance: float = 0.5,
 ) -> str:
-    """Nouveau souvenir (plein texte indexé par le moteur : tsvector français ou FTS5)."""
+    """Nouveau souvenir (plein texte indexé par le moteur : tsvector français ou FTS5).
+
+    La colonne `embedding` garde le modèle d'origine de la base (384 dimensions sous PostgreSQL) ; le vecteur d'un
+    autre modèle (ex. BAAI/bge-m3 après une bascule) va dans `memoire_vecteurs`, où la recherche le trouve.
+    """
+    a_part = vecteur is not None and not await _va_dans_colonne(conn, modele, len(vecteur))
+    if a_part:
+        ident = await ajouter(
+            conn,
+            contenu,
+            type_=type_,
+            tags=tags,
+            source=source,
+            confidentialite=confidentialite,
+            origine=origine,
+            importance=importance,
+        )
+        assert vecteur is not None
+        if conn.dialecte == "sqlite":
+            await conn.execute(
+                "INSERT INTO memoire_vecteurs (memoire_id, modele, vecteur) VALUES ($1, $2, $3)",
+                ident,
+                modele,
+                vecteur_octets(vecteur),
+            )
+        else:
+            await conn.execute(
+                "INSERT INTO memoire_vecteurs (memoire_id, modele, vecteur) VALUES ($1, $2, $3::text::vector)",
+                ident,
+                modele,
+                vecteur_sql(vecteur),
+            )
+        return ident
     if conn.dialecte == "sqlite":
         requete = (
             "INSERT INTO memoires (contenu, type, tags, source, confidentialite, origine, embedding, embedding_model,"

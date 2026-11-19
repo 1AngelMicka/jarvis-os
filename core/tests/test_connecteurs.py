@@ -273,7 +273,8 @@ async def test_activation_antigravity_exige_la_case_cochee(systeme: dict[str, An
     systeme["moteurs"]["compte"].dispo = systeme["moteurs"]["cle"].dispo = systeme["moteurs"]["local"].dispo = False
     assert await c.router() is None
     evs = [e async for e in systeme["ctx"].service.repondre("Salut", moteur="antigravity")]
-    assert evs[-1].type == "fin" and evs[-1].donnees["moteur"] == "antigravity"
+    fin = next(e for e in evs if e.type == "fin")
+    assert fin.donnees["moteur"] == "antigravity"
 
 
 async def test_connecteur_desactive_refuse(systeme: dict[str, Any]) -> None:

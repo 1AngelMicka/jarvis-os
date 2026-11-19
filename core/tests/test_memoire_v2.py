@@ -210,3 +210,57 @@ def test_bge_m3_propose_par_jarvis() -> None:
     _ajouter_modeles(TextEmbedding)
     modele = next(m for m in TextEmbedding.list_supported_models() if m["model"] == "BAAI/bge-m3")
     assert modele["dim"] == 1024
+
+
+async def test_nouveau_souvenir_apres_bascule(pool: Base) -> None:
+    """Après une bascule vers un modèle d'une autre dimension, un nouveau souvenir s'enregistre (vecteur à part)
+    et se retrouve par la recherche du nouveau modèle."""
+    await ajouter(pool, "La voiture est au garage")  # la colonne contient déjà le modèle d'origine
+    nouveau = EncodeurNouveau()
+    texte = "Le marathon de printemps se court en avril"
+    ident = await memoire.ajouter(
+        pool, texte, vecteur=await nouveau.encoder(texte), modele=nouveau.nom_modele, origine="conversation"
+    )
+    assert await pool.fetchval("SELECT embedding FROM memoires WHERE id = $1", ident) is None
+    assert await pool.fetchval("SELECT count(*) FROM memoire_vecteurs WHERE modele = $1", nouveau.nom_modele) == 1
+    resultat = (await memoire.rechercher(pool, nouveau, "marathon en avril", limite=1))[0]
+    assert str(resultat.souvenir.id) == ident
+
+
+# --- Résumés des conversations ------------------------------------------------------------------------------
+
+
+async def test_resume_de_conversation_remplace_le_precedent(pool: Base, tmp_path: Path) -> None:
+    from jarvis2.titrage import resumer_conversation, resumer_recentes
+
+    moteurs = {"compte": Scenario("compte", "cli"), "local": Scenario("local", "local", externe=False)}
+    s = await systeme(pool, tmp_path, moteurs, prives=[r"\bsanté\b"])
+    conv = await s["depot"].creer("Sport")
+    await s["depot"].ajouter_message(conv.id, "utilisateur", "Je prépare un marathon pour avril")
+    await s["depot"].ajouter_message(conv.id, "jarvis", "Très bien, commençons un plan.")
+    r = await resumer_conversation(pool, s["service"], conv.id)
+    assert r["statut"] == "ok" and not r["prive"]
+    contenu = await pool.fetchval("SELECT contenu FROM memoires WHERE source = $1", f"resume:{conv.id}")
+    assert contenu.startswith("Conversation du ") and "« Sport »" in contenu
+    # Nuit suivante : un seul résumé vivant (l'ancien est clos, pas effacé)
+    assert (await resumer_recentes(pool, s["service"], datetime.now(UTC) - timedelta(hours=1)))["resumes"] == 1
+    vivants = await pool.fetchval(
+        "SELECT count(*) FROM memoires WHERE source = $1 AND valid_to IS NULL", f"resume:{conv.id}"
+    )
+    assert (
+        vivants == 1
+        and await pool.fetchval("SELECT count(*) FROM memoires WHERE source = $1", f"resume:{conv.id}") == 2
+    )
+    # Sujet privé : IA locale seulement, souvenir privé ; sans IA locale, rien ne part
+    privee = await s["depot"].creer("Santé")
+    await s["depot"].ajouter_message(privee.id, "utilisateur", "Ma santé en ce moment : fatigue")
+    await s["depot"].ajouter_message(privee.id, "jarvis", "Reposez-vous.")
+    r = await resumer_conversation(pool, s["service"], privee.id)
+    assert r["prive"] and r["moteur"] == "local"
+    assert (
+        await pool.fetchval("SELECT confidentialite FROM memoires WHERE source = $1", f"resume:{privee.id}")
+        == "local_uniquement"
+    )
+    moteurs["local"].dispo = False
+    with pytest.raises(LookupError):
+        await resumer_conversation(pool, s["service"], privee.id)

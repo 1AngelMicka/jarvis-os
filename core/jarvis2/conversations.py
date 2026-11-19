@@ -114,6 +114,37 @@ class DepotConversations:
         )
         return [_conversation(ligne) for ligne in lignes]
 
+    async def chercher(self, texte: str, archivees: bool = False, limite: int = 50) -> list[Conversation]:
+        """Conversations dont le titre ou un message contient le texte (sans tenir compte de la casse)."""
+        motif = "%" + texte.lower().replace("\\", "").replace("%", "").replace("_", "") + "%"
+        lignes = await self.pool.fetch(
+            f"SELECT {COLONNES}, {NB_MESSAGES} FROM conversations c"  # noqa: S608 — constantes
+            " WHERE c.archivee = $1 AND NOT c.interne AND (lower(c.titre) LIKE $2 OR EXISTS ("
+            "  SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND lower(m.contenu) LIKE $2))"
+            " ORDER BY c.epinglee DESC, c.maj_le DESC LIMIT $3",
+            archivees,
+            motif,
+            limite,
+        )
+        return [_conversation(ligne) for ligne in lignes]
+
+    async def modifier(
+        self,
+        conversation_id: UUID,
+        *,
+        titre: str | None = None,
+        epinglee: bool | None = None,
+        archivee: bool | None = None,
+    ) -> Conversation | None:
+        """Renommer (titre « utilisateur », plus jamais réécrit par l'IA), épingler, archiver ou restaurer."""
+        if titre is not None:
+            await self.renommer(conversation_id, titre, "utilisateur")
+        if epinglee is not None:
+            await self.pool.execute("UPDATE conversations SET epinglee = $2 WHERE id = $1", conversation_id, epinglee)
+        if archivee is not None:
+            await self.pool.execute("UPDATE conversations SET archivee = $2 WHERE id = $1", conversation_id, archivee)
+        return await self.obtenir(conversation_id)
+
     async def messages(self, conversation_id: UUID, limite: int = 500) -> list[MessageStocke]:
         lignes = await self.pool.fetch(
             "SELECT id, role, contenu, horodatage, meta FROM ("

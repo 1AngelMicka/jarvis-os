@@ -112,6 +112,8 @@ class ServiceDialogue:
         self.memoire = memoire
         self.connecteurs = connecteurs
         self.sujets_prives = sujets_prives
+        self.titre_auto = True  # titre écrit par l'IA après le premier échange
+        self._taches: set[asyncio.Task[Any]] = set()  # titres en cours (gardés jusqu'à leur fin)
 
     async def est_prive(self, texte: str | None) -> bool:
         """Sujet privé : il nomme un sujet privé de l'utilisateur, ou des souvenirs privés y répondent."""
@@ -187,6 +189,32 @@ class ServiceDialogue:
             s.confidentialite == "local_uniquement" for s in contexte.noyau
         )
         return Envoi(messages, contexte, masques, prive)
+
+    async def titre_automatique(
+        self,
+        conversation_id: UUID,
+        instance: MoteurInstrumente,
+        question: str,
+        reponse: str,
+        prive: bool,
+        modele: str | None = None,
+    ) -> str | None:
+        """Après le premier échange : un vrai titre écrit par l'IA (locale pour un sujet privé), sinon rien."""
+        from . import titrage
+
+        try:
+            prive = prive or await self.est_prive(question)
+            redacteur = await titrage.moteur_pour(self, prive, instance)
+        except LookupError:
+            return None
+        titre = await titrage.titrer(redacteur, question, reponse, modele if redacteur is instance else None)
+        if titre is None:
+            return None
+        actuelle = await self.depot.obtenir(conversation_id)
+        if actuelle is None or actuelle.titre_source != "extrait":  # renommée entre-temps : le choix humain prime
+            return None
+        await self.depot.renommer(conversation_id, titre, "auto")
+        return titre
 
     async def ouvrir(self, message: str, conversation_id: UUID | None) -> tuple[Conversation, str]:
         """Conversation existante (titre provisoire si elle est vide) ou nouvelle."""
@@ -268,6 +296,25 @@ class ServiceDialogue:
                     stocke = await self.depot.ajouter_message(conversation.id, "jarvis", rep.texte, meta)
                     termine = True
                     yield EvenementDialogue("fin", {"message_id": stocke.id, "texte": rep.texte, **meta})
+                    if self.titre_auto and not historique and conversation.titre_source == "extrait":
+                        # Tâche à part : le titre s'écrit même si l'interface s'est fermée entre-temps
+                        tache = asyncio.create_task(
+                            self.titre_automatique(
+                                conversation.id,
+                                instance,
+                                message,
+                                rep.texte,
+                                prive,
+                                options.modele if options else None,
+                            )
+                        )
+                        self._taches.add(tache)
+                        tache.add_done_callback(self._taches.discard)
+                        nouveau = await asyncio.shield(tache)
+                        if nouveau:
+                            yield EvenementDialogue(
+                                "titre", {"conversation_id": str(conversation.id), "titre": nouveau}
+                            )
         except ErreurMoteur as exc:
             termine = True
             journal.warning("Réponse impossible (%s) : %s", instance.id_moteur, exc)

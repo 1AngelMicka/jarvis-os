@@ -122,6 +122,12 @@ class Contexte:
         )
 
 
+class ModificationConversation(BaseModel):
+    titre: str | None = Field(None, max_length=120)
+    epinglee: bool | None = None
+    archivee: bool | None = None
+
+
 class DemandeDialogue(BaseModel):
     message: str = Field(min_length=1, max_length=100_000)
     conversation_id: UUID | None = None
@@ -395,9 +401,35 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         return {"resultats": [{"score": r.score, **r.souvenir.en_dict()} for r in resultats]}
 
     @app.get("/v1/conversations")
-    async def conversations(request: Request, limite: int = 50, archivees: bool = False) -> dict[str, Any]:
-        liste = await ctx(request).depot.lister(limite=max(1, min(limite, 200)), archivees=archivees)
+    async def conversations(
+        request: Request, limite: int = 50, archivees: bool = False, q: str = ""
+    ) -> dict[str, Any]:
+        depot = ctx(request).depot
+        limite = max(1, min(limite, 200))
+        texte = q.strip()[:200]
+        liste = (
+            await depot.chercher(texte, archivees=archivees, limite=limite)
+            if texte
+            else await depot.lister(limite=limite, archivees=archivees)
+        )
         return {"conversations": [c.en_dict() for c in liste]}
+
+    @app.patch("/v1/conversations/{conversation_id}")
+    async def modifier_conversation(
+        request: Request, conversation_id: UUID, corps: ModificationConversation
+    ) -> dict[str, Any]:
+        """Renommer, épingler, restaurer (🟢 : rien ne se perd). Archiver passe par une demande (🟡)."""
+        if corps.archivee:
+            raise HTTPException(422, "Archiver passe par une demande (action conversation.archiver)")
+        titre = " ".join(corps.titre.split()) if corps.titre is not None else None
+        if titre == "":
+            raise HTTPException(422, "Titre vide")
+        conv = await ctx(request).depot.modifier(
+            conversation_id, titre=titre, epinglee=corps.epinglee, archivee=corps.archivee
+        )
+        if conv is None:
+            raise HTTPException(404, "Conversation introuvable")
+        return {"conversation": conv.en_dict()}
 
     @app.get("/v1/conversations/{conversation_id}")
     async def conversation(request: Request, conversation_id: UUID) -> dict[str, Any]:
@@ -407,6 +439,19 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             raise HTTPException(404, "Conversation introuvable")
         messages = await depot.messages(conversation_id)
         return {"conversation": conv.en_dict(), "messages": [m.en_dict() for m in messages]}
+
+    @app.post("/v1/conversations/{conversation_id}/resumer")
+    async def resumer(request: Request, conversation_id: UUID) -> dict[str, Any]:
+        """Résumé daté de la conversation en mémoire, tout de suite (sinon chaque nuit à 3 h 15)."""
+        from .titrage import resumer_conversation
+
+        c = ctx(request)
+        try:
+            return await resumer_conversation(c.pool, c.service, conversation_id)
+        except LookupError as exc:
+            raise HTTPException(404 if "introuvable" in str(exc) else 409, str(exc)) from exc
+        except ErreurMoteur as exc:
+            raise HTTPException(502, str(exc)) from exc
 
     @app.post("/v1/dialogue")
     async def dialogue(request: Request, demande: DemandeDialogue) -> StreamingResponse:

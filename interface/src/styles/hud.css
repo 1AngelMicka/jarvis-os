@@ -359,6 +359,31 @@ html[data-animations="reduites"] .noyau-couche, html[data-animations="reduites"]
 .hist-item[aria-current="true"] { background: rgb(var(--c-cyan) / .1); border-left-color: var(--cyan); }
 .hist-titre { font-size: var(--t-petit); line-height: 1.3; color: var(--texte); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .hist-meta { font: var(--t-micro)/1 var(--f-donnees); color: var(--texte-3); }
+/* Historique : recherche, archives, actions par conversation (survol ou focus ; toujours visibles au tactile) */
+.hist-cadre { display: flex; flex-direction: column; gap: var(--e-3); min-height: 0; }
+.hist-outils { display: flex; align-items: center; gap: var(--e-2); }
+.hist-recherche {
+  flex: 1; display: flex; align-items: center; gap: var(--e-2); min-width: 0; min-height: var(--cible); padding: 0 var(--e-3);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-saisie); background: rgb(var(--c-creux) / .6);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.hist-recherche:focus-within { border-color: var(--cyan); box-shadow: 0 0 0 3px rgb(var(--c-cyan) / .14); }
+.hist-recherche .ico { flex: none; color: var(--texte-3); }
+.hist-recherche input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--texte); font: var(--t-petit)/1.2 var(--f-ui); }
+.hist-recherche input:focus { outline: none; }
+.hist-etat { margin: 0; padding: var(--e-3) var(--e-2); font: var(--t-mini)/1.4 var(--f-donnees); color: var(--texte-3); }
+.hist-ligne { position: relative; display: flex; align-items: center; gap: var(--e-1); border-radius: var(--r-1); }
+.hist-ligne .hist-item { flex: 1; min-width: 0; }
+.hist-actions { display: flex; align-items: center; gap: var(--e-1); padding-right: var(--e-1); opacity: 0; transition: opacity var(--transition); }
+.hist-ligne:hover .hist-actions, .hist-ligne:focus-within .hist-actions, .hist-ligne[data-active] .hist-actions { opacity: 1; }
+.hist-actions .icone-btn[aria-pressed="true"] { color: var(--cyan-vif); border-color: var(--cyan); }
+@media (pointer: coarse) { .hist-actions { opacity: 1; } }
+.hist-titre .hist-epingle { width: 14px; height: 14px; margin-right: var(--e-1); vertical-align: -2px; color: var(--cyan-vif); }
+.hist-edition {
+  flex: 1; min-width: 0; min-height: var(--cible); padding: 0 var(--e-3); border: var(--l-fin) solid var(--cyan); border-radius: var(--r-1);
+  background: rgb(var(--c-creux) / .8); color: var(--texte); font: var(--t-petit)/1.3 var(--f-ui); box-shadow: 0 0 0 3px rgb(var(--c-cyan) / .14);
+}
+.hist-edition:focus { outline: none; }
 
 /* ---------- États vides, chargement ---------- */
 .vide { margin: auto; max-width: 42ch; padding: var(--e-7) var(--e-5); text-align: center; color: var(--texte-2); }
@@ -644,3 +669,5 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
   .onglets { gap: 0; }
   .onglet { flex: 1 1 auto; justify-content: center; padding: 0 var(--e-2); font-size: var(--t-mini); letter-spacing: 0; }
 }
+/* iPhone : 16 px au moins dans un champ, sinon la page zoome à la saisie */
+@media (pointer: coarse) { .hist-recherche input, .hist-edition { font-size: 16px; } }

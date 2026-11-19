@@ -1,4 +1,5 @@
-"""Tâches de nuit de la mémoire (heure de Paris) : consolidation 3 h 30, oubli par archivage 3 h 45, export 4 h."""
+"""Tâches de nuit de la mémoire (heure de Paris) : résumés des conversations 3 h 15, consolidation 3 h 30, oubli par
+archivage 3 h 45, export 4 h."""
 
 from __future__ import annotations
 
@@ -12,12 +13,16 @@ from .consolidation import consolider
 from .db import Base
 from .dialogue import ServiceDialogue
 from .memoire_v2 import exporter_markdown, oublier
+from .titrage import resumer_recentes
 
 
 def taches_memoire(base: Base, dialogue: ServiceDialogue, dossier_export: Path) -> list[TacheSysteme]:
     async def consolidation(derniere: datetime | None) -> dict[str, Any]:
         depuis = derniere or datetime.now(UTC) - timedelta(days=1)
         return await consolider(base, dialogue, depuis)
+
+    async def resumes(derniere: datetime | None) -> dict[str, Any]:
+        return await resumer_recentes(base, dialogue, derniere)
 
     async def oubli(_: datetime | None) -> dict[str, Any]:
         return {"archives": await oublier(base)}
@@ -27,6 +32,7 @@ def taches_memoire(base: Base, dialogue: ServiceDialogue, dossier_export: Path) 
         return {"fichiers": len(fichiers), "dossier": str(dossier_export)}
 
     return [
+        TacheSysteme("resumes", "Résumé de chaque conversation (privé : IA locale)", "15 3 * * *", resumes),
         TacheSysteme("consolidation", "Consolidation de la mémoire (IA locale)", "30 3 * * *", consolidation),
         TacheSysteme("oubli", "Archivage des souvenirs oubliés", "45 3 * * *", oubli),
         TacheSysteme("export", "Export Markdown de la mémoire", "0 4 * * *", export),
