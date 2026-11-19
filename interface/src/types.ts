@@ -144,6 +144,14 @@ export interface MetaMessage {
   /** Images jointes à un message de l'utilisateur : seulement leur type et leur poids (le Core ne les garde pas). */
   images?: { type: string; octets: number }[];
   domaines?: { id: string; nom: string; niveau: number }[]; // domaines de connaissance évoqués
+  /** Exécution inventée : phrases qui affirment une action qu'aucune action réelle du tour n'appuie. */
+  invente?: AffirmationInventee[];
+}
+
+export interface AffirmationInventee {
+  categorie: string;
+  verbe: string;
+  extrait: string;
 }
 
 export interface MessageStocke {
@@ -175,7 +183,8 @@ export type EvenementDialogue =
   | { type: "fin"; donnees: MetaMessage & { message_id: number; texte: string } }
   | { type: "erreur"; donnees: { message: string; conversation_id?: string } }
   | { type: "avis"; donnees: AvisExpert }
-  | { type: "titre"; donnees: { conversation_id: string; titre: string } };
+  | { type: "titre"; donnees: { conversation_id: string; titre: string } }
+  | { type: "invente"; donnees: { message_id: number; affirmations: AffirmationInventee[] } };
 
 // --- Premier lancement ---
 export interface Verification {
