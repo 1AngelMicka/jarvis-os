@@ -7,6 +7,7 @@ import { LecteurSSE } from "./sse";
 import type {
   Appareil,
   Connecteur,
+  Demande,
   Materiel,
   DemandeAction,
   DemandeDialogue,
@@ -101,6 +102,8 @@ const envoyer = <T>(chemin: string, corps: unknown = {}) => appeler<T>(chemin, {
 export const lireEtat = () => unSeul("etat", () => appeler<Etat>("/v1/etat"));
 /** Le Core répond-il ? (route publique, légère : surveillance de la connexion) */
 export const sonderCore = () => appeler<{ statut: string }>("/v1/sante");
+/** Demandes en attente seules (léger : rafraîchit la file sans relire tout l'état) */
+export const listerDemandes = () => appeler<{ demandes: Demande[] }>("/v1/demandes");
 export const lireConversation = (id: string) =>
   unSeul(`conversation:${id}`, () => appeler<DetailConversation>(`/v1/conversations/${encodeURIComponent(id)}`));
 

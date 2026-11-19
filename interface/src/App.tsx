@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat, sonderCore } from "./api";
+import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat, listerDemandes, sonderCore } from "./api";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
 import { VueAgents } from "./composants/Agents";
@@ -128,7 +128,14 @@ function Hud() {
     const sonder = () => {
       sonderCore()
         .then(() => {
-          if (horsLigne) charger(false);
+          if (horsLigne) {
+            charger(false);
+            return;
+          }
+          // File d'approbations : une demande créée ou close ailleurs (autre appareil, expiration) apparaît ici
+          return listerDemandes().then(({ demandes }) => {
+            setEtat((e) => (e && JSON.stringify(e.demandes) !== JSON.stringify(demandes) ? { ...e, demandes } : e));
+          });
         })
         .catch(() => {
           if (!horsLigne) setErreurEtat("Core injoignable.");
@@ -182,6 +189,7 @@ function Hud() {
 
   const ouvrir = useCallback((id: string) => {
     controleur.current?.abort();
+    setVue("dialogue"); // depuis n'importe quelle vue (assistant, connecteurs…), la conversation s'affiche
     setActive(id);
     setLateralOuvert(false);
     setChargement(true);
@@ -203,6 +211,7 @@ function Hud() {
 
   const nouvelle = () => {
     controleur.current?.abort();
+    setVue("dialogue");
     setActive(null);
     setMessages([]);
     setLateralOuvert(false);

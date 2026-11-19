@@ -36,6 +36,13 @@ Facultatif, détecté mais jamais installé par JARVIS :
 
 Les installeurs (Windows `.exe`/`.msi`, macOS `.dmg`, Linux `.deb`/`.AppImage`) sont joints à chaque version publiée. L'application ouvre l'interface dans sa propre fenêtre, lance le Core s'il ne tourne pas, se range dans la zone de notification (Ctrl+Maj+J, ou Ctrl+Alt+J si le premier est déjà pris, la ramène). Elle s'appuie sur le Core installé par le script ci-dessus.
 
+Les installeurs ne sont pas encore signés :
+
+- **Windows** : SmartScreen affiche « Windows a protégé votre ordinateur ». Cliquez sur « Informations complémentaires » puis « Exécuter quand même ».
+- **macOS** : Gatekeeper refuse d'ouvrir l'application. Après l'avoir copiée dans Applications, lancez une fois `xattr -dr com.apple.quarantine "/Applications/JARVIS 2.app"`.
+
+Ne téléchargez les installeurs que depuis la page des versions de ce dépôt.
+
 ## Sauvegarde
 
 ```powershell
