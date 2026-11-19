@@ -113,19 +113,82 @@ Reprendre chaque capacité de JARVIS v1 absente de la v2, en plus propre : même
 - **C. Chantiers et activité** : tâches suivies avec progression, sans doublon, « C'est fait » ; panneau Activité en direct (missions, ateliers, chantiers).
 - **D. Profil** : questionnaire guidé par sections, réponses en mémoire (privées : locales), entretien vocal.
 - **E. Dialogue avancé** : images jointes (coller, glisser, trombone), palette Ctrl+K, commandes « / », raccourcis.
-- **F. JARVIS pilote l'interface** : bloc d'actions validé par le Core (naviguer, ouvrir, proposer une mission…), lancements toujours proposés ; registre de règles de protection.
+- **F. JARVIS pilote l'interface** : bloc d'actions validé par le Core (naviguer, ouvrir, proposer une mission…), lancements toujours proposés ; registre de règles de protection ; commandes rapides sans LLM éditables (motif avec jokers → action 🟢🟡🔴 seulement, jamais de shell, priorité réglable, phrase de test) ; « toujours autoriser » mémorisable pour une action 🟡 (jamais pour un clic à l'écran ou dans un navigateur), 🔴 jamais à distance sans clé d'accès.
 - **G. Réglages** : vue Système par catégories, recherche, adresses directes.
 - **H. Connaissances** : domaines (carte, fiches, questions de contrôle, score), extraction après les missions, révision ; sources scientifiques (OpenAlex, arXiv, PubMed, Europe PMC).
-- **I. Ateliers** : pause / reprise, clôture avec notes, relance après échec, choix du modèle, conflits de fichiers entre ateliers, résumé de ce qui tourne dans le contexte.
-- **J. Ressources du PC** : CPU, RAM, GPU, VRAM ; Ollama démarré seulement sur demande, arrêt après inactivité, déchargement ; mode jeu (veille stricte).
-- **K. Voix** : voix de synthèse au choix (navigateur, ElevenLabs avec la clé de l'utilisateur), commandes vocales (silence, stop), « Dis Jarvis » en fond dans l'application de bureau, mémoire d'ambiance (désactivée par défaut).
-- **L. Accueil du matin** : salutation, météo Open-Meteo (ville privée), points d'attention.
-- **M. Bureau** : protocole `jarvis://` (liste blanche), raccourcis globaux voix et écran, gadget de bureau.
-- **N. Coûts** : suivi par connecteur et plafond de dépenses.
+- **I. Ateliers** : pause / reprise, clôture avec notes, relance après échec, choix du modèle, conflits de fichiers entre ateliers, résumé de ce qui tourne dans le contexte ; veille des sessions Claude Code de l'utilisateur en LECTURE SEULE (état « vous attend / travaille / bloquée sur une permission », alerte voix ou téléphone ; format interne derrière une couche d'abstraction testée, désactivable ; jamais d'écriture dans ces sessions ni de lecture de leurs jetons).
+- **J. Ressources et contrôle du PC** : CPU, RAM, GPU, VRAM ; Ollama démarré seulement sur demande, arrêt après inactivité, déchargement ; mode jeu (veille stricte) ; contrôle du PC sous 🟢🟡🔴 (volume, luminosité, fenêtres, média en cours, verrouillage, extinction annulable) avec modes qui changent vraiment Windows ; actions vérifiées en relisant l'état (sinon « non vérifiée ») ; vision : OCR d'abord, modèle de vision local seulement si peu de texte.
+- **K. Voix** : voix de synthèse au choix (navigateur, ElevenLabs avec la clé de l'utilisateur), commandes vocales (silence, stop), « Dis Jarvis » en fond dans l'application de bureau, mémoire d'ambiance (désactivée par défaut). En plus :
+  - éveil en deux étages : tampon horodaté, alias des erreurs de Whisper, correspondance floue, petit juge d'intention local seulement sur signal ; option openWakeWord avec notre propre modèle ;
+  - relance sans mot d'éveil décidée sur les horodatages ; machine à états actif / veille ;
+  - coupure quand on parle par-dessus : annulation d'écho (APM livekit, trames de 10 ms, délai mesuré), repli sans annulation d'écho (RMS micro contre haut-parleur, casque détecté) ; « stop » marche pendant la lecture ;
+  - reconnaissance du propriétaire (ECAPA-TDNN, plusieurs empreintes, désactivée par défaut), fermée pour 🟡🔴 si indisponible ;
+  - transcription robuste : small/medium int8, VAD Silero, préchauffage, filtres d'hallucinations (dont françaises), disjoncteur, CUDA / ROCm / processeur détectés (ROCm à mesurer sur les cartes AMD) ;
+  - synthèse neuronale locale (Piper en processus séparé, voix FR), phrases générées en parallèle et lues dans l'ordre, voix du système en secours : JARVIS n'est jamais muet ; secrets masqués avant la lecture à voix haute ;
+  - latence mesurée étape par étape dans `jarvis2 docteur` (Ollama par 127.0.0.1, keep_alive, préchauffage) ; fin de tour par un petit modèle et transcription anticipée ;
+  - dictée globale Windows (raccourci maintenu, collage, dictionnaire de corrections, mise en forme selon l'application).
+- **L. Accueil du matin** : salutation, météo Open-Meteo (ville privée), points d'attention ; préréglages proposés à l'installation (conversation, code, recherche, point du matin).
+- **M. Bureau et téléphone** : protocole `jarvis://` (liste blanche), raccourcis globaux voix et écran, gadget de bureau ; téléphone (PWA via Tailscale) : notifications Web Push, « Partager vers JARVIS », liens de fichiers à usage unique, limite de tentatives au jumelage, appel de décision pour une action 🔴 (oui / non / plus tard, avec clé d'accès) ; jamais de déverrouillage à distance ; un contenu reçu reste non fiable.
+- **N. Coûts et transparence** : suivi par connecteur et plafond de dépenses ; jauges d'abonnement 5 h / 7 jours lues dans nos propres appels (« inconnu » tant que rien n'est mesuré, périmé après 30 min) ; pied dépliable sous chaque réponse (moteur, modèle, durée, jetons, énergie si mesurable, estimations signalées).
 - **O. Amélioration continue** : suggestions, amélioration réalisée en atelier, aperçu, mise en service et retour arrière.
-- **P. Thème « Présence »** : JARVIS en nuée de particules.
+- **P. Thème « Présence »** : JARVIS en orbe de particules (mouvement dans un shader, voisins par grille spatiale, densité de pixels ≤ 2, réagit à la voix, 5 états : veille, écoute, réflexion, parole, compactage ; version fixe si l'utilisateur limite les animations) ; rendu séparé du fil audio ; niveau du micro visible ; option « HUD en fond d'écran ».
 
 **Terminé quand** : chaque capacité de la liste de JARVIS v1 existe dans la v2 et a été vérifiée en vrai.
+
+### 14. Le meilleur des autres
+Les meilleures idées des autres assistants personnels (voir [INSPIRATIONS.md](INSPIRATIONS.md) : sources, licences, ce qui est repris en code ou seulement en idée). Aucun de ces projets n'est installé ni requis : tout est réimplémenté. Les outils tiers (Ollama, Piper, modèles) sont proposés, jamais installés sans l'accord de l'utilisateur. Dans l'ordre :
+
+**A. Installation**
+1. `install.ps1` / `install.sh` : winget / Homebrew pour ce qui manque, PATH relu depuis le registre, fichier d'état pour reprendre après une coupure, message final honnête ; Ollama et un premier modèle **proposés** (case à cocher, refus par défaut sans interaction).
+2. Gros téléchargements en arrière-plan, marqueurs `.downloading` / `.ready` / `.failed` (renommage atomique), 3 essais, lus par `jarvis2 docteur`.
+3. Une seule table matériel → modèle ; RAM Windows lue sans wmic ; un palier sous le maximum pour garder de la marge ; cartes AMD (ROCm) prises en compte.
+4. Point d'entrée pipx `jarvis2` en plus des installeurs.
+5. Signature du code (programme gratuit pour l'open source ou service de signature) et mises à jour signées ; paquets winget et Homebrew.
+
+**B. Agents sûrs**
+6. Barrière d'injection par tour : dès qu'un tour a lu du web, l'écran, un fichier externe ou une autre session, les outils qui agissent sont refusés jusqu'à la fin du tour.
+7. Approbation liée à l'empreinte du plan exact (le plan change : l'approbation tombe), confirmation émise par l'interface et jamais par le modèle ; pile d'annulation pour les actions 🟡 réversibles (corbeille plutôt que suppression).
+8. Détecteur d'« exécution inventée » : une réponse qui prétend avoir agi sans appel d'outil est signalée, vérifiée contre le journal réel des outils.
+9. Ateliers dans un vrai bac à sable sous Windows (conteneur sans réseau ou Windows Sandbox) ; refus si le bac à sable est indisponible.
+10. Brainstorm → spec Markdown → plan à cases → exécution, avancement lu dans les cases ; missions en graphe de dépendances (étapes indépendantes en parallèle, raison du choix de modèle dans l'audit, repli sur la conversation simple).
+11. Routeur par type de tâche (code, raisonnement, rapide, privé) par un petit classifieur local qui donne sa raison, rétrogradation d'une route dont le score baisse.
+12. Skills SKILL.md importables : niveaux de confiance, capacités dangereuses (shell, réseau, écriture) bloquées sans revue, empreinte SHA-256 du dossier à l'approbation (un fichier modifié bloque le skill), exécution sans clés d'API dans l'environnement et confinée à son dossier ; MCP : sessions persistantes, une relance, outils choisis par le sens (et un outil de recherche d'outils), moins de 12 outils proposés au modèle local par tour.
+
+**C. Confidentialité**
+13. Masquage des secrets étendu (cartes avec contrôle de Luhn, clés AWS / Stripe / GitHub / OpenAI / Google, JWT, Bearer, codes à usage unique, identifiants dans les adresses ; empreintes git épargnées) avant le contexte et avant le journal.
+14. Niveaux public / semi-privé / privé qui décident ce qui peut sortir vers le cloud ; porte de rappel sans LLM ; un fait mémorisé est **remplacé** quand l'utilisateur change d'avis (test dédié).
+15. Page « Où partent mes données », générée depuis la configuration réelle (fonction, service contacté, ce qui part, local ou non) ; accord séparé avant d'envoyer une image à un service cloud.
+
+**D. Maison et extensions**
+16. Widgets générés à la demande dans le HUD (météo, minuteur, liste) : fragment filtré par DOMPurify avec liste fermée de balises, attributs, classes et adresses ; phrase d'attente dès qu'un outil long démarre.
+17. Connecteurs facultatifs 🟡 : Philips Hue (API locale du pont), OBS (WebSocket).
+18. Home Assistant, le PC restant le cerveau :
+    - transcription et synthèse exposées en Wyoming ;
+    - pilotage par le serveur MCP de Home Assistant (transport MCP HTTP + OAuth/PKCE ; repli : API REST avec jeton dans le coffre) ;
+    - niveaux : 🟢 lecture, 🟡 lumières, prises, média, 🔴 serrures, alarme, portail (confirmation + voix du propriétaire) ;
+    - satellites (Home Assistant Voice ou ESP32-S3 sous ESPHome) : seul l'audio après l'éveil part vers le PC, clé par appareil, présence par pièce, déblocage après 25 s, plafond de volume, minuteurs sur le satellite d'origine ;
+    - profils par personne liés à la reconnaissance de voix.
+19. Mode serveur sans écran (`jarvis2 --sans-ecran`) : micro du navigateur ou des satellites, contrôle d'écran désactivé.
+
+**Terminé quand** : chaque point est en place et vérifié en vrai, et INSPIRATIONS.md dit d'où vient chaque idée.
+
+### Objectif transversal : le meilleur dépôt GitHub du genre
+À traiter au fil des phases, pas à la fin :
+- **README** :
+  - en haut, une ligne d'installation par système ;
+  - un GIF de démonstration réel et des captures dans les 4 thèmes et sur téléphone ;
+  - un tableau « ce qui tourne en local / ce qui sort » ;
+  - le matériel requis, dit honnêtement (AMD compris) ;
+  - une comparaison factuelle avec les autres projets, sans dénigrer.
+- **Langues** : README en anglais avec `README.fr.md` ; interface traduisible (anglais en plus du français).
+- **Documentation** : installation par système, dépannage, architecture (schéma), sécurité et permissions, écrire un skill, une commande ou une recette, FAQ.
+- **Qualité visible** : badges (CI, licence, version), tests et banc mémoire publiés, CHANGELOG tenu, versions sémantiques, notes de version honnêtes ; une CI qui exécute les commandes du README.
+- **Communauté** : CONTRIBUTING, CODE_OF_CONDUCT, modèles d'issues et de PR, Discussions, étiquettes « good first issue », feuille de route publique (ce plan).
+- **Dépôt** : description, sujets et image de partage ; aucun fichier généré ni binaire versionné ; aucune donnée personnelle (historique vérifié avant chaque push).
+- **Installeurs** : signés dès que l'utilisateur fournit les certificats ; en attendant, contournements expliqués honnêtement.
+
+Ce qui demande une action sur le compte GitHub (Discussions, sujets, image de partage, rendre une version publique) est préparé, puis soumis à l'utilisateur avant d'être fait.
+
 
 Plus tard, facultatif : passerelle de messagerie (Telegram / Signal, avec jumelage des expéditeurs inconnus), application mobile native.
 
