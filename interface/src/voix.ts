@@ -46,6 +46,11 @@ export class LecteurVocal {
     this.tampon = reste;
   }
 
+  /** Lit un texte entier tout de suite, même si la lecture des réponses est coupée (demande explicite). */
+  lire(texte: string): void {
+    for (const m of `${texte}\n`.matchAll(FIN_DE_PHRASE)) this.dire(m[0]);
+  }
+
   finir(): void {
     if (this.actif && this.tampon.trim()) this.dire(this.tampon);
     this.tampon = "";

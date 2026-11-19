@@ -194,6 +194,7 @@ export interface EtatAccueil {
   termine: boolean;
   stockage: "sqlite" | "postgres";
   tailscale: EtatTailscale | null;
+  prereglages?: Prereglage[];
 }
 
 export interface Jumelage {
@@ -321,3 +322,52 @@ export interface OrigineMemoire {
   nom: string;
   nombre: number;
 }
+
+// --- Accueil du matin (lot L) ---
+export type ModeMatin = "parle" | "texte" | "desactive";
+export interface MeteoMatin {
+  temperature: number | null;
+  ciel: string | null;
+  min: number | null;
+  max: number | null;
+  pluie: number | null;
+  texte: string;
+}
+export interface RecetteMatin {
+  id: string;
+  nom: string;
+  statut: "ok" | "erreur" | "en_cours" | "ignoree";
+}
+export type CarteMatin =
+  | { afficher: false; raison: "urgence" | "desactive" | "deja_vu"; mode: ModeMatin }
+  | {
+      afficher: true;
+      mode: ModeMatin;
+      jour: string;
+      lieu_connu: boolean;
+      salutation: string;
+      date: string;
+      heure: string;
+      meteo: MeteoMatin | null;
+      recettes: RecetteMatin[];
+      attention: string[];
+      texte_parle: string;
+    };
+export interface LocalisationMatin {
+  nom: string | null;
+  source: "configuration" | "geocodage" | "appareil";
+  latitude?: number;
+  longitude?: number;
+}
+export interface ReglagesMatin {
+  mode: ModeMatin;
+  localisation: LocalisationMatin | null;
+}
+export interface LieuTrouve {
+  nom: string;
+  region: string | null;
+  pays: string | null;
+  latitude: number;
+  longitude: number;
+}
+export type Prereglage = "conversation" | "code" | "recherche" | "point_du_matin";
