@@ -1,8 +1,25 @@
 [project]
 name = "jarvis2"
 version = "0.8.0"
-description = "JARVIS 2 — Core (API, moteurs, mémoire)"
+description = "JARVIS 2 — assistant personnel local : Core (API, moteurs, mémoire) et interface web"
+readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.13,<3.14"
+keywords = ["assistant", "ia", "local", "mémoire", "vie privée"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: End Users/Desktop",
+    "Natural Language :: French",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.32",
@@ -25,6 +42,12 @@ dependencies = [
 [project.scripts]
 jarvis2 = "jarvis2.__main__:main"
 
+[project.urls]
+Accueil = "https://github.com/1AngelMicka/jarvis-os"
+Source = "https://github.com/1AngelMicka/jarvis-os"
+Suivi = "https://github.com/1AngelMicka/jarvis-os/issues"
+Versions = "https://github.com/1AngelMicka/jarvis-os/releases"
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",
@@ -43,7 +66,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["jarvis2"]
 
-# Interface précompilée livrée dans la roue distribuable (hatch_build.py) : aucun Node chez l'utilisateur
+# Interface précompilée, LICENSE et NOTICE livrés dans la roue distribuable (hatch_build.py) : aucun Node chez
+# l'utilisateur. Sans interface compilée, la roue est construite sans elle (avertissement), sauf si
+# JARVIS2_EXIGER_INTERFACE=1 (CI, publication).
 [tool.hatch.build.targets.wheel.hooks.custom]
 
 [tool.pytest.ini_options]

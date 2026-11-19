@@ -109,7 +109,7 @@ def verifier_interface(dossier: Path) -> Verification:
         "Interface",
         "erreur",
         f"interface compilée absente ({dossier})",
-        aide="Réinstallez JARVIS 2 ; en développement : cd interface ; npm run build",
+        aide="Réinstallez JARVIS 2 (roue publiée) ; depuis le dépôt : cd interface ; npm run build, puis réinstallez",
     )
 
 

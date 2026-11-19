@@ -22,6 +22,14 @@ sh install.sh --source <jarvis2-x.y.z-py3-none-any.whl>
 
 Le script installe [uv](https://docs.astral.sh/uv/) s'il manque (après confirmation), puis JARVIS 2 (`uv tool install`, Python 3.13 géré par uv), prépare la base SQLite et le modèle d'embeddings (environ 220 Mo, une seule fois), et lance `jarvis2` : l'interface s'ouvre dans le navigateur, sur `http://localhost:8765`.
 
+Avec [pipx](https://pipx.pypa.io) plutôt que les scripts (même roue, interface incluse) :
+
+```sh
+pipx install --python 3.13 jarvis2-x.y.z-py3-none-any.whl
+jarvis2 docteur --reparer   # base SQLite et modèle d'embeddings, une seule fois
+jarvis2
+```
+
 Au premier lancement, le navigateur du PC s'associe d'un clic, puis l'**assistant d'installation** vérifie tout (avec des boutons « Réparer »), aide à choisir une IA et à associer le téléphone. Il reste accessible depuis le panneau État (« Installation »).
 
 Commandes utiles : `jarvis2` (démarrer et ouvrir l'interface), `jarvis2 docteur` (diagnostic ; `--json`, `--reparer`), `jarvis2 jumeler` (lien d'association d'un appareil), `jarvis2 verifier-audit`, `jarvis2 lever-urgence` (secours si la clé d'accès est perdue), `jarvis2 serveur --sans-ecran` (serveur domestique sans écran : voir [docs/SERVEUR.md](docs/SERVEUR.md)).
@@ -77,7 +85,7 @@ cd interface; npm install; npm run dev                # interface de développem
 
 Avec PostgreSQL : `uv run --python 3.13 infra/creer_env.py` (`.env` avec mots de passe générés), `docker compose up -d`, `cd core; uv run python -m jarvis2 migrer`.
 
-Pour servir l'interface compilée par le Core : `npm run build` dans `interface`, puis ouvrir **http://localhost:8765** (le nom `localhost`, pas l'adresse IP : les clés d'accès l'exigent). Construire le paquet installable : `npm run build` puis `cd core; uv build --wheel` (l'interface est incluse dans la roue).
+Pour servir l'interface compilée par le Core : `npm run build` dans `interface`, puis ouvrir **http://localhost:8765** (le nom `localhost`, pas l'adresse IP : les clés d'accès l'exigent). Construire le paquet installable : `npm run build` puis `cd core; uv build --wheel` (l'interface est incluse dans la roue ; sans interface compilée, la roue est construite sans elle, avec un avertissement, et le Core affiche une page d'explication). Installer directement le dépôt : `pipx install --python 3.13 ./core` après `npm run build`.
 
 ## Importer des données
 
