@@ -37,8 +37,10 @@ from pydantic import BaseModel, Field
 from . import __version__, memoire, vision, widgets
 from .agents.mcp import GestionnaireMCP
 from .agents.missions import ServiceMissions
+from .agents.outils_tour import ServiceOutilsTour
 from .agents.recettes import Planificateur
 from .agents.recherche_web import RechercheWeb
+from .agents.skills import ServiceSkills
 from .agents.sources_scientifiques import SourcesScientifiques
 from .ameliorations import ServiceAmeliorations
 from .api_accueil import routeur as routeur_accueil
@@ -62,6 +64,7 @@ from .api_pilotage import routeur as routeur_pilotage
 from .api_profil import routeur as routeur_profil
 from .api_routage import routeur as routeur_routage
 from .api_securite import routeur as routeur_securite
+from .api_skills import routeur as routeur_skills
 from .api_synthese import routeur as routeur_synthese
 from .api_telechargements import routeur as routeur_telechargements
 from .api_transcription import routeur as routeur_transcription
@@ -135,6 +138,7 @@ class Contexte:
     tailscale: EtatTailscale | None = None
     chargement_modele: str | None = None  # None, « absent », « en_cours », « termine », « erreur »
     mcp: GestionnaireMCP | None = None
+    skills: ServiceSkills | None = None  # skills SKILL.md importés, revus et approuvés (phase 14, point 12)
     maison: GestionnaireMaison | None = None  # Hue, OBS : connecteurs facultatifs, désactivés par défaut
     pc: ServicePC | None = None  # ressources et contrôle du PC, Ollama à la demande, mode jeu (lot J)
     recherche: RechercheWeb = field(default_factory=lambda: RechercheWeb(None))
@@ -162,6 +166,7 @@ class Contexte:
     missions: ServiceMissions = field(init=False)
     planificateur: Planificateur | None = field(init=False)
     pilotage: ServicePilotage = field(init=False)
+    outils_tour: ServiceOutilsTour = field(init=False)  # outils proposés au modèle par tour (moins de 12)
     commandes: ServiceCommandes = field(init=False)
     push: ServicePush = field(init=False)  # notifications Web Push (clés VAPID dans le dossier des données)
     eveil: ServiceEveil = field(init=False)  # « Dis Jarvis » et conversation vocale de chaque appareil
@@ -189,6 +194,17 @@ class Contexte:
             (lambda t: not expurgateur.mentionne(t)) if expurgateur is not None else None,
         )
         self.service.pilotage = self.pilotage  # bloc d'actions des réponses, validé par le Core
+        self.outils_tour = ServiceOutilsTour(
+            self.pool,
+            self.mcp,
+            self.skills,
+            self.memoire.encodeur if self.memoire is not None else None,
+            (lambda t: not expurgateur.mentionne(t)) if expurgateur is not None else None,
+        )
+        self.outils_tour.declarer(self.approbations.registre)
+        if self.skills is not None:
+            self.skills.declarer(self.approbations.registre)
+        self.service.outils_tour = self.outils_tour.section
         self.commandes = ServiceCommandes(self.pool, self.approbations.registre, self.pilotage)
         self.eveil = ServiceEveil(self.pool, self.service, exclu=expurgateur.mentionne if expurgateur else None)
         self.connaissances = ServiceConnaissances(self.pool, self.service)
@@ -339,6 +355,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
         memoire,
         connecteurs=connecteurs,
         mcp=GestionnaireMCP.depuis_config(locale.serveurs_mcp),
+        skills=ServiceSkills(pool, p.dossier_donnees / "skills"),
         maison=GestionnaireMaison(pool, coffre),
         pc=pc,
         recherche=RechercheWeb(locale.searxng),
@@ -732,6 +749,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_pc)
     app.include_router(routeur_eveil)
     app.include_router(routeur_routage)
+    app.include_router(routeur_skills)
 
     dossier = parametres.dossier_interface
     if (dossier / "index.html").is_file():

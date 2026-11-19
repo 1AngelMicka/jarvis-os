@@ -194,6 +194,8 @@ class ServiceDialogue:
         self.ce_qui_tourne: Callable[[], Awaitable[str]] | None = None
         # Routeur par type de tâche (14 · B 11) : code, raisonnement, rapide, privé ; scores dans `telemetrie`
         self.routeur: Routeur | None = Routeur(depot.pool, connecteurs) if connecteurs is not None else None
+        # Outils du tour (MCP activés, skills approuvés) choisis par le sens, moins de 12 : ajoutés au pilotage
+        self.outils_tour: Callable[[str], Awaitable[str]] | None = None
 
     async def est_prive(self, texte: str | None) -> bool:
         """Sujet privé : il nomme un sujet privé de l'utilisateur, ou des souvenirs privés y répondent."""
@@ -238,6 +240,10 @@ class ServiceDialogue:
             except Exception:  # le pilotage ne doit jamais empêcher de répondre
                 journal.exception("Consignes de pilotage indisponibles")
                 extra = ""
+            if extra and self.outils_tour is not None:
+                outils = await self.outils_tour(texte)  # jamais bloquant : section vide en cas d'erreur
+                if outils:
+                    extra = "\n\n".join((extra, outils))
             if extra:
                 consignes = "\n\n".join((consignes, extra))
         if pilotage:  # widgets du HUD (phase 14, D 16) : fragment validé par le Core, jamais rendu brut

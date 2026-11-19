@@ -6,6 +6,7 @@ import type { ResumeDomaine } from "../connaissances";
 import { TexteRiche } from "../texte";
 import type { Mission, OutilMcp, Recette, ReponseAction, ServeurMcp } from "../types";
 import { SectionCreations } from "./Creations";
+import { ReglagesOutilsMcp, SectionSkills } from "./Skills";
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const TYPES: { id: Mission["type"]; nom: string; aide: string }[] = [
@@ -442,7 +443,7 @@ interface Props {
   cible?: { type: "mission" | "creation"; id: string } | null | undefined;
 }
 
-/** Agents : missions de fond, recettes planifiées, outils MCP sous approbation. */
+/** Agents : missions de fond, recettes planifiées, outils MCP sous approbation, skills revus. */
 export function VueAgents({ surChangement, surOuvrirConversation, surAction, cible }: Props) {
   return (
     <div className="connecteurs">
@@ -450,6 +451,8 @@ export function VueAgents({ surChangement, surOuvrirConversation, surAction, cib
       <Recettes surChangement={surChangement} surOuvrir={surOuvrirConversation} />
       <SectionCreations surChangement={surChangement} initiale={cible?.type === "creation" ? cible.id : undefined} />
       <OutilsMcp surAction={surAction} />
+      <ReglagesOutilsMcp />
+      <SectionSkills surAction={surAction} />
     </div>
   );
 }
