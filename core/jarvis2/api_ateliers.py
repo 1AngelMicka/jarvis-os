@@ -1,16 +1,17 @@
 """Routes des ateliers Claude Code : création, consignes, pause, arrêt et reprise, relance, modèle, clôture,
-conflits de fichiers, autorisations en direct, fusion 🟡 ; veille (lecture seule) des sessions Claude Code."""
+conflits de fichiers, autorisations en direct, fusion 🟡, bac à sable (« sans bac » = 🟡 confirmé) ; veille
+(lecture seule) des sessions Claude Code."""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from .ateliers.gestionnaire import MODELES, ErreurAtelier, GestionnaireAteliers
+from .ateliers.gestionnaire import MODELES, ErreurAtelier, GestionnaireAteliers, etat_bac
 from .ateliers.veille import VeilleClaudeCode
 from .securite import audit
 from .securite.appareils import Appareil
@@ -44,10 +45,21 @@ def _propre(ligne: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+ChoixBac = Literal["auto", "docker", "podman", "windows_sandbox", "bubblewrap", "sandbox_exec", "aucun"]
+SANS_BAC = "Sans bac à sable : confirmation explicite requise"
+
+
 class Creation(BaseModel):
     projet: str = Field(min_length=1, max_length=40)
     nom: str = Field(min_length=1, max_length=120)
     modele: str | None = Field(default=None, max_length=80)
+    bac_a_sable: ChoixBac = "auto"
+    confirmer_sans_bac: bool = False
+
+
+class ChoixBacASable(BaseModel):
+    choix: ChoixBac
+    confirmer: bool = False
 
 
 class ChoixModele(BaseModel):
@@ -82,15 +94,18 @@ class DemandeOutil(BaseModel):
 async def lister(request: Request) -> dict[str, Any]:
     g = _ateliers(request)
     conflits = await g.conflits()
+    bacs = await g.detecteur.detecter()
     return {
         "projets": [{"id": p.id, "nom": p.nom} for p in g.projets.values()],
         "modeles": [{"id": i, "nom": n} for i, n in MODELES],
+        "bacs": [b.en_dict() for b in bacs],
         "ateliers": [
             {
                 **_propre(a),
                 "actif": a["id"] in g.processus or a["id"] in g.taches,
                 "en_pause": g.en_pause(a["id"]),
                 "conflits": conflits.get(str(a["id"]), []),
+                "bac": etat_bac(a["bac_a_sable"] or "auto", bacs),
             }
             for a in await g.lister()
         ],
@@ -98,14 +113,27 @@ async def lister(request: Request) -> dict[str, Any]:
     }
 
 
+@routeur.get("/ateliers/bacs-a-sable")
+async def bacs_a_sable(request: Request, rafraichir: bool = False) -> dict[str, Any]:
+    g = _ateliers(request)
+    return {"bacs": [b.en_dict() for b in await g.detecteur.detecter(rafraichir)]}
+
+
 @routeur.post("/ateliers")
 async def creer(request: Request, corps: Creation) -> dict[str, Any]:
     g, a = _ateliers(request), _appareil(request)
+    if corps.bac_a_sable == "aucun" and not corps.confirmer_sans_bac:
+        raise HTTPException(409, SANS_BAC)
     try:
-        atelier = await g.creer(corps.projet, corps.nom, a.acteur, corps.modele)
+        atelier = await g.creer(corps.projet, corps.nom, a.acteur, corps.modele, corps.bac_a_sable)
     except ErreurAtelier as exc:
         raise HTTPException(409, str(exc)) from exc
-    await audit.journaliser(_ctx(request).pool, acteur=a.acteur, action="atelier.cree", cible=str(atelier["id"]))
+    pool = _ctx(request).pool
+    await audit.journaliser(pool, acteur=a.acteur, action="atelier.cree", cible=str(atelier["id"]))
+    if corps.bac_a_sable == "aucun":
+        await audit.journaliser(
+            pool, acteur=a.acteur, action="atelier.sans_bac_a_sable", niveau="jaune", cible=str(atelier["id"])
+        )
     return _propre(atelier)
 
 
@@ -183,6 +211,26 @@ async def modele(request: Request, ident: UUID, corps: ChoixModele) -> dict[str,
         raise HTTPException(409, str(exc)) from exc
     await audit.journaliser(
         _ctx(request).pool, acteur=a.acteur, action="atelier.modele", cible=str(ident), details={"modele": corps.modele}
+    )
+    return _propre(atelier)
+
+
+@routeur.put("/ateliers/{ident}/bac-a-sable")
+async def bac_a_sable(request: Request, ident: UUID, corps: ChoixBacASable) -> dict[str, Any]:
+    g, a = _ateliers(request), _appareil(request)
+    if corps.choix == "aucun" and not corps.confirmer:
+        raise HTTPException(409, SANS_BAC)
+    try:
+        atelier = await g.choisir_bac(ident, corps.choix)
+    except ErreurAtelier as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await audit.journaliser(
+        _ctx(request).pool,
+        acteur=a.acteur,
+        action="atelier.bac_a_sable",
+        niveau="jaune" if corps.choix == "aucun" else "vert",
+        cible=str(ident),
+        details={"choix": corps.choix},
     )
     return _propre(atelier)
 

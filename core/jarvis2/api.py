@@ -369,6 +369,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
             f"http://127.0.0.1:{p.port}",
             urgence,
             [p.claude_commande] if p.claude_commande else None,
+            image_bac=locale.image_bac_a_sable,
         ),
         veille=VeilleClaudeCode(
             pool,

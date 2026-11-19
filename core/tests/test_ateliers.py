@@ -24,6 +24,8 @@ from jarvis2.securite.actions import creer_registre
 from jarvis2.securite.permissions import Approbations
 from jarvis2.securite.urgence import ArretUrgence
 
+from .faux_bac import detecteur_disponible
+
 pytestmark = pytest.mark.base
 FAUX = [sys.executable, str(Path(__file__).with_name("faux_claude_atelier.py"))]
 
@@ -45,7 +47,13 @@ def depot_git(dossier: Path) -> Path:
 async def ateliers(pool: Base, tmp_path: Path) -> GestionnaireAteliers:
     projet = depot_git(tmp_path / "projet")
     return GestionnaireAteliers(
-        pool, [Projet("essai", "Essai", projet)], tmp_path / "ateliers", "http://127.0.0.1:1", ArretUrgence(), FAUX
+        pool,
+        [Projet("essai", "Essai", projet)],
+        tmp_path / "ateliers",
+        "http://127.0.0.1:1",
+        ArretUrgence(),
+        FAUX,
+        detecteur=detecteur_disponible(),
     )
 
 

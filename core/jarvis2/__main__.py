@@ -372,6 +372,10 @@ def main(argv: list[str] | None = None) -> int:
         help="une ligne « modèle<TAB>mémoire en Go<TAB>taille » pour cet usage (installeurs) ; code 1 si rien ne tient",
     )
     sous.add_parser("atelier-mcp", help="(interne) outil d'autorisation des ateliers, lancé par Claude Code")
+    wsb = sous.add_parser("bac-a-sable-wsb", help="(interne) une commande d'atelier dans Windows Sandbox")
+    wsb.add_argument("wsb", type=Path, help="fichier .wsb préparé par JARVIS (hors du worktree)")
+    wsb.add_argument("worktree", type=Path, help="worktree de l'atelier (seul dossier partagé)")
+    wsb.add_argument("ident", help="identifiant de la commande")
     args = analyseur.parse_args(argv)
     if args.commande == "materiel":  # sans paramètres ni journal : lu par les installeurs avant toute configuration
         return _materiel(args.json, args.modele)
@@ -379,6 +383,10 @@ def main(argv: list[str] | None = None) -> int:
         from .ateliers.mcp_autorisation import main as main_mcp
 
         return main_mcp()
+    if args.commande == "bac-a-sable-wsb":  # lancée par Claude Code à la place de la commande Bash accordée
+        from .ateliers.bac_a_sable import executer_wsb
+
+        return asyncio.run(executer_wsb(args.wsb, args.worktree, args.ident))
     if args.commande is None:  # `jarvis2` seul : démarrer et ouvrir l'interface
         args = analyseur.parse_args(["serveur", "--ouvrir"])
 

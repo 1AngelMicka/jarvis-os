@@ -16,6 +16,12 @@ sujets_prives = [
 ]
 
 # --- Ateliers Claude Code (facultatif) : projets (dépôts git) où Claude Code peut travailler, un worktree par atelier ---
+# Les commandes des ateliers tournent dans un bac à sable (Docker, Podman, Windows Sandbox, Bubblewrap, sandbox-exec),
+# réseau coupé, seul le worktree monté. Image Docker/Podman utilisée (JARVIS ne la télécharge jamais : `docker pull`
+# à faire vous-même ; il ne démarre jamais Docker non plus) :
+# [ateliers]
+# image_bac_a_sable = "python:3.13-slim"
+#
 # [[ateliers.projets]]
 # id = "monsite"
 # nom = "Mon site"

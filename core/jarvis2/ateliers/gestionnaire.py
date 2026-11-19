@@ -9,6 +9,11 @@ session Claude Code ; relance automatique après un plantage technique (2 fois a
 Coordination : les fichiers modifiés par chaque atelier sont notés ; deux ateliers ouverts du même projet qui
 touchent le même fichier sont signalés (jamais bloqués). La fusion dans le projet est une action 🟡 : JARVIS commite
 le worktree puis fusionne la branche (`--no-ff`) dans un projet propre, sinon il refuse.
+Bac à sable (`bac_a_sable.py`) : Claude Code (le « cerveau », abonnement de l'utilisateur) reste sur le PC dans le
+worktree ; ce qui AGIT passe par le bac à sable choisi pour l'atelier. Le bac est résolu AVANT chaque lancement
+(aucun disponible = refus, jamais de repli silencieux ; « aucun » = sans bac, choix explicite) ; chaque commande
+`Bash` accordée est réécrite pour s'exécuter dans ce bac (réseau coupé, seul le worktree monté), `WebFetch` et
+`WebSearch` y sont refusés, et une commande dont le bac n'est plus disponible est refusée, jamais exécutée dehors.
 """
 
 from __future__ import annotations
@@ -35,13 +40,26 @@ from ..securite import barriere
 from ..securite.filtre import masquer_secrets
 from ..securite.urgence import ArretUrgence
 from .autorisation import decider
+from .bac_a_sable import (
+    IMAGE_DEFAUT,
+    NOMS,
+    Bac,
+    Detecteur,
+    RefusBacASable,
+    choisir,
+    commande_reecrite,
+    envelopper,
+    valider_choix,
+)
 from .processus import suspendre
 
 journal = logging.getLogger("jarvis2.ateliers")
 
 IDENT = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 DELAI_ATTENTE = 600.0  # une demande d'autorisation sans réponse est refusée au bout de 10 minutes
-COLONNES = "id, projet, nom, branche, chemin, statut, session, cree_par, cree_le, maj_le, modele, notes, clos_le"
+COLONNES = (
+    "id, projet, nom, branche, chemin, statut, session, cree_par, cree_le, maj_le, modele, notes, clos_le, bac_a_sable"
+)
 RELANCES_MAX = 2  # relances automatiques après un plantage technique de Claude Code
 DELAI_RELANCE = 2.0  # secondes avant la 1re relance automatique (puis 4 s)
 MODELE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-\[\]]{0,79}$")
@@ -52,6 +70,7 @@ MODELES: tuple[tuple[str, str], ...] = (
     ("haiku", "Haiku — très rapide, pour les petites tâches"),
 )
 OUTILS_ECRITURE = frozenset({"Write", "Edit", "MultiEdit", "NotebookEdit"})
+OUTILS_RESEAU = frozenset({"WebFetch", "WebSearch"})  # refusés dans un bac à sable (réseau coupé)
 CONSIGNE_RELANCE = (
     "Claude Code s'est arrêté sur une erreur technique. Reprends le travail là où tu t'étais arrêté, "
     "sans refaire ce qui est déjà fait."
@@ -60,6 +79,23 @@ CONSIGNE_RELANCE = (
 
 class ErreurAtelier(RuntimeError):
     pass
+
+
+def valider_bac(choix: str | None) -> str:
+    """Choix de bac à sable d'un atelier : « auto », un type, ou « aucun »."""
+    try:
+        return valider_choix(choix or "auto")
+    except ValueError as exc:
+        raise ErreurAtelier(str(exc)) from exc
+
+
+def etat_bac(choix: str, bacs: Sequence[Bac]) -> dict[str, str | None]:
+    """Ce que ferait le prochain lancement : bac effectif (None = sans bac ou refus) et raison d'un refus."""
+    try:
+        bac = choisir(choix, bacs)
+    except (RefusBacASable, ValueError) as exc:
+        return {"effectif": None, "refus": str(exc)}
+    return {"effectif": bac.id if bac else None, "refus": None}
 
 
 def valider_modele(modele: str | None) -> str | None:
@@ -142,6 +178,8 @@ class GestionnaireAteliers:
         urgence: ArretUrgence,
         commande_claude: Sequence[str] | None = None,
         commande_mcp: Sequence[str] | None = None,
+        detecteur: Detecteur | None = None,
+        image_bac: str = IMAGE_DEFAUT,
     ) -> None:
         self.base = base
         self.projets = {p.id: p for p in projets}
@@ -158,6 +196,11 @@ class GestionnaireAteliers:
         self.attentes: dict[str, Attente] = {}
         # Pause : événement baissé = atelier en pause (processus suspendu, autorisations retenues)
         self.reprises: dict[UUID, asyncio.Event] = {}
+        # Bac à sable : détection (cache 30 s) et bac effectif de l'exécution en cours de chaque atelier
+        self.image_bac = image_bac
+        self.detecteur = detecteur or Detecteur(image=image_bac)
+        self.dossier_wsb = dossier / "bac-a-sable"  # fichiers .wsb : hors de tout worktree
+        self.bacs: dict[UUID, str | None] = {}
 
     # --- Lecture ---------------------------------------------------------------------------------------------
 
@@ -198,8 +241,11 @@ class GestionnaireAteliers:
 
     # --- Cycle de vie ----------------------------------------------------------------------------------------
 
-    async def creer(self, projet_id: str, nom: str, acteur: str, modele: str | None = None) -> dict[str, Any]:
+    async def creer(
+        self, projet_id: str, nom: str, acteur: str, modele: str | None = None, bac_a_sable: str = "auto"
+    ) -> dict[str, Any]:
         modele = valider_modele(modele)
+        bac_a_sable = valider_bac(bac_a_sable)
         projet = self.projets.get(projet_id)
         if projet is None:
             raise ErreurAtelier(f"Projet inconnu : « {projet_id} » (configuration locale, [[ateliers.projets]])")
@@ -214,8 +260,8 @@ class GestionnaireAteliers:
         if code != 0:
             raise ErreurAtelier(f"Worktree impossible : {sortie}")
         await self.base.execute(
-            "INSERT INTO ateliers (id, projet, nom, branche, chemin, cree_par, modele)"
-            " VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            "INSERT INTO ateliers (id, projet, nom, branche, chemin, cree_par, modele, bac_a_sable)"
+            " VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
             ident,
             projet.id,
             nom.strip()[:120] or "Atelier",
@@ -223,8 +269,11 @@ class GestionnaireAteliers:
             str(chemin),
             acteur,
             modele,
+            bac_a_sable,
         )
-        await self._noter(ident, "cree", {"branche": branche, "chemin": str(chemin), "modele": modele})
+        await self._noter(
+            ident, "cree", {"branche": branche, "chemin": str(chemin), "modele": modele, "bac_a_sable": bac_a_sable}
+        )
         atelier = await self.obtenir(ident)
         assert atelier is not None
         return atelier
@@ -237,6 +286,18 @@ class GestionnaireAteliers:
             raise ErreurAtelier("L'atelier travaille : le modèle se change entre deux consignes")
         await self.base.execute("UPDATE ateliers SET modele = $2, maj_le = now() WHERE id = $1", ident, modele)
         await self._noter(ident, "modele", {"modele": modele, "avant": atelier["modele"]})
+        nouveau = await self.obtenir(ident)
+        assert nouveau is not None
+        return nouveau
+
+    async def choisir_bac(self, ident: UUID, choix: str) -> dict[str, Any]:
+        """Change le bac à sable d'un atelier (pris en compte à la consigne suivante)."""
+        choix = valider_bac(choix)
+        atelier = await self._ouvert(ident)
+        if ident in self.processus or ident in self.taches:
+            raise ErreurAtelier("L'atelier travaille : le bac à sable se change entre deux consignes")
+        await self.base.execute("UPDATE ateliers SET bac_a_sable = $2, maj_le = now() WHERE id = $1", ident, choix)
+        await self._noter(ident, "bac_a_sable", {"choix": choix, "avant": atelier["bac_a_sable"]})
         nouveau = await self.obtenir(ident)
         assert nouveau is not None
         return nouveau
@@ -286,14 +347,25 @@ class GestionnaireAteliers:
             raise ErreurAtelier("Cet atelier travaille déjà")
         if self.urgence.actif:
             raise ErreurAtelier("Arrêt d'urgence actif")
+        choix = atelier["bac_a_sable"] or "auto"
+        try:
+            bac = choisir(choix, await self.detecteur.detecter())
+        except (RefusBacASable, ValueError) as exc:
+            await self._noter(ident, "bac_a_sable_refuse", {"choix": choix, "raison": str(exc)})
+            raise ErreurAtelier(str(exc)) from exc
         session = atelier["session"] if reprendre else None
+        self.bacs[ident] = bac.id if bac else None
         await self._statut(ident, "en_cours")
-        await self._noter(ident, "consigne", {"texte": consigne, "reprise": bool(session)})
+        await self._noter(
+            ident, "consigne", {"texte": consigne, "reprise": bool(session), "bac": bac.id if bac else None}
+        )
+        if bac is None:
+            await self._noter(ident, "sans_bac_a_sable", {"message": "Sans bac à sable : choix explicite"})
         tache = asyncio.get_running_loop().create_task(
             self._executer(ident, Path(atelier["chemin"]), consigne, session, atelier["modele"])
         )
         self.taches[ident] = tache
-        tache.add_done_callback(lambda _: self.taches.pop(ident, None))
+        tache.add_done_callback(lambda _: (self.taches.pop(ident, None), self.bacs.pop(ident, None)))
 
     async def relancer(self, ident: UUID) -> None:
         """Après un échec : la dernière consigne repart, dans la même session Claude Code si elle existe."""
@@ -503,6 +575,13 @@ class GestionnaireAteliers:
             message = f"{refus} (Termine sans cet outil : l'utilisateur relancera l'action lui-même s'il la veut.)"
             await self._noter(ident, "autorisation", {"outil": outil, "verdict": "deny", "raison": refus})
             return {"behavior": "deny", "message": message}
+        bac_id = self.bacs.get(ident)
+        if bac_id is not None and outil in OUTILS_RESEAU:
+            raison = f"{outil} refusé : réseau coupé dans le bac à sable ({NOMS.get(bac_id, bac_id)})"
+            await self._noter(
+                ident, "autorisation", {"outil": outil, "verdict": "deny", "raison": raison, "bac": bac_id}
+            )
+            return {"behavior": "deny", "message": raison}
         decision = decider(Path(atelier["chemin"]), outil, entree)
         if decision.verdict == "demander":
             attente = Attente(
@@ -523,10 +602,17 @@ class GestionnaireAteliers:
             )
         else:
             reponse = decision.reponse(entree)
+        if reponse["behavior"] == "allow" and outil == "Bash" and bac_id is not None:
+            reponse = await self._dans_le_bac(bac_id, Path(atelier["chemin"]), entree)
         await self._noter(
             ident,
             "autorisation",
-            {"outil": outil, "verdict": reponse["behavior"], "raison": reponse.get("message", decision.raison)},
+            {
+                "outil": outil,
+                "verdict": reponse["behavior"],
+                "raison": reponse.get("message", decision.raison),
+                "bac": bac_id,
+            },
         )
         if reponse["behavior"] == "allow":
             await self._marquer_lecture(ident, tour, outil, entree, decision.verdict == "demander")
@@ -536,6 +622,23 @@ class GestionnaireAteliers:
             if relatif:
                 await self.declarer_fichiers(ident, [relatif])
         return reponse
+
+    async def _dans_le_bac(self, bac_id: str, worktree: Path, entree: dict[str, Any]) -> dict[str, Any]:
+        """Commande accordée → réécrite pour tourner dans le bac ; bac devenu indisponible → refusée (jamais dehors)."""
+        bac = await self.detecteur.bac(bac_id)
+        if bac is None or not bac.disponible:
+            raison = bac.raison if bac is not None else "non détecté"
+            return {
+                "behavior": "deny",
+                "message": f"Bac à sable {NOMS.get(bac_id, bac_id)} indisponible ({raison}) : commande non exécutée",
+            }
+        try:
+            args = await asyncio.to_thread(
+                envelopper, bac_id, str(entree.get("command") or ""), worktree, self.image_bac, self.dossier_wsb
+            )
+        except (OSError, ValueError) as exc:
+            return {"behavior": "deny", "message": f"Commande non exécutée dans le bac à sable : {exc}"}
+        return {"behavior": "allow", "updatedInput": {**entree, "command": commande_reecrite(args)}}
 
     async def _marquer_lecture(
         self, ident: UUID, tour: barriere.Tour, outil: str, entree: dict[str, Any], hors_atelier: bool
