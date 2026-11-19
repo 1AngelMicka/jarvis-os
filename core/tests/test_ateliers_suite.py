@@ -24,6 +24,7 @@ from jarvis2.memoire import Expurgateur, ReglagesRecherche
 from jarvis2.securite import appareils
 from jarvis2.securite.urgence import ArretUrgence
 
+from .faux_bac import detecteur_disponible
 from .test_ateliers import FAUX, attendre_fin, depot_git
 from .test_memoire import EncodeurFactice
 
@@ -34,7 +35,13 @@ pytestmark = pytest.mark.base
 async def ateliers(pool: Base, tmp_path: Path) -> GestionnaireAteliers:
     projet = depot_git(tmp_path / "projet")
     return GestionnaireAteliers(
-        pool, [Projet("essai", "Essai", projet)], tmp_path / "ateliers", "http://127.0.0.1:1", ArretUrgence(), FAUX
+        pool,
+        [Projet("essai", "Essai", projet)],
+        tmp_path / "ateliers",
+        "http://127.0.0.1:1",
+        ArretUrgence(),
+        FAUX,
+        detecteur=detecteur_disponible(),
     )
 
 

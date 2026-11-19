@@ -83,6 +83,8 @@ class ConfigLocale:
     scientifique: bool = True
     # Projets ouverts aux ateliers Claude Code ([[ateliers.projets]] : id, nom, chemin d'un dépôt git)
     projets_ateliers: tuple[dict[str, Any], ...] = ()
+    # Image Docker/Podman du bac à sable des ateliers ([ateliers] image_bac_a_sable) : jamais téléchargée par JARVIS
+    image_bac_a_sable: str = "python:3.13-slim"
     # Accueil du matin ([matin] : ville, ou latitude et longitude) : lieu PRIVÉ, jamais lu à voix haute
     matin: dict[str, Any] = field(default_factory=dict)
     # Veille des sessions Claude Code ([veille_claude_code] dossier = dossier `sessions` de Claude Code, si ce
@@ -130,6 +132,9 @@ def analyser(donnees: dict[str, Any], chemin: Path | None = None) -> ConfigLocal
     searxng = (donnees.get("recherche") or {}).get("searxng")
     if searxng is not None and not (isinstance(searxng, str) and searxng.startswith(("http://", "https://"))):
         raise ValueError("recherche.searxng : adresse http(s) attendue")
+    image_bac = (donnees.get("ateliers") or {}).get("image_bac_a_sable", "python:3.13-slim")
+    if not (isinstance(image_bac, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/:@-]{0,199}", image_bac)):
+        raise ValueError("ateliers.image_bac_a_sable : nom d'image attendu (ex. python:3.13-slim)")
     scientifique = (donnees.get("recherche") or {}).get("scientifique", True)
     if not isinstance(scientifique, bool):
         raise ValueError("recherche.scientifique : true ou false attendu")
@@ -145,6 +150,7 @@ def analyser(donnees: dict[str, Any], chemin: Path | None = None) -> ConfigLocal
         searxng=searxng.rstrip("/") if searxng else None,
         scientifique=scientifique,
         projets_ateliers=tuple(p for p in (donnees.get("ateliers") or {}).get("projets") or [] if isinstance(p, dict)),
+        image_bac_a_sable=image_bac,
         matin=dict(donnees.get("matin") or {}),
         dossier_veille_claude=_dossier_veille(donnees.get("veille_claude_code")),
         pc=dict(donnees.get("pc") or {}),

@@ -25,6 +25,7 @@ from jarvis2.securite.appareils import Appareil
 from jarvis2.securite.permissions import Approbations, ErreurAction
 from jarvis2.securite.urgence import ArretUrgence
 
+from .faux_bac import detecteur_disponible
 from .test_ateliers import FAUX, attendre_fin, depot_git
 
 pytestmark = pytest.mark.base
@@ -38,7 +39,13 @@ TESTS_LENTS = (sys.executable, "-c", "import time; time.sleep(30)")
 def gestionnaire(pool: Base, tmp_path: Path, urgence: ArretUrgence, tests: tuple[str, ...] = TESTS) -> Any:
     projet = depot_git(tmp_path / "projet")
     return GestionnaireAteliers(
-        pool, [Projet("essai", "Essai", projet, tests)], tmp_path / "ateliers", "http://127.0.0.1:1", urgence, FAUX
+        pool,
+        [Projet("essai", "Essai", projet, tests)],
+        tmp_path / "ateliers",
+        "http://127.0.0.1:1",
+        urgence,
+        FAUX,
+        detecteur=detecteur_disponible(),
     )
 
 
