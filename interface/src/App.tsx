@@ -174,13 +174,17 @@ function Hud() {
       });
   }, []);
 
+  // Arrivée par un lien jarvis://, une notification ou un partage : l'assistant de premier lancement ne la masque pas
+  const arriveeParLien = useRef(
+    Boolean(lireLien(window.location.hash) ?? lireDecision(window.location.hash) ?? lirePartage(window.location.search)),
+  );
   useEffect(() => {
     charger();
     // Premier lancement : l'assistant s'ouvre tant qu'il n'a pas été terminé
     lireAccueil()
       .then((a) => {
-        // …sauf si une adresse directe (`#reglages/…`) a déjà ouvert une autre vue
-        if (!a.termine && !lireAdresse(window.location.hash)) setVue("accueil");
+        // …sauf si une adresse directe (`#reglages/…`) ou un lien a déjà ouvert une autre vue
+        if (!a.termine && !lireAdresse(window.location.hash) && !arriveeParLien.current) setVue("accueil");
       })
       .catch(() => {
         /* Core injoignable : l'écran d'erreur du dialogue le dit déjà */
