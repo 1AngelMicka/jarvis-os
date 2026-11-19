@@ -15,6 +15,7 @@ from . import blocs, memoire
 from .memoire_v2 import manquants
 from .securite import audit
 from .securite.appareils import Appareil
+from .telechargements import ModeleAbsent
 
 if TYPE_CHECKING:
     from .api import Contexte
@@ -103,8 +104,11 @@ async def remplacer_souvenir(request: Request, ident: UUID, corps: Remplacement)
         raise HTTPException(422, "Contenu vide")
     vecteur = modele = None
     if c.memoire is not None:
-        vecteur = await c.memoire.encodeur.encoder(contenu)
-        modele = c.memoire.encodeur.nom_modele
+        try:
+            vecteur = await c.memoire.encodeur.encoder(contenu)
+            modele = c.memoire.encodeur.nom_modele
+        except ModeleAbsent:  # modèle pas encore accepté : remplacé quand même, trouvé par le plein texte
+            vecteur = modele = None
     try:
         nouveau_id = await memoire.remplacer(
             c.pool, str(ident), contenu, vecteur=vecteur, modele=modele, raison=f"remplacé par {a.acteur}"

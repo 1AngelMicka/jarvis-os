@@ -281,3 +281,18 @@ async def test_flux_decrit_la_memoire(pool: Base, client: httpx.AsyncClient) -> 
     assert "seulement" in regles["semi_prive"]["vers_cloud"] and "noyau" in regles["semi_prive"]["vers_cloud"]
     assert "partout" in regles["public"]["vers_cloud"]
     assert m["porte_rappel"] == rappel.DESCRIPTION and str(rappel.LONGUEUR_MIN) in m["porte_rappel"]
+
+
+async def test_remplacer_sans_modele_d_embeddings(pool: Base, client: httpx.AsyncClient) -> None:
+    """Modèle d'embeddings pas encore téléchargé : le changement d'avis passe quand même, sans vecteur."""
+    from jarvis2.telechargements import ModeleAbsent
+
+    class SansModele(EncodeurFactice):
+        async def encoder(self, texte: str) -> list[float]:
+            raise ModeleAbsent("modèle absent")
+
+    ctx = client._transport.app.state.ctx  # type: ignore[attr-defined]
+    ctx.memoire.encodeur = SansModele()
+    ident = await ajouter(pool, "Le jardin démarre au printemps", type_="projet")
+    r = await client.post(f"/v1/memoire/souvenirs/{ident}/remplacer", json={"contenu": "Le jardin démarre à l'automne"})
+    assert r.status_code == 200 and r.json()["nouveau"]["contenu"] == "Le jardin démarre à l'automne"
