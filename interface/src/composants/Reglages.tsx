@@ -27,6 +27,7 @@ import { Telephone, Verifications } from "./Accueil";
 import { EnvoisTelephone, NotificationsTelephone, PartagesRecus } from "./Bureau";
 import { VueConnecteurs } from "./Connecteurs";
 import { VueCouts } from "./Couts";
+import { VueRoutes } from "./Routes";
 import { ReglagesEveil } from "./Eveil";
 import { FluxDonnees } from "./FluxDonnees";
 import { ReglagesMatin } from "./Matin";
@@ -437,6 +438,8 @@ export function VueReglages(p: Props) {
         return <ReglageDictee />;
       case "connecteurs":
         return <VueConnecteurs surChangement={p.surChangement} />;
+      case "routes":
+        return <VueRoutes />;
       case "couts":
         return <VueCouts />;
       case "accueil-matin":

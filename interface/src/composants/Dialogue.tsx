@@ -162,7 +162,12 @@ function Message({ m, moteurs, surAction }: { m: MessageAffiche; moteurs: InfoMo
         </div>
       )}
       {m.role === "jarvis" && !m.enCours && m.meta?.moteur && !m.meta.interrompu && (
-        <PiedReponse meta={m.meta} nomMoteur={moteurs.find((x) => x.id === m.meta?.moteur)?.nom ?? ""} />
+        <PiedReponse
+          meta={m.meta}
+          nomMoteur={moteurs.find((x) => x.id === m.meta?.moteur)?.nom ?? ""}
+          nomConnecteur={(id) => moteurs.find((x) => x.id === id)?.nom ?? id}
+          messageId={m.meta.message_id ?? (/^s\d+$/.test(m.cle) ? Number(m.cle.slice(1)) : undefined)}
+        />
       )}
     </article>
   );

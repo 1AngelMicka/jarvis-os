@@ -60,6 +60,7 @@ from .api_memoire import routeur as routeur_memoire
 from .api_pc import routeur as routeur_pc
 from .api_pilotage import routeur as routeur_pilotage
 from .api_profil import routeur as routeur_profil
+from .api_routage import routeur as routeur_routage
 from .api_securite import routeur as routeur_securite
 from .api_synthese import routeur as routeur_synthese
 from .api_telechargements import routeur as routeur_telechargements
@@ -679,6 +680,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_pilotage)
     app.include_router(routeur_pc)
     app.include_router(routeur_eveil)
+    app.include_router(routeur_routage)
 
     dossier = parametres.dossier_interface
     if (dossier / "index.html").is_file():

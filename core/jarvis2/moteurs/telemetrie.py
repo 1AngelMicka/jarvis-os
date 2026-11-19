@@ -115,6 +115,9 @@ class MoteurInstrumente(Moteur):
         erreur: str | None = None,
         premier: int | None = None,
     ) -> Mesure:
+        meta = dict(reponse.meta) if reponse else {}
+        if options is not None and options.route:  # score de la route (routage.py), même en erreur
+            meta["route"] = options.route
         return Mesure(
             moteur=self.interne.id,
             modele=(reponse.modele if reponse else None) or (options.modele if options else None),
@@ -127,7 +130,7 @@ class MoteurInstrumente(Moteur):
             cout_usd=reponse.cout_usd if reponse else 0.0,
             erreur=erreur,
             conversation_id=conversation_id,
-            meta=dict(reponse.meta) if reponse else {},
+            meta=meta,
         )
 
     def stream(

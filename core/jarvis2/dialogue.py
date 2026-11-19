@@ -13,7 +13,7 @@ import re
 import time
 from collections import Counter
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -25,6 +25,7 @@ from .embeddings import Encodeur
 from .memoire import ContexteMemoire, ReglagesRecherche, lire_noyau, rechercher_multi
 from .moteurs.base import Delta, ErreurMoteur, Fin, Image, Message, Options
 from .moteurs.telemetrie import MoteurInstrumente
+from .routage import Decision, Routeur
 from .securite import barriere, invente
 from .securite.filtre import masquer
 
@@ -191,20 +192,27 @@ class ServiceDialogue:
         self.pilotage: ServicePilotage | None = None  # bloc d'actions de JARVIS et règles de protection (lot F)
         # « Ce qui tourne » (ateliers, sessions Claude Code veillées, missions) : ajouté aux consignes à chaque échange
         self.ce_qui_tourne: Callable[[], Awaitable[str]] | None = None
+        # Routeur par type de tâche (14 · B 11) : code, raisonnement, rapide, privé ; scores dans `telemetrie`
+        self.routeur: Routeur | None = Routeur(depot.pool, connecteurs) if connecteurs is not None else None
 
     async def est_prive(self, texte: str | None) -> bool:
         """Sujet privé : il nomme un sujet privé de l'utilisateur, ou des souvenirs privés y répondent."""
+        return await self.motif_prive(texte) is not None
+
+    async def motif_prive(self, texte: str | None) -> str | None:
+        """Pourquoi le sujet est privé (raison montrée par le routeur), ou None."""
         if not texte:
-            return False
+            return None
         if any(m.search(texte) for m in self.sujets_prives):
-            return True
+            return "sujet privé de la configuration locale"
         if self.memoire is None:
-            return False
+            return None
         contexte = await self.memoire.contexte(texte, externe=False, forcer_recherche=True)
-        return any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs) or any(
-            d["prive"]
-            for d in contexte.domaines  # domaine de connaissance privé évoqué
-        )
+        if any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs):
+            return "des souvenirs privés y répondent"
+        if any(d["prive"] for d in contexte.domaines):  # domaine de connaissance privé évoqué
+            return "domaine de connaissance privé"
+        return None
 
     async def consignes(
         self, texte: str, externe: bool, conversation_id: UUID | None = None, pilotage: bool = False
@@ -295,41 +303,58 @@ class ServiceDialogue:
         texte: str | None = None,
         images: bool = False,
     ) -> tuple[MoteurInstrumente, str | None]:
+        instance, avertissement, _ = await self.choisir_moteur_route(moteur, conversation, texte, images)
+        return instance, avertissement
+
+    async def choisir_moteur_route(
+        self,
+        moteur: str | None,
+        conversation: Conversation | None = None,
+        texte: str | None = None,
+        images: bool = False,
+    ) -> tuple[MoteurInstrumente, str | None, Decision | None]:
         """Choix explicite > choix imposé pour la conversation > routeur (jamais un connecteur à risque ; une IA
         locale seulement pour un sujet privé ; avec des images jointes, un connecteur qui sait les lire).
         Connecteur choisi au plafond de dépenses : refus clair si aucune autre IA n'est disponible, sinon le routeur
         passe à une autre IA et l'avertissement est rendu."""
-        instance = await self._choisir(moteur, conversation, texte, images)
+        instance, decision = await self._choisir(moteur, conversation, texte, images)
         if images and not instance.interne.vision:
             raise ErreurMoteur(
                 f"« {instance.interne.nom} » ne lit pas les images : choisissez Claude, une API (Anthropic, OpenAI, "
                 "Gemini…) ou Ollama avec un modèle de vision, ou envoyez le message sans image"
             )
         if self.connecteurs is None:
-            return instance, None
+            return instance, None, decision
         etat = await self.connecteurs.etat_plafond(instance.id_moteur)
         if not etat or not etat["atteint"]:
-            return instance, None
+            return instance, None, decision
         refus = self.connecteurs.message_plafond(instance.id_moteur, etat)
         autre = await self.connecteurs.router(
             local=await self.est_prive(texte), images=images, exclus=frozenset({instance.id_moteur})
         )
         if autre is None or autre not in self.moteurs:
             raise ErreurMoteur(refus)
-        return self.moteurs[autre], f"{refus} Réponse par « {self.moteurs[autre].interne.nom} »."
+        return self.moteurs[autre], f"{refus} Réponse par « {self.moteurs[autre].interne.nom} ».", None
 
     async def _choisir(
         self, moteur: str | None, conversation: Conversation | None, texte: str | None, images: bool
-    ) -> MoteurInstrumente:
+    ) -> tuple[MoteurInstrumente, Decision | None]:
         cle = moteur if moteur and moteur != "auto" else None
         if cle is None and moteur is None and conversation is not None and conversation.connecteur:
             cle = conversation.connecteur
             if self.connecteurs is not None and not self.connecteurs.actif(cle):
                 cle = None  # le connecteur imposé a été désactivé depuis : le routeur reprend la main
+        decision: Decision | None = None
         if cle is None:
-            if self.connecteurs is not None:
+            if self.connecteurs is not None and self.routeur is not None and texte:
+                # Routeur par type de tâche : classement local avec sa raison, route rétrogradée si son score baisse
+                decision = await self.routeur.decider(texte, images=images, motif_prive=self.motif_prive)
+                prive = decision.type == "prive"
+                cle = decision.connecteur
+            elif self.connecteurs is not None:
                 prive = await self.est_prive(texte)
                 cle = await self.connecteurs.router(local=prive, images=images)
+            if self.connecteurs is not None:
                 if cle is None and prive:
                     raise ErreurMoteur(
                         "Sujet privé : aucune IA locale n'est disponible, et ce message ne quitte pas le PC. "
@@ -350,7 +375,7 @@ class ServiceDialogue:
             raise ErreurMoteur(
                 f"Connecteur « {self.moteurs[cle].interne.nom} » désactivé : activez-le dans Connecteurs"
             )
-        return self.moteurs[cle]
+        return self.moteurs[cle], decision
 
     async def _alerte_plafond(self, ident: str) -> dict[str, Any] | None:
         """État du plafond après la réponse, seulement à partir de 80 % (alerte affichée sous la réponse)."""
@@ -551,7 +576,15 @@ class ServiceDialogue:
         if conversation_id is not None and existante is None:
             raise LookupError("Conversation introuvable")
         # Le connecteur est choisi AVANT d'ouvrir la conversation : un accord images manquant n'enregistre rien
-        instance, avertissement = await self.choisir_moteur_detaille(moteur, existante, message, images=bool(images))
+        instance, avertissement, decision = await self.choisir_moteur_route(
+            moteur, existante, message, images=bool(images)
+        )
+        if decision is not None:  # la route est notée dans la télémétrie (score) ; son modèle s'il est choisi
+            options = replace(
+                options or Options(),
+                route=decision.type,
+                modele=(options.modele if options else None) or decision.modele,
+            )
         if images and self.connecteurs is not None and not self.connecteurs.images_autorisees(instance.id_moteur):
             raise AccordImagesRequis(instance.id_moteur, instance.interne.nom)
         conversation, titre = await self.ouvrir(message, conversation_id)
@@ -596,6 +629,7 @@ class ServiceDialogue:
                 "souvenirs": len(contexte.souvenirs),
                 "noyau": len(contexte.noyau),
                 "masques": dict(masques),
+                **({"route": decision.en_dict()} if decision is not None else {}),
                 **({"avertissement": avertissement} if avertissement else {}),
                 "images": len(images),
             },
@@ -625,6 +659,7 @@ class ServiceDialogue:
                         **({"porte": contexte.porte} if contexte.porte else {}),
                         "masques": dict(masques),
                         "prive": prive,
+                        **({"route": decision.en_dict()} if decision is not None else {}),
                         # Domaines de connaissance évoqués : l'interface propose de les réviser
                         **({"domaines": domaines_evoques(contexte)} if contexte.domaines else {}),
                     }

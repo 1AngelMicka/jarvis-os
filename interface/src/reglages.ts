@@ -158,6 +158,14 @@ export const SECTIONS: readonly Section[] = [
     alias: ["plafonds"],
   },
   {
+    id: "routes",
+    categorie: "cerveau",
+    titre: "Routes par type de tâche",
+    description: "Une IA pour le code, le raisonnement, les questions rapides et le privé ; scores et rétrogradations",
+    motsCles: ["routeur", "route", "classifieur", "code", "raisonnement", "rapide", "prive", "score", "retrogradation", "modele"],
+    alias: ["routeur"],
+  },
+  {
     id: "accueil-matin",
     categorie: "matin",
     titre: "Accueil du matin et maison",

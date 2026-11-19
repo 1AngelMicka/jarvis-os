@@ -1,0 +1,71 @@
+/* ---------- Routeur par type de tâche (14 · B 11) : Réglages › Cerveau & coûts › Routes ---------- */
+
+.routes { display: flex; flex-direction: column; gap: var(--e-7); max-width: var(--colonne-lecture); margin: 0 auto; padding: var(--e-3) 0 var(--e-6); }
+.routes-squelette { max-width: none; }
+.routes-section { display: flex; flex-direction: column; gap: var(--e-3); }
+.routes-titre { margin: 0; font: 600 var(--t-petit)/1.3 var(--f-ui); color: var(--texte-2); text-transform: var(--casse); letter-spacing: .06em; }
+.routes-note { margin: 0; font-size: var(--t-mini); line-height: 1.5; color: var(--texte-3); }
+.route-vide { margin: 0; padding: var(--e-4); border: var(--l-fin) dashed var(--ligne); border-radius: var(--r-2); font-size: var(--t-mini); color: var(--texte-3); }
+.route-erreur { margin: 0; font-size: var(--t-mini); line-height: 1.4; color: var(--rouge-clair); }
+
+.routes-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.route {
+  display: flex; flex-direction: column; gap: var(--e-3); min-width: 0; padding: var(--e-4) var(--e-5);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); background: rgb(var(--c-verre-bas) / .7);
+}
+.route[data-type="prive"] { border-color: rgb(var(--c-vert) / .35); }
+.route-tete { display: flex; flex-direction: column; gap: var(--e-1); }
+.route-nom { margin: 0; font: 600 var(--t-base)/1.3 var(--f-ui); color: var(--texte-fort); }
+.route-desc { font-size: var(--t-mini); line-height: 1.4; color: var(--texte-3); }
+.route-champ { display: flex; flex-direction: column; gap: var(--e-1); min-width: 0; font: var(--t-micro)/1.2 var(--f-donnees); color: var(--texte-3); }
+.route-champ .select { min-width: 0; max-width: 100%; }
+.route-champ input {
+  min-height: 32px; padding: 0 var(--e-3); font: var(--t-mini)/1 var(--f-ui);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); background: rgb(var(--c-creux) / .7); color: var(--texte);
+}
+.route-champ input:focus { outline: none; border-color: var(--cyan); }
+.route-actuel { margin: 0; font-size: var(--t-mini); line-height: 1.4; color: var(--texte-2); }
+.route-actuel strong { color: var(--texte-fort); font-weight: 600; }
+
+.route-candidats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-2); }
+.candidat {
+  display: flex; flex-direction: column; gap: var(--e-1); padding: var(--e-2) var(--e-3);
+  border-left: var(--l-moyen) solid var(--ligne); background: rgb(var(--c-creux) / .35); border-radius: 0 var(--r-1) var(--r-1) 0;
+}
+.candidat[data-ton="attention"] { border-left-color: var(--ambre); }
+.candidat[data-ton="danger"] { border-left-color: var(--rouge); }
+.candidat-tete, .candidat-pied { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--e-2); }
+.candidat-nom { font: 600 var(--t-mini)/1.3 var(--f-ui); color: var(--texte); min-width: 0; overflow-wrap: anywhere; }
+.candidat-note { font-weight: 400; color: var(--texte-3); }
+.candidat-score { font: var(--t-mini)/1.3 var(--f-donnees); color: var(--texte-2); font-variant-numeric: tabular-nums; }
+.candidat[data-ton="attention"] .candidat-score { color: var(--ambre-texte); }
+.candidat[data-ton="danger"] .candidat-score, .candidat[data-etat="retrogradee"] .candidat-etat { color: var(--rouge-clair); }
+.candidat-chiffres { margin: 0; font: var(--t-micro)/1.4 var(--f-donnees); color: var(--texte-3); font-variant-numeric: tabular-nums; }
+.candidat-etat { font: var(--t-micro)/1.4 var(--f-donnees); color: var(--texte-3); }
+
+.routes-essai { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--e-2); }
+.routes-essai-champ { flex: 1 1 220px; }
+.routes-resultat { margin: 0; font-size: var(--t-mini); line-height: 1.5; color: var(--texte-2); overflow-wrap: anywhere; }
+.routes-resultat strong { color: var(--texte-fort); }
+
+.routes-historique { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-2); }
+.routes-historique li {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0 var(--e-3); font-size: var(--t-mini); line-height: 1.4; color: var(--texte-2);
+  padding: var(--e-2) var(--e-3); border-left: var(--l-moyen) solid var(--ligne);
+}
+.routes-historique li[data-evenement="retrogradee"] { border-left-color: var(--rouge); }
+.routes-historique li[data-evenement="reprise"], .routes-historique li[data-evenement="retablie"] { border-left-color: var(--vert); }
+.routes-historique time { font: var(--t-micro)/1.4 var(--f-donnees); color: var(--texte-3); font-variant-numeric: tabular-nums; }
+.routes-historique .routes-note { grid-column: 2; }
+
+/* Pied de réponse : avis sur une réponse routée */
+.pied-avis { display: inline-flex; flex-wrap: wrap; gap: var(--e-2); }
+.pied-avis .btn[aria-pressed="true"] { background: rgb(var(--c-cyan) / .2); color: var(--cyan-vif); box-shadow: inset 0 0 0 1px rgb(var(--c-cyan) / .4); }
+
+@media (pointer: coarse) {
+  .route-champ input { min-height: var(--cible); font-size: 16px; }
+}
+@media (max-width: 599px) {
+  .routes-historique li { grid-template-columns: minmax(0, 1fr); }
+  .routes-historique .routes-note { grid-column: 1; }
+}

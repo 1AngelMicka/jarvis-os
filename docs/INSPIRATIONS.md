@@ -58,7 +58,7 @@ Le détail de chaque point est dans [PLAN.md](PLAN.md) : phase 13 (lots), phase 
 | Détecteur d'exécution inventée | — | Phase 14 · B |
 | Ateliers en bac à sable réel (refus si indisponible) | aman (à l'inverse) | Phase 14 · B |
 | Brainstorm → spec → plan à cases → exécution ; missions en graphe | microsoft/JARVIS | Phase 14 · B |
-| Routeur par type de tâche (petit classifieur local) | — | Phase 14 · B |
+| Routeur par type de tâche (petit classifieur local), route rétrogradée d'après la télémétrie | OpenJarvis (idée : `HeuristicRouter` et politique guidée par les traces, réimplémentés sans code repris) | Phase 14 · B 11 ✅ |
 | Skills SKILL.md avec confiance, empreinte, confinement ; MCP persistant et outils choisis par sens | OpenJarvis, NeyorDEV (idée) | Phase 14 · B |
 | Commandes rapides sans LLM, éditables | Jarvis.sh (idée, sans eval) | Lot F |
 | « Toujours autoriser » pour 🟡 (jamais pour les clics), 🔴 jamais à distance sans clé | sosoj92 | Lot F |

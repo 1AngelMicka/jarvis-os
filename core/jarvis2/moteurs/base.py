@@ -56,6 +56,7 @@ class Options:
     effort: str | None = None
     temperature: float | None = None
     rapide: bool = False  # petite tâche utilitaire (titre, résumé) : pas de réflexion longue, réponse courte
+    route: str | None = None  # type de tâche choisi par le routeur (routage.py) : noté dans la télémétrie
 
 
 @dataclass(slots=True)

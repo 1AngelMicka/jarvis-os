@@ -144,7 +144,7 @@ async def resume(connecteurs: Connecteurs, maintenant: datetime | None = None) -
     premier_jour = min(mois, jour - timedelta(days=JOURS_HISTORIQUE - 1))
     lignes = await connecteurs.pool.fetch(
         "SELECT moteur, statut, jetons_entree, jetons_sortie, cout_usd, meta, cree_le FROM telemetrie"
-        " WHERE cree_le >= $1",
+        " WHERE cree_le >= $1 AND operation <> 'retour'",  # avis de l'utilisateur (routage.py) : pas des appels
         premier_jour.astimezone(UTC),
     )
     par_jour: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))

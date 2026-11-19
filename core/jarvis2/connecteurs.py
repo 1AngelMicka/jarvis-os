@@ -282,15 +282,20 @@ class Connecteurs:
         ]
 
     async def router(
-        self, local: bool = False, images: bool = False, exclus: frozenset[str] = frozenset()
+        self,
+        local: bool = False,
+        images: bool = False,
+        exclus: frozenset[str] = frozenset(),
+        prefere: str | None = None,
     ) -> str | None:
         """`images` : seuls les connecteurs qui savent lire les images jointes sont candidats. `exclus` et
-        connecteurs au plafond de dépenses : jamais choisis."""
+        connecteurs au plafond de dépenses : jamais choisis. `prefere` : celui de la route (routage.py), sinon
+        le préféré global."""
         etats = await self.etats(tous=False)
         if images:
             etats = [e for e in etats if self.definitions[e.id].moteur.interne.vision]
         atteints = {e.id for e in etats if e.utilisable and await self.plafond_atteint(e.id)}
-        return choisir(etats, self.prefere, local=local, exclus=exclus | atteints)
+        return choisir(etats, prefere or self.prefere, local=local, exclus=exclus | atteints)
 
     # --- Plafond de dépenses (connecteurs payants) -----------------------------------------------------------
 

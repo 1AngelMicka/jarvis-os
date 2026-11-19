@@ -1,6 +1,7 @@
 // Types partagés avec l'API du Core (core/jarvis2/api.py).
 
 import type { EtatPlafond } from "./couts";
+import type { Avis, RouteMessage } from "./routage";
 
 export interface InfoModele {
   id: string;
@@ -191,6 +192,11 @@ export interface MetaMessage {
   actions_ecartees?: string[];
   /** Barrière d'injection (14 · B 6) : ce tour a lu du contenu non fiable ; ses actions qui agissent sont retenues. */
   barriere?: BilanBarriere;
+  /** Identifiant du message (événement « fin ») : avis 👍 / 👎 sur la réponse. */
+  message_id?: number;
+  /** Routeur par type de tâche (14 · B 11) : type, raison, IA rétrogradées écartées ; avis de l'utilisateur. */
+  route?: RouteMessage;
+  retour?: Avis;
 }
 
 export interface LectureNonFiable {
