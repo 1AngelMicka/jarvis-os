@@ -13,6 +13,7 @@
 .pilotage-libelle { flex: 1 1 16em; min-width: 0; font: var(--t-petit)/1.4 var(--f-ui); color: var(--texte); overflow-wrap: anywhere; }
 .pilotage-action[data-genre="proposition"] .pilotage-libelle { color: var(--texte-fort); }
 .pilotage-niveau { white-space: nowrap; }
+.pilotage-action[data-bloquee] .pilotage-libelle { color: var(--texte-2); }
 .pilotage-suite { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--e-2); }
 .pilotage-fait { font: var(--t-mini)/1.3 var(--f-ui); color: var(--vert); }
 .pilotage-erreur { font: var(--t-mini)/1.3 var(--f-ui); color: var(--ambre-texte); overflow-wrap: anywhere; }

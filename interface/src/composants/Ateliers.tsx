@@ -47,6 +47,8 @@ function ligneEvenement(e: EvenementAtelier): string {
       return `Outil ${txt(c.nom)} ${txt(c.entree)}`;
     case "autorisation":
       return `${c.verdict === "allow" ? "Autorisé" : "Refusé"} : ${txt(c.outil)} — ${txt(c.raison)}`;
+    case "barriere":
+      return `Barrière d'injection : ${txt(c.message)}`;
     case "attente":
       return `En attente de votre accord : ${txt(c.raison)}`;
     case "fin":

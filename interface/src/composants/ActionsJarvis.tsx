@@ -29,9 +29,14 @@ export function ActionsJarvis({ actions, ecartees, appliquees = false, surAction
   };
 
   const propositions = actions.some((a) => a.genre === "proposition");
+  const retenues = actions.some((a) => a.bloquee);
   return (
     <section className="pilotage" aria-label={propositions ? "Propositions de JARVIS" : "Actions de JARVIS"}>
-      {propositions && <p className="pilotage-titre">JARVIS propose — rien n'est lancé sans votre clic</p>}
+      {retenues ? (
+        <p className="pilotage-titre">Retenu par la barrière d'injection — lancez vous-même ce que vous voulez</p>
+      ) : (
+        propositions && <p className="pilotage-titre">JARVIS propose — rien n'est lancé sans votre clic</p>
+      )}
       <ul className="pilotage-liste">
         {actions.map((a, i) => {
           const etat = etats[i] ?? {};
@@ -39,7 +44,7 @@ export function ActionsJarvis({ actions, ecartees, appliquees = false, surAction
           // Une proposition déjà acceptée ne se relance pas d'un second clic (une mission en double coûte)
           const fige = Boolean(etat.fait) && lancement;
           return (
-            <li key={`${a.type}-${String(i)}`} className="pilotage-action" data-genre={a.genre} data-niveau={a.niveau}>
+            <li key={`${a.type}-${String(i)}`} className="pilotage-action" data-genre={a.genre} data-niveau={a.niveau} data-bloquee={a.bloquee ? true : undefined}>
               <span className="pilotage-libelle">
                 {a.genre === "proposition" && a.niveau !== "vert" && (
                   <span className="pilotage-niveau" aria-label={a.niveau === "rouge" ? "sensible" : "à valider"}>

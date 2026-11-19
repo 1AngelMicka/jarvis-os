@@ -166,3 +166,25 @@ html[data-animations="reduites"] .palette[open], html[data-animations="reduites"
 }
 .msg-invente-liste li + li { margin-top: var(--e-1); }
 @media (pointer: coarse) { .msg-invente summary { min-height: var(--cible); } }
+
+/* --- Barrière d'injection (14 · B 6) : actions retenues après une lecture de contenu non fiable ------------- */
+.msg-barriere { margin: var(--e-3) 0 0; font: var(--t-mini)/1.4 var(--f-ui); color: var(--texte-2); }
+.msg-barriere summary {
+  display: inline-flex; align-items: center; gap: var(--e-2); min-height: var(--e-7); cursor: pointer;
+  list-style: none; border-radius: var(--r-1);
+}
+.msg-barriere summary::-webkit-details-marker { display: none; }
+.msg-barriere summary::before {
+  content: ""; flex: none; width: var(--e-3); height: var(--e-3); border-radius: var(--r-1);
+  border: var(--l-fort) solid var(--ambre);
+}
+.msg-barriere-titre { color: var(--ambre-texte); }
+.msg-barriere summary:hover .msg-barriere-titre { text-decoration: underline; text-underline-offset: var(--e-1); }
+.msg-barriere summary:focus-visible { outline: var(--l-fort) solid var(--ambre); outline-offset: var(--e-1); }
+.msg-barriere-texte { margin: var(--e-2) 0 0; }
+.msg-barriere-liste {
+  margin: var(--e-2) 0 0; padding: 0 0 0 var(--e-5); border-left: var(--l-fin) solid rgb(var(--c-ambre) / .5);
+  list-style: none; overflow-wrap: anywhere;
+}
+.msg-barriere-liste li + li { margin-top: var(--e-1); }
+@media (pointer: coarse) { .msg-barriere summary { min-height: var(--cible); } }

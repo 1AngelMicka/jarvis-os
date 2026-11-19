@@ -5,7 +5,7 @@ import { analyserCommande, type IdCommande, suggererSlash, texteAEnvoyer } from 
 import { ErreurImage, type ImageJointe, imagesDe, NB_MAX_IMAGES, places, preparerImage, TYPES_ACCEPTES } from "../images";
 import { TexteRiche } from "../texte";
 import { DomainesEvoques } from "./Connaissances";
-import type { ActionPilotage, AffirmationInventee, AvisExpert, InfoMoteur, MetaMessage } from "../types";
+import type { ActionPilotage, AffirmationInventee, AvisExpert, BilanBarriere, InfoMoteur, MetaMessage } from "../types";
 import { ActionsJarvis } from "./ActionsJarvis";
 import { type ImageAffichee, Vignettes, versAffichees } from "./PiecesJointes";
 import { PiedReponse } from "./PiedReponse";
@@ -91,6 +91,29 @@ export function AvertissementInvente({ affirmations }: { affirmations: Affirmati
   );
 }
 
+/** Barrière d'injection : ce tour a lu du contenu non fiable, ses actions sont retenues. Le détail se déplie. */
+export function BarriereInjection({ bilan }: { bilan: BilanBarriere }) {
+  const n = bilan.bloquees.length;
+  return (
+    <details className="msg-barriere">
+      <summary>
+        <span className="msg-barriere-titre">
+          Barrière d'injection · {n} action{n > 1 ? "s" : ""} retenue{n > 1 ? "s" : ""}
+        </span>
+      </summary>
+      <p className="msg-barriere-texte">{bilan.message}</p>
+      <ul className="msg-barriere-liste" aria-label="Contenu non fiable lu pendant ce tour">
+        {bilan.sources.map((s) => (
+          <li key={`${s.source}-${s.detail}`}>
+            {s.libelle}
+            {s.detail ? ` — ${s.detail}` : ""}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 function Message({ m, moteurs, surAction }: { m: MessageAffiche; moteurs: InfoMoteur[]; surAction?: SurActionPilotage | undefined }) {
   const local = moteurs.find((x) => x.id === m.meta?.moteur)?.famille === "local";
   return (
@@ -113,6 +136,7 @@ function Message({ m, moteurs, surAction }: { m: MessageAffiche; moteurs: InfoMo
       )}
       {m.role === "jarvis" && !m.enCours && m.meta?.invente && m.meta.invente.length > 0 && <AvertissementInvente affirmations={m.meta.invente} />}
       {m.meta?.conseil && m.meta.conseil.length > 0 && <Avis avis={m.meta.conseil} />}
+      {m.role === "jarvis" && !m.enCours && m.meta?.barriere && m.meta.barriere.bloquees.length > 0 && <BarriereInjection bilan={m.meta.barriere} />}
       {m.role === "jarvis" && !m.enCours && surAction && (m.meta?.actions?.length || m.meta?.actions_ecartees?.length) ? (
         <ActionsJarvis actions={m.meta.actions ?? []} ecartees={m.meta.actions_ecartees} appliquees={m.actionsAppliquees ?? false} surAction={surAction} />
       ) : null}
