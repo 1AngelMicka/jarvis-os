@@ -7,6 +7,8 @@ import re
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from .securite.filtre import masquer_secrets
+
 FORMAT = "%(asctime)s %(levelname)-7s %(name)s : %(message)s"
 
 # Formes de secrets courantes : jamais écrites en clair dans un journal.
@@ -26,7 +28,7 @@ def masquer(texte: str) -> str:
             texte = motif.sub(r"\1***", texte)
         else:
             texte = motif.sub("***", texte)
-    return texte
+    return masquer_secrets(texte)
 
 
 class FiltreSecrets(logging.Filter):
