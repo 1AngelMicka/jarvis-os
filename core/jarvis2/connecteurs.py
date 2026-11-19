@@ -350,6 +350,46 @@ class Connecteurs:
             details={"plafond_mensuel_usd": valeur},
         )
 
+    # --- Accord images vers le cloud (« Où partent mes données ») ---------------------------------------------
+
+    def accord_images_requis(self, ident: str) -> bool:
+        """Connecteur dont les données quittent le PC et qui lit les images : une image jointe n'y part qu'après
+        un accord donné une fois pour ce connecteur (mémorisé, révocable)."""
+        d = self.definitions.get(ident)
+        return d is not None and d.moteur.interne.externe and d.moteur.interne.vision
+
+    def images_accordees_le(self, ident: str) -> str | None:
+        r = self._reglages.get(ident)
+        valeur = r.get("images_accordees_le") if r is not None else None
+        if valeur is None:
+            return None
+        return valeur if isinstance(valeur, str) else valeur.isoformat()
+
+    def images_autorisees(self, ident: str) -> bool:
+        return not self.accord_images_requis(ident) or self.images_accordees_le(ident) is not None
+
+    async def accorder_images(self, ident: str, accorde: bool, appareil: Appareil) -> None:
+        d = self._verifier(ident)
+        if not self.accord_images_requis(ident):
+            raise ErreurAction("Ce connecteur ne fait pas sortir d'image du PC : aucun accord à donner")
+        await self.pool.execute(
+            "INSERT INTO connecteurs (id, actif, images_accordees_le)"
+            " VALUES ($1, $2, CASE WHEN $3 THEN now() ELSE NULL END)"
+            " ON CONFLICT (id) DO UPDATE SET images_accordees_le = CASE WHEN $3 THEN now() ELSE NULL END,"
+            " maj_le = now()",
+            ident,
+            self.actif(ident) if ident in self._reglages else d.moteur.interne.actif_par_defaut,
+            accorde,
+        )
+        await self.charger()
+        await audit.journaliser(
+            self.pool,
+            acteur=appareil.acteur,
+            action="connecteur.images_accordees" if accorde else "connecteur.images_revoquees",
+            cible=ident,
+            niveau="jaune" if accorde else "vert",
+        )
+
     async def decrire(self, tous: bool = True) -> list[dict[str, Any]]:
         """Cartes de la page Connecteurs (aucune clé : seulement « enregistrée » et un aperçu)."""
         etats = await self.etats(tous)
@@ -400,6 +440,8 @@ class Connecteurs:
                     "payant": self.payant(e.id),
                     "plafond_mensuel_usd": self.plafond(e.id),
                     "vision": m.vision,
+                    "images_accord_requis": self.accord_images_requis(e.id),
+                    "images_accordees_le": self.images_accordees_le(e.id),
                 }
             )
         return cartes

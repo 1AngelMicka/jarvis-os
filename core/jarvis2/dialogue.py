@@ -76,6 +76,20 @@ def maintenant_paris() -> str:
     return datetime.now(ZoneInfo("Europe/Paris")).strftime("%Y-%m-%d %H:%M (heure de Paris)")
 
 
+class AccordImagesRequis(ErreurMoteur):
+    """Image jointe pour un connecteur cloud sans accord : rien n'est envoyé ni enregistré, l'interface demande
+    l'accord (une fois par connecteur, mémorisé, révocable dans « Où partent mes données »)."""
+
+    def __init__(self, connecteur: str, nom: str) -> None:
+        super().__init__(
+            f"Envoyer une image à « {nom} » la fait quitter le PC : donnez d'abord votre accord pour ce connecteur"
+        )
+        self.connecteur, self.nom = connecteur, nom
+
+    def en_dict(self) -> dict[str, str]:
+        return {"connecteur": self.connecteur, "nom": self.nom, "message": str(self)}
+
+
 @dataclass
 class SourceMemoire:
     """Accès à la mémoire pour le dialogue (absente = dialogue sans mémoire, comme en phase 2)."""
@@ -424,8 +438,14 @@ class ServiceDialogue:
             message = "Que montrent ces images ?" if len(images) > 1 else "Que montre cette image ?"
         if not message:
             raise ValueError("Message vide")
+        existante = await self.depot.obtenir(conversation_id) if conversation_id is not None else None
+        if conversation_id is not None and existante is None:
+            raise LookupError("Conversation introuvable")
+        # Le connecteur est choisi AVANT d'ouvrir la conversation : un accord images manquant n'enregistre rien
+        instance, avertissement = await self.choisir_moteur_detaille(moteur, existante, message, images=bool(images))
+        if images and self.connecteurs is not None and not self.connecteurs.images_autorisees(instance.id_moteur):
+            raise AccordImagesRequis(instance.id_moteur, instance.interne.nom)
         conversation, titre = await self.ouvrir(message, conversation_id)
-        instance, avertissement = await self.choisir_moteur_detaille(moteur, conversation, message, images=bool(images))
         if avertissement:
             moteur = None  # le choix imposé reste celui de la conversation : il reprendra au plafond relevé
         if moteur == "auto":

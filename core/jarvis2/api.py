@@ -5,6 +5,7 @@
 - `GET  /v1/conversations`            : liste
 - `GET  /v1/conversations/{id}`       : conversation + messages
 - `POST /v1/dialogue`                 : message -> réponse en flux SSE (`debut`, `delta`, `fin`, `erreur`)
+- `GET  /v1/donnees/flux`             : où partent mes données (voir api_donnees.py)
 - sécurité (appareils, jumelage, clés d'accès, demandes, arrêt d'urgence, audit) : voir api_securite.py
 
 Chaque requête `/v1/` exige le jeton d'un appareil autorisé (`Authorization: Bearer`), sauf la santé et le
@@ -45,6 +46,7 @@ from .api_ateliers import routeur as routeur_ateliers
 from .api_chantiers import routeur as routeur_chantiers
 from .api_connaissances import routeur as routeur_connaissances
 from .api_connecteurs import routeur as routeur_connecteurs
+from .api_donnees import routeur as routeur_donnees
 from .api_matin import routeur as routeur_matin
 from .api_medias import routeur as routeur_medias
 from .api_medias import routeur_pages as routeur_creations
@@ -61,7 +63,7 @@ from .connecteurs import Connecteurs, construire_catalogue
 from .conseil import ServiceConseil
 from .conversations import DepotConversations
 from .db import Base, ErreurBaseOuReseau, ouvrir_base, version_schema
-from .dialogue import ServiceDialogue, SourceMemoire
+from .dialogue import AccordImagesRequis, ServiceDialogue, SourceMemoire
 from .embeddings import EncodeurFastEmbed
 from .matin import ServiceMeteo
 from .memoire import Expurgateur, ReglagesRecherche
@@ -515,6 +517,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
                         demande.message, demande.conversation_id, demande.moteur, options, images
                     ):
                         yield sse(ev.type, ev.donnees)
+                except AccordImagesRequis as exc:  # rien n'est parti : l'interface demande l'accord puis renvoie
+                    yield sse("accord_images", exc.en_dict())
                 except (ErreurMoteur, ValueError, LookupError) as exc:
                     yield sse("erreur", {"message": str(exc)})
 
@@ -535,6 +539,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_connaissances)
     app.include_router(routeur_matin)
     app.include_router(routeur_telechargements)
+    app.include_router(routeur_donnees)
 
     dossier = parametres.dossier_interface
     if (dossier / "index.html").is_file():
