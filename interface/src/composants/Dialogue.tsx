@@ -2,6 +2,8 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { EVENEMENT_PREREMPLIR, prendre } from "../bureau";
 import { analyserCommande, type IdCommande, suggererSlash, texteAEnvoyer } from "../commandes";
+import { type Cle, t, tn } from "../i18n";
+import { useLangue } from "../i18n/react";
 import { ErreurImage, type ImageJointe, imagesDe, NB_MAX_IMAGES, places, preparerImage, TYPES_ACCEPTES } from "../images";
 import { TexteRiche } from "../texte";
 import { DomainesEvoques } from "./Connaissances";
@@ -28,19 +30,25 @@ export interface MessageAffiche {
 /** Applique une action proposée par JARVIS ; renvoie un compte rendu court ou lève une erreur affichable. */
 export type SurActionPilotage = (a: ActionPilotage) => Promise<string | undefined>;
 
-const NOMS_EFFORT: Record<string, string> = {
-  low: "Rapide",
-  medium: "Équilibré",
-  high: "Élevé",
-  xhigh: "Très élevé",
-  max: "Maximal",
+const EFFORTS: Record<string, Cle> = {
+  low: "effort.low",
+  medium: "effort.medium",
+  high: "effort.high",
+  xhigh: "effort.xhigh",
+  max: "effort.max",
 };
+
+/** Nom affiché d'un niveau d'effort (l'identifiant brut s'il est inconnu). */
+function nomEffort(effort: string): string {
+  const cle = EFFORTS[effort];
+  return cle ? t(cle) : effort;
+}
 
 function nomModele(moteurs: InfoMoteur[], meta: MetaMessage | undefined): string {
   if (!meta?.moteur) return "";
   const moteur = moteurs.find((m) => m.id === meta.moteur);
   const modele = moteur?.modeles.find((x) => x.id === meta.modele)?.nom ?? meta.modele ?? "";
-  return [moteur?.nom ?? meta.moteur, modele, meta.effort ? NOMS_EFFORT[meta.effort] : ""]
+  return [moteur?.nom ?? meta.moteur, modele, meta.effort ? nomEffort(meta.effort) : ""]
     .filter(Boolean)
     .join(" · ");
 }
@@ -53,8 +61,7 @@ function Avis({ avis }: { avis: AvisExpert[] }) {
   return (
     <details className="msg-avis">
       <summary>
-        Avis des experts ({avis.length}) · {avis.filter((a) => !a.erreur).length} réponse
-        {avis.filter((a) => !a.erreur).length > 1 ? "s" : ""}
+        {t("avis.titre", { total: avis.length })} · {tn("avis.reponses", avis.filter((a) => !a.erreur).length)}
       </summary>
       <ul>
         {avis.map((a) => (
@@ -78,11 +85,9 @@ export function AvertissementInvente({ affirmations }: { affirmations: Affirmati
   return (
     <details className="msg-invente">
       <summary>
-        <span className="msg-invente-titre">JARVIS dit avoir agi, mais aucune action n'a été faite</span>
+        <span className="msg-invente-titre">{t("invente.titre")}</span>
       </summary>
-      <p className="msg-invente-texte">
-        Aucun outil ni aucune action n'a été exécuté pendant cette réponse. Phrase{phrases.length > 1 ? "s" : ""} en cause :
-      </p>
+      <p className="msg-invente-texte">{tn("invente.texte", phrases.length)}</p>
       <ul className="msg-invente-liste">
         {phrases.map((p) => (
           <li key={p}>{p}</li>
@@ -98,12 +103,10 @@ export function BarriereInjection({ bilan }: { bilan: BilanBarriere }) {
   return (
     <details className="msg-barriere">
       <summary>
-        <span className="msg-barriere-titre">
-          Barrière d'injection · {n} action{n > 1 ? "s" : ""} retenue{n > 1 ? "s" : ""}
-        </span>
+        <span className="msg-barriere-titre">{tn("barriere.titre", n)}</span>
       </summary>
       <p className="msg-barriere-texte">{bilan.message}</p>
-      <ul className="msg-barriere-liste" aria-label="Contenu non fiable lu pendant ce tour">
+      <ul className="msg-barriere-liste" aria-label={t("barriere.sources")}>
         {bilan.sources.map((s) => (
           <li key={`${s.source}-${s.detail}`}>
             {s.libelle}
@@ -120,10 +123,10 @@ function Message({ m, moteurs, surAction }: { m: MessageAffiche; moteurs: InfoMo
   return (
     <article className={`msg msg--${m.role}`} data-interlocuteur={m.role === "jarvis" ? (local ? "local" : "jarvis") : undefined} aria-busy={m.enCours || undefined}>
       <span className="msg-auteur">
-        {m.role === "utilisateur" ? "Vous" : m.role === "erreur" ? "Incident" : "JARVIS"}
-        {m.rapide && <span className="msg-rapide"> · commande rapide, sans IA</span>}
+        {m.role === "utilisateur" ? t("msg.vous") : m.role === "erreur" ? t("msg.incident") : "JARVIS"}
+        {m.rapide && <span className="msg-rapide">{t("msg.rapide")}</span>}
       </span>
-      {m.images && m.images.length > 0 && <Vignettes images={m.images} libelle="Images jointes" className="vignettes--fil" />}
+      {m.images && m.images.length > 0 && <Vignettes images={m.images} libelle={t("msg.imagesJointes")} className="vignettes--fil" />}
       {(m.texte || m.role !== "utilisateur" || !m.images?.length) && (
         <div className="msg-corps">
           {m.role === "jarvis" ? <TexteRiche source={m.texte} /> : m.texte}
@@ -132,7 +135,7 @@ function Message({ m, moteurs, surAction }: { m: MessageAffiche; moteurs: InfoMo
       )}
       {!m.images?.length && m.meta?.images && m.meta.images.length > 0 && (
         <p className="msg-images-absentes">
-          {m.meta.images.length} image{m.meta.images.length > 1 ? "s" : ""} jointe{m.meta.images.length > 1 ? "s" : ""} · non conservée{m.meta.images.length > 1 ? "s" : ""}
+          {tn("msg.imagesAbsentes", m.meta.images.length)}
         </p>
       )}
       {m.role === "jarvis" && !m.enCours && m.meta?.invente && m.meta.invente.length > 0 && <AvertissementInvente affirmations={m.meta.invente} />}
@@ -146,21 +149,19 @@ function Message({ m, moteurs, surAction }: { m: MessageAffiche; moteurs: InfoMo
         <div className="msg-pied">
           <span className="msg-meta">{nomModele(moteurs, m.meta)}</span>
           {m.meta.souvenirs?.length ? (
-            <span className="msg-meta">
-              {m.meta.souvenirs.length} souvenir{m.meta.souvenirs.length > 1 ? "s" : ""}
-            </span>
+            <span className="msg-meta">{tn("msg.souvenirs", m.meta.souvenirs.length)}</span>
           ) : null}
           {m.meta.domaines?.length ? <DomainesEvoques domaines={m.meta.domaines} /> : null}
-          {m.meta.memoire_consultee === false && <span className="msg-meta msg-meta--ambre">mémoire indisponible</span>}
-          {m.meta.jetons_sortie ? <span className="msg-meta">{m.meta.jetons_sortie} jetons</span> : null}
+          {m.meta.memoire_consultee === false && <span className="msg-meta msg-meta--ambre">{t("msg.memoireIndisponible")}</span>}
+          {m.meta.jetons_sortie ? <span className="msg-meta">{t("msg.jetons", { n: m.meta.jetons_sortie })}</span> : null}
           {nbMasques(m.meta) > 0 && (
             <span className="msg-meta msg-meta--ambre" title={Object.entries(m.meta.masques ?? {}).map(([k, n]) => `${k} : ${String(n)}`).join(" · ")}>
-              {nbMasques(m.meta)} élément{nbMasques(m.meta) > 1 ? "s" : ""} masqué{nbMasques(m.meta) > 1 ? "s" : ""} avant envoi
+              {tn("msg.masques", nbMasques(m.meta))}
             </span>
           )}
-          {(m.meta.source_auth === "none" || m.meta.source_auth === "compte") && <span className="msg-meta msg-meta--ok">compte · 0 $</span>}
+          {(m.meta.source_auth === "none" || m.meta.source_auth === "compte") && <span className="msg-meta msg-meta--ok">{t("msg.compte")}</span>}
           {m.meta.cout_usd ? <span className="msg-meta">{m.meta.cout_usd.toFixed(4)} $</span> : null}
-          {m.meta.interrompu && <span className="msg-meta msg-meta--ambre">interrompue</span>}
+          {m.meta.interrompu && <span className="msg-meta msg-meta--ambre">{t("msg.interrompue")}</span>}
         </div>
       )}
       {m.role === "jarvis" && !m.enCours && m.meta?.moteur && !m.meta.interrompu && (
@@ -186,6 +187,7 @@ interface FilProps {
 }
 
 export function Fil({ messages, moteurs, reflexion, chargement, etapeReflexion, surAction }: FilProps) {
+  useLangue();
   const zone = useRef<HTMLDivElement>(null);
   const collee = useRef(true);
 
@@ -206,23 +208,23 @@ export function Fil({ messages, moteurs, reflexion, chargement, etapeReflexion, 
     return (
       <div className="fil fil--vide">
         <div className="accueil">
-          <p className="accueil-titre">Que voulez-vous faire ?</p>
-          <p className="accueil-texte">Posez une question, réfléchissez à voix haute, confiez une idée. Claude répond par votre abonnement, ou un modèle local si vous le choisissez.</p>
+          <p className="accueil-titre">{t("accueil.titre")}</p>
+          <p className="accueil-texte">{t("accueil.texte")}</p>
           <p className="accueil-astuce">
             <span>
-              <kbd>Entrée</kbd> envoyer
+              <kbd>{t("touche.entree")}</kbd> {t("accueil.envoyer")}
             </span>
             <span>
-              <kbd>Maj</kbd> + <kbd>Entrée</kbd> nouvelle ligne
+              <kbd>{t("touche.maj")}</kbd> + <kbd>{t("touche.entree")}</kbd> {t("accueil.nouvelleLigne")}
             </span>
             <span>
-              <kbd>Échap</kbd> arrêter
+              <kbd>{t("touche.echap")}</kbd> {t("accueil.arreter")}
             </span>
             <span>
-              <kbd>Ctrl</kbd> + <kbd>K</kbd> commandes
+              <kbd>Ctrl</kbd> + <kbd>K</kbd> {t("accueil.commandes")}
             </span>
             <span>
-              <kbd>/</kbd> dans la saisie
+              <kbd>/</kbd> {t("accueil.slash")}
             </span>
           </p>
         </div>
@@ -249,7 +251,7 @@ export function Fil({ messages, moteurs, reflexion, chargement, etapeReflexion, 
               <i />
               <i />
             </span>
-            {etapeReflexion ?? "JARVIS réfléchit…"}
+            {etapeReflexion ?? t("fil.reflechit")}
           </div>
         )}
       </div>
@@ -279,10 +281,13 @@ interface ConsoleProps {
 }
 
 export function Console(p: ConsoleProps) {
+  useLangue();
   const [texte, setTexte] = useState("");
   const [images, setImages] = useState<ImageJointe[]>([]);
   const [enPreparation, setEnPreparation] = useState(0);
   const [erreurSaisie, setErreurSaisie] = useState<string | null>(null);
+  // Message « commande inconnue » affiché : effacé dès que la saisie change
+  const erreurCommande = useRef<string | null>(null);
   const [survol, setSurvol] = useState(false);
   const [suggestion, setSuggestion] = useState(0);
   const [suggestionsFermees, setSuggestionsFermees] = useState(false);
@@ -298,9 +303,9 @@ export function Console(p: ConsoleProps) {
   // Images refusées d'avance : conseil multi-IA, ou connecteur choisi qui ne sait pas les lire
   const refusImages = images.length
     ? p.conseil
-      ? "Le conseil multi-IA ne lit pas les images : désactivez-le pour les envoyer."
+      ? t("console.conseilImages")
       : moteurActif && moteurActif.vision === false
-        ? `${moteurActif.nom} ne lit pas les images : choisissez Auto, Claude, une API ou Ollama avec un modèle de vision.`
+        ? t("console.sansVision", { nom: moteurActif.nom })
         : null
     : null;
   const peutEnvoyer = (Boolean(texte.trim()) || images.length > 0) && pret && !p.bloquee && !refusImages && !enPreparation;
@@ -333,8 +338,8 @@ export function Console(p: ConsoleProps) {
     const libres = places(images.length + enPreparation);
     const retenues = candidates.slice(0, libres);
     const messages: string[] = [];
-    if (ignores) messages.push(`${String(ignores)} fichier${ignores > 1 ? "s" : ""} ignoré${ignores > 1 ? "s" : ""} (seules les images sont acceptées).`);
-    if (candidates.length > retenues.length) messages.push(`${String(NB_MAX_IMAGES)} images au plus par message.`);
+    if (ignores) messages.push(tn("console.fichiersIgnores", ignores));
+    if (candidates.length > retenues.length) messages.push(t("console.maxImages", { n: NB_MAX_IMAGES }));
     setErreurSaisie(messages.length ? messages.join(" ") : null);
     if (!retenues.length) return;
     setEnPreparation((n) => n + retenues.length);
@@ -344,7 +349,7 @@ export function Console(p: ConsoleProps) {
           setImages((is) => (is.length < NB_MAX_IMAGES ? [...is, img] : is));
         })
         .catch((e: unknown) => {
-          setErreurSaisie(e instanceof ErreurImage ? e.message : `${f.name} : image illisible.`);
+          setErreurSaisie(e instanceof ErreurImage ? e.message : t("console.imageIllisible", { nom: f.name }));
         })
         .finally(() => {
           setEnPreparation((n) => n - 1);
@@ -433,7 +438,8 @@ export function Console(p: ConsoleProps) {
       return;
     }
     if (analyse.type === "inconnue") {
-      setErreurSaisie(`Commande inconnue : « /${analyse.nom} ». Tapez /aide pour la liste, ou // pour envoyer un message qui commence par « / ».`);
+      erreurCommande.current = t("console.commandeInconnue", { nom: analyse.nom });
+      setErreurSaisie(erreurCommande.current);
       return;
     }
     if (!peutEnvoyer) return;
@@ -455,7 +461,7 @@ export function Console(p: ConsoleProps) {
     >
       <div className="console-reglages">
         <label className="reglage-compact reglage-cerveau">
-          <span className="reglage-libelle">Cerveau</span>
+          <span className="reglage-libelle">{t("console.cerveau")}</span>
           <select
             className="select select--compact"
             value={p.moteur}
@@ -463,12 +469,12 @@ export function Console(p: ConsoleProps) {
               p.surMoteur(e.target.value);
             }}
           >
-            <option value="auto">Auto (routeur)</option>
+            <option value="auto">{t("console.auto")}</option>
             {p.moteurs.map((m) => (
               <option key={m.id} value={m.id} disabled={!m.disponible}>
                 {m.nom}
-                {m.risque ? " ⚠ risque" : ""}
-                {m.disponible ? "" : " — indisponible"}
+                {m.risque ? t("console.risque") : ""}
+                {m.disponible ? "" : t("console.indisponible")}
               </option>
             ))}
           </select>
@@ -477,17 +483,17 @@ export function Console(p: ConsoleProps) {
           type="button"
           className="segment-btn bouton-conseil"
           aria-pressed={p.conseil}
-          title="Conseil multi-IA : plusieurs connecteurs donnent leur avis, puis une synthèse"
+          title={t("console.conseilTitre")}
           onClick={() => {
             p.surConseil(!p.conseil);
           }}
         >
-          Conseil
+          {t("console.conseil")}
         </button>
         {p.extras}
         {moteurActif && moteurActif.modeles.length > 0 && (
           <label className="reglage-compact">
-            <span className="visuellement-cache">Modèle</span>
+            <span className="visuellement-cache">{t("console.modele")}</span>
             <select
               className="select select--compact"
               value={p.modele}
@@ -505,7 +511,7 @@ export function Console(p: ConsoleProps) {
         )}
         {moteurActif && moteurActif.efforts.length > 0 && (
           <label className="reglage-compact">
-            <span className="visuellement-cache">Effort</span>
+            <span className="visuellement-cache">{t("console.effort")}</span>
             <select
               className="select select--compact"
               value={p.effort}
@@ -515,7 +521,7 @@ export function Console(p: ConsoleProps) {
             >
               {moteurActif.efforts.map((e) => (
                 <option key={e} value={e}>
-                  {NOMS_EFFORT[e] ?? e}
+                  {nomEffort(e)}
                 </option>
               ))}
             </select>
@@ -524,17 +530,17 @@ export function Console(p: ConsoleProps) {
       </div>
       {p.bloquee && (
         <p className="console-alerte" role="status">
-          Arrêt d'urgence actif : JARVIS n'envoie plus rien tant qu'il n'est pas levé.
+          {t("console.urgence")}
         </p>
       )}
       {moteurActif?.risque && (
         <p className="console-alerte" role="status">
-          Connecteur à risque choisi : vos conditions d'utilisation chez ce fournisseur l'interdisent peut-être.
+          {t("console.risqueAlerte")}
         </p>
       )}
       {moteurActif && !moteurActif.disponible && (
         <p className="console-alerte" role="status">
-          {moteurActif.nom} indisponible : {moteurActif.detail}.
+          {t("console.moteurIndisponible", { nom: moteurActif.nom, detail: moteurActif.detail })}
         </p>
       )}
       {erreurSaisie && (
@@ -550,7 +556,7 @@ export function Console(p: ConsoleProps) {
       <Vignettes
         images={versAffichees(images)}
         enPreparation={enPreparation}
-        libelle={`Images jointes au message (${String(images.length)} sur ${String(NB_MAX_IMAGES)})`}
+        libelle={t("console.imagesJointes", { n: images.length, max: NB_MAX_IMAGES })}
         className="vignettes--saisie"
         surRetirer={(id) => {
           setImages((is) => is.filter((i) => i.id !== id));
@@ -559,7 +565,7 @@ export function Console(p: ConsoleProps) {
         }}
       />
       {suggestions.length > 0 && (
-        <ul className="suggestions" id={idSuggestions} role="listbox" aria-label="Commandes">
+        <ul className="suggestions" id={idSuggestions} role="listbox" aria-label={t("console.commandes")}>
           {suggestions.map((c) => (
             <li
               key={c.id}
@@ -595,8 +601,8 @@ export function Console(p: ConsoleProps) {
         <button
           type="button"
           className="joindre-btn"
-          aria-label={`Joindre des images (${String(images.length)} sur ${String(NB_MAX_IMAGES)})`}
-          title="Joindre des images (ou collez-les, ou glissez-les)"
+          aria-label={t("console.joindre", { n: images.length, max: NB_MAX_IMAGES })}
+          title={t("console.joindreTitre")}
           disabled={p.bloquee || places(images.length + enPreparation) === 0}
           onClick={() => {
             fichiers.current?.click();
@@ -607,14 +613,14 @@ export function Console(p: ConsoleProps) {
           </svg>
         </button>
         <label className="visuellement-cache" htmlFor="saisie-message">
-          Message à JARVIS
+          {t("console.message")}
         </label>
         <textarea
           id="saisie-message"
           ref={champ}
           rows={1}
           value={texte}
-          placeholder={p.conseil ? "Question pour le conseil…" : images.length ? "Une question sur ces images ? (facultatif)" : "Écrire à JARVIS… (/ pour les commandes)"}
+          placeholder={p.conseil ? t("console.placeholderConseil") : images.length ? t("console.placeholderImages") : t("console.placeholder")}
           autoComplete="off"
           role={suggestions.length ? "combobox" : undefined}
           aria-expanded={suggestions.length ? true : undefined}
@@ -625,7 +631,7 @@ export function Console(p: ConsoleProps) {
             setTexte(e.target.value);
             setSuggestion(0);
             setSuggestionsFermees(false);
-            if (erreurSaisie?.startsWith("Commande inconnue")) setErreurSaisie(null);
+            if (erreurSaisie !== null && erreurSaisie === erreurCommande.current) setErreurSaisie(null);
           }}
           onPaste={(e) => {
             const colles = Array.from(e.clipboardData.files);
@@ -671,8 +677,8 @@ export function Console(p: ConsoleProps) {
           className="envoyer-btn"
           data-arreter={p.enCours || undefined}
           disabled={!p.enCours && !peutEnvoyer && !texte.trim().startsWith("/")}
-          aria-label={p.enCours ? "Arrêter la réponse" : "Envoyer"}
-          title={p.enCours ? "Arrêter (Échap)" : "Envoyer (Entrée)"}
+          aria-label={p.enCours ? t("console.arreterReponse") : t("console.envoyer")}
+          title={p.enCours ? t("console.arreterTitre") : t("console.envoyerTitre")}
         >
           {p.enCours ? (
             <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
@@ -687,7 +693,7 @@ export function Console(p: ConsoleProps) {
       </div>
       {survol && (
         <div className="depot-images" aria-hidden="true">
-          Déposez vos images ({String(places(images.length + enPreparation))} place{places(images.length + enPreparation) > 1 ? "s" : ""})
+          {tn("console.depot", places(images.length + enPreparation))}
         </div>
       )}
     </form>

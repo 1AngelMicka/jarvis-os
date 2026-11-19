@@ -20,6 +20,8 @@ import { Console, EVENEMENT_JOINDRE, Fil, type MessageAffiche } from "./composan
 import { FenetreAccordImages } from "./composants/AccordImages";
 import { Aide, type ModePalette, Palette } from "./composants/Palette";
 import { commande as infoCommande, commandeDuRaccourci, type IdCommande, themeDepuis, themeSuivant } from "./commandes";
+import { t, tn } from "./i18n";
+import { useLangue } from "./i18n/react";
 import type { ImageJointe } from "./images";
 import { choisirTheme, lireTheme, THEMES, type Theme } from "./theme";
 import { ListeConversations } from "./composants/Historique";
@@ -59,6 +61,7 @@ function modeleParDefaut(moteur: InfoMoteur | undefined, prefere?: string): stri
 
 /** Porte d'entrée : écran de jumelage tant que cet appareil n'a pas de jeton valable. */
 export function App() {
+  useLangue(); // un changement de langue redessine toute l'interface
   const [autorise, setAutorise] = useState(() => Boolean(lireJeton()) && !window.location.hash.includes("jumeler="));
   useEffect(() => {
     const surRefus = () => {
@@ -87,6 +90,7 @@ export function App() {
 type Onglet = "conversations" | "activite" | "demandes" | "securite";
 
 function Hud() {
+  useLangue();
   const [etat, setEtat] = useState<Etat | null>(null);
   const [erreurEtat, setErreurEtat] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ResumeConversation[]>([]);
@@ -180,7 +184,7 @@ function Hud() {
         setEffort(prefs.effort && claude?.efforts.includes(prefs.effort) ? prefs.effort : (claude?.effort_defaut ?? ""));
       })
       .catch((err: unknown) => {
-        setErreurEtat(err instanceof Error ? err.message : "Core injoignable.");
+        setErreurEtat(err instanceof Error ? err.message : t("erreur.injoignableCourt"));
       });
   }, []);
 
@@ -289,7 +293,7 @@ function Hud() {
           });
         })
         .catch(() => {
-          if (!horsLigne) setErreurEtat("Core injoignable.");
+          if (!horsLigne) setErreurEtat(t("erreur.injoignableCourt"));
         });
     };
     const minuterie = window.setInterval(sonder, 15000);
@@ -951,14 +955,14 @@ function Hud() {
     <div className="panneau-actions">
       {active && (
         <>
-          <button type="button" className="btn btn-discret btn-mini" title="Résumer cette conversation dans la mémoire (sinon chaque nuit)" onClick={resumer}>
-            Résumer
+          <button type="button" className="btn btn-discret btn-mini" title={t("dialogue.resumerTitre")} onClick={resumer}>
+            {t("dialogue.resumer")}
           </button>
-          <button type="button" className="btn btn-discret btn-mini" title="Archiver (🟡, demande votre accord)" onClick={() => { agirSurConversation("conversation.archiver"); }}>
-            Archiver
+          <button type="button" className="btn btn-discret btn-mini" title={t("dialogue.archiverTitre")} onClick={() => { agirSurConversation("conversation.archiver"); }}>
+            {t("dialogue.archiver")}
           </button>
-          <button type="button" className="btn btn-discret btn-mini btn-danger" title="Supprimer définitivement (🔴, clé d'accès)" onClick={() => { agirSurConversation("conversation.supprimer"); }}>
-            Supprimer
+          <button type="button" className="btn btn-discret btn-mini btn-danger" title={t("dialogue.supprimerTitre")} onClick={() => { agirSurConversation("conversation.supprimer"); }}>
+            {t("dialogue.supprimer")}
           </button>
         </>
       )}
@@ -966,16 +970,16 @@ function Hud() {
         <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />
         </svg>
-        Nouvelle
+        {t("dialogue.nouvelle")}
       </button>
     </div>
   );
 
   const ONGLETS: { id: Onglet; nom: string; pastille?: number }[] = [
-    { id: "conversations", nom: "Conversations" },
-    { id: "activite", nom: "Activité", pastille: activite?.en_cours ?? 0 },
-    { id: "demandes", nom: "Demandes", pastille: nbDemandes },
-    { id: "securite", nom: "Sécurité" },
+    { id: "conversations", nom: t("onglet.conversations") },
+    { id: "activite", nom: t("onglet.activite"), pastille: activite?.en_cours ?? 0 },
+    { id: "demandes", nom: t("onglet.demandes"), pastille: nbDemandes },
+    { id: "securite", nom: t("onglet.securite") },
   ];
 
   return (
@@ -993,9 +997,9 @@ function Hud() {
         </div>
         <div className="barre-etat" role="status">
           <span className="point-etat" data-ok={erreurEtat ? false : etat ? !urgence : undefined} aria-hidden="true" />
-          <span className="barre-etat-texte">{erreurEtat ? "Core hors ligne" : etat ? (urgence ? "Arrêt d'urgence" : "Core en ligne") : "Connexion…"}</span>
+          <span className="barre-etat-texte">{erreurEtat ? t("barre.coreHorsLigne") : etat ? (urgence ? t("barre.urgence") : t("barre.coreEnLigne")) : t("barre.connexion")}</span>
         </div>
-        <nav className="barre-nav" aria-label="Vues">
+        <nav className="barre-nav" aria-label={t("barre.vues")}>
           <button
             type="button"
             className="btn btn-discret btn-mini btn-connecteurs"
@@ -1004,7 +1008,7 @@ function Hud() {
               setVue((v) => (v === "connecteurs" ? "dialogue" : "connecteurs"));
             }}
           >
-            Connecteurs
+            {t("vue.connecteurs")}
           </button>
           <button
             type="button"
@@ -1014,7 +1018,7 @@ function Hud() {
               setVue((v) => (v === "couts" ? "dialogue" : "couts"));
             }}
           >
-            Coûts
+            {t("vue.couts")}
           </button>
           <button
             type="button"
@@ -1024,7 +1028,7 @@ function Hud() {
               setVue((v) => (v === "memoire" ? "dialogue" : "memoire"));
             }}
           >
-            Mémoire
+            {t("vue.memoire")}
           </button>
           <button
             type="button"
@@ -1034,7 +1038,7 @@ function Hud() {
               setVue((v) => (v === "connaissances" ? "dialogue" : "connaissances"));
             }}
           >
-            Savoir
+            {t("vue.savoir")}
           </button>
           <button
             type="button"
@@ -1044,7 +1048,7 @@ function Hud() {
               setVue((v) => (v === "agents" ? "dialogue" : "agents"));
             }}
           >
-            Agents
+            {t("vue.agents")}
           </button>
           <button
             type="button"
@@ -1054,7 +1058,7 @@ function Hud() {
               setVue((v) => (v === "ateliers" ? "dialogue" : "ateliers"));
             }}
           >
-            Ateliers
+            {t("vue.ateliers")}
           </button>
           <button
             type="button"
@@ -1064,7 +1068,7 @@ function Hud() {
               setVue((v) => (v === "ameliorations" ? "dialogue" : "ameliorations"));
             }}
           >
-            Améliorer
+            {t("vue.ameliorer")}
           </button>
           <button
             type="button"
@@ -1075,22 +1079,22 @@ function Hud() {
               else ouvrirReglages();
             }}
           >
-            Réglages
+            {t("vue.reglages")}
           </button>
         </nav>
         <SelecteurTheme className="selecteur-theme--barre" />
         {!urgence && etat && (
-          <button type="button" className="btn btn-rouge btn-mini btn-urgence" onClick={declencherUrgence} title="Tout arrêter tout de suite">
+          <button type="button" className="btn btn-rouge btn-mini btn-urgence" onClick={declencherUrgence} title={t("barre.urgenceTitre")}>
             <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0" />
             </svg>
-            <span className="btn-urgence-texte">Arrêt d'urgence</span>
+            <span className="btn-urgence-texte">{t("barre.urgence")}</span>
           </button>
         )}
         <button
           type="button"
           className="icone-btn btn-historique"
-          aria-label={`Panneau latéral${nbDemandes ? ` (${String(nbDemandes)} demande${nbDemandes > 1 ? "s" : ""} en attente)` : ""}`}
+          aria-label={nbDemandes ? tn("barre.lateralDemandes", nbDemandes) : t("barre.lateral")}
           aria-expanded={lateralOuvert}
           onClick={() => {
             setLateralOuvert((o) => !o);
@@ -1104,19 +1108,19 @@ function Hud() {
         {urgence && (
           <div className="bandeau-urgence" role="alert">
             <span>
-              <b>Arrêt d'urgence actif</b>
-              {etat?.urgence.par ? ` · déclenché par ${etat.urgence.par.replace(/^appareil:/, "")}` : ""} : plus aucune
-              action n'est acceptée.
+              <b>{t("urgence.bandeau")}</b>
+              {etat?.urgence.par ? t("urgence.declenchePar", { qui: etat.urgence.par.replace(/^appareil:/, "") }) : ""}
+              {t("urgence.bandeauSuite")}
             </span>
             <button type="button" className="btn btn-mini" onClick={demanderLevee}>
-              Lever l'arrêt (clé d'accès)
+              {t("urgence.lever")}
             </button>
           </div>
         )}
       </header>
 
       <aside className="colonne-gauche">
-        <Panneau titre="Noyau" className="panneau-noyau" ordre={0}>
+        <Panneau titre={t("panneau.noyau")} className="panneau-noyau" ordre={0}>
           <div className="zone-noyau">
             {presence.actif ? (
               <Presence etat={etatOrbe} alerte={alerteOrbe} mode="panneau" avecToile={!presence.fond} />
@@ -1125,32 +1129,32 @@ function Hud() {
             )}
           </div>
         </Panneau>
-        <Panneau titre="État" className="panneau-etat" ordre={1} meta={etat ? `v${etat.version}` : undefined}>
+        <Panneau titre={t("panneau.etat")} className="panneau-etat" ordre={1} meta={etat ? `v${etat.version}` : undefined}>
           <ul className="etat-liste">
             <li className="etat-item">
               <span className="point-etat" data-ok={erreurEtat ? false : etat ? !urgence : undefined} aria-hidden="true" />
               <span className="etat-nom">JARVIS-Core</span>
-              <span className="etat-valeur">{erreurEtat ? "hors ligne" : etat ? (urgence ? "arrêt d'urgence" : "en ligne") : "…"}</span>
+              <span className="etat-valeur">{erreurEtat ? t("etat.horsLigne") : etat ? (urgence ? t("etat.urgence") : t("etat.enLigne")) : "…"}</span>
             </li>
             {etat && (
-              <li className="etat-item" title={`${String(etat.memoire.noyau)} souvenirs noyau · ${String(etat.memoire.local_uniquement)} privés (IA locales uniquement)`}>
+              <li className="etat-item" title={t("etat.memoireDetail", { noyau: etat.memoire.noyau, prives: etat.memoire.local_uniquement })}>
                 <span className="point-etat" data-ok={etat.memoire.total > 0} aria-hidden="true" />
-                <span className="etat-nom">Mémoire</span>
-                <span className="etat-valeur">{etat.memoire.total.toLocaleString("fr-FR")} souvenirs</span>
+                <span className="etat-nom">{t("vue.memoire")}</span>
+                <span className="etat-valeur">{tn("etat.souvenirs", etat.memoire.total)}</span>
               </li>
             )}
             {etat?.sans_ecran && (
-              <li className="etat-item" title="Capture, clics et contrôle de l'écran : indisponibles en mode sans écran. La voix passe par le micro de ce navigateur.">
+              <li className="etat-item" title={t("etat.sansEcranDetail")}>
                 <span className="point-etat" aria-hidden="true" />
-                <span className="etat-nom">Écran</span>
-                <span className="etat-valeur">mode sans écran</span>
+                <span className="etat-nom">{t("etat.ecran")}</span>
+                <span className="etat-valeur">{t("etat.sansEcran")}</span>
               </li>
             )}
             {moteurs.map((m) => (
               <li className="etat-item" key={m.id} title={m.detail}>
                 <span className="point-etat" data-ok={m.disponible} aria-hidden="true" />
                 <span className="etat-nom">{m.nom}</span>
-                <span className="etat-valeur">{m.disponible ? `${String(m.modeles.length)} modèle${m.modeles.length > 1 ? "s" : ""}` : "arrêté"}</span>
+                <span className="etat-valeur">{m.disponible ? tn("etat.modeles", m.modeles.length) : t("etat.arrete")}</span>
               </li>
             ))}
             {etat && (
@@ -1163,9 +1167,9 @@ function Hud() {
                     setVue("accueil");
                   }}
                 >
-                  Installation
+                  {t("etat.installation")}
                 </button>
-                <span className="etat-valeur">diagnostic</span>
+                <span className="etat-valeur">{t("etat.diagnostic")}</span>
               </li>
             )}
             {etat && (
@@ -1180,18 +1184,18 @@ function Hud() {
                     setRejouerMatin((n) => n + 1);
                   }}
                 >
-                  Accueil du matin
+                  {t("etat.matin")}
                 </button>
-                <span className="etat-valeur">rejouer</span>
+                <span className="etat-valeur">{t("etat.rejouer")}</span>
               </li>
             )}
             {etat && (
               <li className="etat-item">
                 <span className="point-etat" data-ok={nbDemandes === 0} aria-hidden="true" />
                 <button type="button" className="etat-nom etat-lien" onClick={montrerDemandes}>
-                  Demandes
+                  {t("etat.demandes")}
                 </button>
-                <span className="etat-valeur">{nbDemandes ? `${String(nbDemandes)} en attente` : "aucune"}</span>
+                <span className="etat-valeur">{nbDemandes ? t("etat.enAttente", { n: nbDemandes }) : t("etat.aucune")}</span>
               </li>
             )}
           </ul>
@@ -1231,7 +1235,7 @@ function Hud() {
                   setVue("dialogue");
                 }}
               >
-                Retour au dialogue
+                {t("reglages.retourDialogue")}
               </button>
             }
           >
@@ -1260,7 +1264,7 @@ function Hud() {
                   setVue("dialogue");
                 }}
               >
-                Retour au dialogue
+                {t("reglages.retourDialogue")}
               </button>
             }
           >
@@ -1292,7 +1296,7 @@ function Hud() {
                   setVue("dialogue");
                 }}
               >
-                Retour au dialogue
+                {t("reglages.retourDialogue")}
               </button>
             }
           >
@@ -1315,7 +1319,7 @@ function Hud() {
                   setVue("dialogue");
                 }}
               >
-                Retour au dialogue
+                {t("reglages.retourDialogue")}
               </button>
             }
           >
@@ -1338,7 +1342,7 @@ function Hud() {
                   setVue("dialogue");
                 }}
               >
-                Retour au dialogue
+                {t("reglages.retourDialogue")}
               </button>
             }
           >
@@ -1358,11 +1362,11 @@ function Hud() {
           </Panneau>
         ) : vue === "reglages" ? (
           <Panneau
-            titre="Réglages"
+            titre={t("vue.reglages")}
             className="panneau-scene"
             ordre={2}
             id="reglages"
-            meta="tout ce qui se règle, par catégorie"
+            meta={t("reglages.panneauMeta")}
             actions={
               <button
                 type="button"
@@ -1371,7 +1375,7 @@ function Hud() {
                   setVue("dialogue");
                 }}
               >
-                Retour au dialogue
+                {t("reglages.retourDialogue")}
               </button>
             }
           >
@@ -1422,7 +1426,7 @@ function Hud() {
                   setVue("dialogue");
                 }}
               >
-                Retour au dialogue
+                {t("reglages.retourDialogue")}
               </button>
             }
           >
@@ -1445,7 +1449,7 @@ function Hud() {
                   setVue("dialogue");
                 }}
               >
-                Retour au dialogue
+                {t("reglages.retourDialogue")}
               </button>
             }
           >
@@ -1454,10 +1458,10 @@ function Hud() {
             </div>
           </Panneau>
         ) : (
-        <Panneau titre="Dialogue" className="panneau-scene" ordre={2} id="dialogue" meta={titreActif ?? "Nouvelle conversation"} actions={actionsDialogue}>
+        <Panneau titre={t("dialogue.titre")} className="panneau-scene" ordre={2} id="dialogue" meta={titreActif ?? t("dialogue.nouvelleConversation")} actions={actionsDialogue}>
             {erreurEtat ? (
               <div className="vide">
-                <p className="vide-titre">Le Core ne répond pas</p>
+                <p className="vide-titre">{t("erreur.coreMuet")}</p>
                 <p>{erreurEtat}</p>
                 <button
                   type="button"
@@ -1466,7 +1470,7 @@ function Hud() {
                     charger();
                   }}
                 >
-                  Réessayer
+                  {t("erreur.reessayer")}
                 </button>
               </div>
             ) : (
@@ -1500,7 +1504,7 @@ function Hud() {
                 reflexion={enCours && !premierMorceau}
                 chargement={chargement || !etat}
                 {...(avisEnCours && (avisEnCours.recus > 0 || !attente)
-                  ? { etapeReflexion: `Conseil : ${String(avisEnCours.recus)} avis sur ${String(avisEnCours.attendus)}…` }
+                  ? { etapeReflexion: t("dialogue.conseilEtape", { recus: avisEnCours.recus, attendus: avisEnCours.attendus }) }
                   : attente
                     ? { etapeReflexion: attente }
                     : {})}
@@ -1549,9 +1553,9 @@ function Hud() {
       <DicteeGlobale />
 
       <aside className="colonne-droite" data-ouvert={lateralOuvert || undefined}>
-        <section className="panneau panneau-lateral" style={{ "--ordre": 3 } as React.CSSProperties} aria-label="Panneau latéral">
+        <section className="panneau panneau-lateral" style={{ "--ordre": 3 } as React.CSSProperties} aria-label={t("barre.lateral")}>
           <header className="panneau-tete panneau-tete--onglets">
-            <div className="onglets" role="tablist" aria-label="Vues">
+            <div className="onglets" role="tablist" aria-label={t("onglet.vues")}>
               {ONGLETS.map((o) => (
                 <button
                   key={o.id}
@@ -1573,7 +1577,7 @@ function Hud() {
             <button
               type="button"
               className="icone-btn petit btn-fermer-historique"
-              aria-label="Fermer"
+              aria-label={t("onglet.fermer")}
               onClick={() => {
                 setLateralOuvert(false);
               }}

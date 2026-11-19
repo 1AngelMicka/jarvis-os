@@ -8,6 +8,8 @@ import "../styles/reglages.css";
 
 import { choisirAnimations, CHOIX_ANIMATIONS, type ChoixAnimations, estChoixAnimations, EVENEMENT_ANIMATIONS, lireAnimations } from "../animations";
 import { RACCOURCIS } from "../commandes";
+import { choisirLangue, type Langue, LANGUES } from "../i18n";
+import { useLangue } from "../i18n/react";
 import { choisirFondEcran, EVENEMENT_FOND, lireFondEcran } from "../presence";
 import { EVENEMENT_THEME, lireTheme } from "../theme";
 import {
@@ -87,13 +89,9 @@ function Segment<T extends string>({ libelle, options, valeur, surChoix }: { lib
   );
 }
 
-const VOIX = [
-  { id: "oui", nom: "Activée" },
-  { id: "non", nom: "Coupée" },
-] as const;
-
 /** Lecture des réponses à voix haute : suit Ctrl+M, « /silence » et le bouton de la console. */
 function ChoixVoix({ lecteur }: { lecteur: LecteurVocal }) {
+  const { t } = useLangue();
   const [actif, setActif] = useState(lecteur.actif);
   useEffect(() => {
     const couper = () => {
@@ -111,8 +109,11 @@ function ChoixVoix({ lecteur }: { lecteur: LecteurVocal }) {
   }, []);
   return (
     <Segment
-      libelle="Lecture à voix haute"
-      options={VOIX}
+      libelle={t("voix.lecture")}
+      options={[
+        { id: "oui", nom: t("voix.activee") },
+        { id: "non", nom: t("voix.coupee") },
+      ]}
       valeur={actif ? "oui" : "non"}
       surChoix={(v) => {
         reglerVoix(lecteur, v === "oui");
@@ -122,6 +123,7 @@ function ChoixVoix({ lecteur }: { lecteur: LecteurVocal }) {
 }
 
 function ChoixAnimationsAppareil() {
+  const { t } = useLangue();
   const [choix, setChoix] = useState<ChoixAnimations>(lireAnimations);
   useEffect(() => {
     const suivre = (e: Event) => {
@@ -133,16 +135,29 @@ function ChoixAnimationsAppareil() {
       window.removeEventListener(EVENEMENT_ANIMATIONS, suivre);
     };
   }, []);
-  return <Segment libelle="Animations" options={CHOIX_ANIMATIONS} valeur={choix} surChoix={choisirAnimations} />;
+  const options = CHOIX_ANIMATIONS.map((c) => ({ id: c.id, nom: t(`animations.${c.id}`) }));
+  return <Segment libelle={t("animations.libelle")} options={options} valeur={choix} surChoix={choisirAnimations} />;
 }
 
-const PLACES_ORBE = [
-  { id: "panneau", nom: "Dans le panneau Noyau" },
-  { id: "fond", nom: "HUD en fond d'écran" },
-] as const;
+/** Langue de l'interface (gardée sur cet appareil ; au premier lancement, celle du navigateur). */
+function ChoixLangue() {
+  const { t, langue } = useLangue();
+  return (
+    <>
+      <Segment<Langue>
+        libelle={t("langue.libelle")}
+        options={LANGUES}
+        valeur={langue}
+        surChoix={choisirLangue}
+      />
+      <p className="sec-texte">{t("langue.aide")}</p>
+    </>
+  );
+}
 
 /** Thème Présence : l'orbe reste dans le panneau Noyau ou passe derrière tout le HUD. */
 function ChoixPresence() {
+  const { t } = useLangue();
   const [fond, setFond] = useState(lireFondEcran);
   const [theme, setTheme] = useState(lireTheme);
   useEffect(() => {
@@ -162,17 +177,18 @@ function ChoixPresence() {
   return (
     <>
       <Segment
-        libelle="Place de l'orbe"
-        options={PLACES_ORBE}
+        libelle={t("presence.place")}
+        options={[
+          { id: "panneau", nom: t("presence.panneau") },
+          { id: "fond", nom: t("presence.fond") },
+        ]}
         valeur={fond ? "fond" : "panneau"}
         surChoix={(v) => {
           choisirFondEcran(v === "fond");
         }}
       />
       <p className="sec-texte">
-        {theme === "presence"
-          ? "L'orbe suit JARVIS : veille, écoute, réflexion, réponse et compactage (résumé en mémoire). La jauge sous l'orbe montre le niveau du micro quand il est ouvert."
-          : "Choisissez d'abord le thème « Présence » (section Thème) : ce réglage est gardé pour lui."}
+        {theme === "presence" ? t("presence.actif") : t("presence.inactif")}
       </p>
     </>
   );
@@ -220,6 +236,7 @@ function VoixInstallees() {
 const INSTALLEE = typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches;
 
 export function VueReglages(p: Props) {
+  const { t, tn } = useLangue();
   const [categorie, setCategorie] = useState<IdCategorie>(() => p.cible?.categorie ?? lireDerniereCategorie());
   // Téléphone : la liste des catégories, puis la page choisie (« Réglages » pour revenir). Adresse directe : la page.
   const [page, setPage] = useState(Boolean(p.cible?.categorie));
@@ -344,11 +361,11 @@ export function VueReglages(p: Props) {
         return (
           <div className="reglage-controles">
             <div className="reglage-controle">
-              <span className="reglage-controle-nom">Voix</span>
+              <span className="reglage-controle-nom">{t("reglages.voix")}</span>
               <ChoixVoix lecteur={p.lecteur} />
             </div>
             <div className="reglage-controle">
-              <span className="reglage-controle-nom">Animations</span>
+              <span className="reglage-controle-nom">{t("animations.libelle")}</span>
               <ChoixAnimationsAppareil />
             </div>
             <div className="reglage-controle">
@@ -356,11 +373,13 @@ export function VueReglages(p: Props) {
             </div>
           </div>
         );
+      case "langue":
+        return <ChoixLangue />;
       case "themes":
         return (
           <>
             <SelecteurTheme libelleVisible className="reglage-theme" />
-            <p className="sec-texte">Gardé sur cet appareil. Aussi : « /theme clair », ou la palette (Ctrl+K).</p>
+            <p className="sec-texte">{t("themes.aide")}</p>
           </>
         );
       case "presence":
@@ -369,7 +388,7 @@ export function VueReglages(p: Props) {
         return (
           <>
             <ChoixAnimationsAppareil />
-            <p className="sec-texte">« Selon le système » suit le réglage d'accessibilité « réduire les animations » de l'appareil.</p>
+            <p className="sec-texte">{t("animations.aide")}</p>
           </>
         );
       case "clavier":
@@ -387,10 +406,10 @@ export function VueReglages(p: Props) {
             </dl>
             <div className="carte-co-actions">
               <button type="button" className="btn btn-mini" onClick={p.surPalette}>
-                Ouvrir la palette
+                {t("clavier.palette")}
               </button>
               <button type="button" className="btn btn-discret btn-mini" onClick={p.surAide}>
-                Toutes les commandes « / »
+                {t("clavier.commandes")}
               </button>
             </div>
           </>
@@ -536,7 +555,7 @@ export function VueReglages(p: Props) {
   };
 
   const nav = (
-    <nav className="reglages-nav" aria-label="Catégories de réglages">
+    <nav className="reglages-nav" aria-label={t("reglages.categories")}>
       <ul>
         {CATEGORIES.map((c) => (
           <li key={c.id}>
@@ -570,13 +589,13 @@ export function VueReglages(p: Props) {
         }}
       >
         <label htmlFor={idRecherche} className="visuellement-cache">
-          Chercher un réglage
+          {t("reglages.chercher")}
         </label>
         <input
           id={idRecherche}
           type="search"
           className="reglages-champ"
-          placeholder="Chercher un réglage (voix, plafond, météo…)"
+          placeholder={t("reglages.chercherExemple")}
           value={recherche}
           autoComplete="off"
           onChange={(e) => {
@@ -595,9 +614,9 @@ export function VueReglages(p: Props) {
 
       <div className="reglages-corps" ref={corps}>
         {recherche.trim() ? (
-          <section className="reglages-resultats" aria-label="Résultats de la recherche">
+          <section className="reglages-resultats" aria-label={t("reglages.resultats")}>
             <p className="sec-texte" role="status">
-              {resultats.length ? `${String(resultats.length)} réglage${resultats.length > 1 ? "s" : ""}` : "Aucun réglage ne correspond. Essayez un autre mot."}
+              {resultats.length ? tn("reglages.nbResultats", resultats.length) : t("reglages.aucunResultat")}
             </p>
             <ul className="reglages-liste-resultats">
               {resultats.map((s) => (
@@ -636,7 +655,7 @@ export function VueReglages(p: Props) {
                 <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M15 6l-6 6 6 6" />
                 </svg>
-                Réglages
+                {t("vue.reglages")}
               </button>
               <h3 className="reglages-page-titre" tabIndex={-1} data-titre="">
                 {info.nom}

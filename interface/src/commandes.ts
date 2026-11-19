@@ -1,6 +1,7 @@
 // Commandes de l'interface : palette Ctrl+K, commandes « / » dans la saisie, raccourcis clavier. Une seule liste,
 // pour que la palette, les suggestions et l'aide disent toujours la même chose.
 
+import { type Cle, t } from "./i18n";
 import { THEMES, type Theme } from "./theme";
 
 export type IdCommande =
@@ -64,17 +65,35 @@ export const COMMANDES: readonly Commande[] = [
 ];
 
 /** Raccourcis affichés dans l'aide (ceux des commandes, plus ceux de la saisie). */
-export const RACCOURCIS: readonly { touches: string; effet: string }[] = [
-  { touches: "Ctrl+K", effet: "Palette de commandes" },
-  { touches: "Ctrl+H", effet: "Historique des conversations" },
-  { touches: "Ctrl+M", effet: "Couper la voix" },
-  { touches: "/", effet: "Écrire à JARVIS (ou une commande « / »)" },
-  { touches: "?", effet: "Cette aide" },
-  { touches: "Entrée", effet: "Envoyer" },
-  { touches: "Maj+Entrée", effet: "Nouvelle ligne" },
-  { touches: "Échap", effet: "Arrêter la réponse, fermer un panneau" },
-  { touches: "Ctrl+V", effet: "Coller une image" },
+/** Raccourcis clavier ; touches et effets dans la langue courante (getters : relus à chaque affichage). */
+const BRUTS: readonly { touches: string; effet: Cle }[] = [
+  { touches: "Ctrl+K", effet: "raccourci.palette" },
+  { touches: "Ctrl+H", effet: "raccourci.historique" },
+  { touches: "Ctrl+M", effet: "raccourci.silence" },
+  { touches: "/", effet: "raccourci.ecrire" },
+  { touches: "?", effet: "raccourci.aide" },
+  { touches: "Entrée", effet: "raccourci.envoyer" },
+  { touches: "Maj+Entrée", effet: "raccourci.nouvelleLigne" },
+  { touches: "Échap", effet: "raccourci.arreter" },
+  { touches: "Ctrl+V", effet: "raccourci.collerImage" },
 ];
+
+/** Touches dont le nom change avec la langue (les autres s'écrivent pareil partout). */
+const TOUCHES_TRADUITES: Readonly<Record<string, Cle>> = {
+  Entrée: "touche.entree",
+  "Maj+Entrée": "touches.majEntree",
+  Échap: "touche.echap",
+};
+
+export const RACCOURCIS: readonly { readonly touches: string; readonly effet: string }[] = BRUTS.map((r) => ({
+  get touches() {
+    const cle = TOUCHES_TRADUITES[r.touches];
+    return cle ? t(cle) : r.touches;
+  },
+  get effet() {
+    return t(r.effet);
+  },
+}));
 
 /** Minuscules, sans accents ni espaces superflus : « Thème » = « theme ». */
 export function normaliser(texte: string): string {

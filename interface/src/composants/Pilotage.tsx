@@ -20,6 +20,8 @@ import {
   verifierCommandeRapide,
 } from "../api";
 import { CHOIX_ANIMATIONS } from "../animations";
+import { t, tn } from "../i18n";
+import { useLangue } from "../i18n/react";
 import { EMOJI_NIVEAU, EVENEMENT_PILOTAGE, MODES_PILOTAGE } from "../pilotage";
 import { THEMES } from "../theme";
 import type { AutorisationPermanente, CommandeRapide, CommandeRapideEdition, ConflitCommande, InfoPilotage, ModePilotage, RegleProtection } from "../types";
@@ -33,6 +35,7 @@ function message(e: unknown, defaut: string): string {
 // --- Mode de pilotage ---------------------------------------------------------------------------------------
 
 export function ReglagePilotage({ surNotifier }: { surNotifier: (m: string) => void }) {
+  useLangue();
   const [mode, setMode] = useState<ModePilotage | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   useEffect(() => {
@@ -41,7 +44,7 @@ export function ReglagePilotage({ surNotifier }: { surNotifier: (m: string) => v
         setMode(p.mode);
       })
       .catch((e: unknown) => {
-        setErreur(message(e, "Pilotage illisible."));
+        setErreur(message(e, t("pilotage.illisible")));
       });
   }, []);
   const choisir = (m: ModePilotage) => {
@@ -50,18 +53,18 @@ export function ReglagePilotage({ surNotifier }: { surNotifier: (m: string) => v
     reglerPilotage(m)
       .then(() => {
         window.dispatchEvent(new CustomEvent(EVENEMENT_PILOTAGE));
-        surNotifier(`Pilotage par JARVIS : ${MODES_PILOTAGE.find((x) => x.id === m)?.nom ?? m}.`);
+        surNotifier(t("pilotage.choisi", { mode: t(`pilotage.${m}`) }));
       })
       .catch((e: unknown) => {
         setMode(avant);
-        setErreur(message(e, "Réglage impossible."));
+        setErreur(message(e, t("pilotage.impossible")));
       });
   };
   if (erreur) return <p className="sec-texte" role="alert">{erreur}</p>;
   if (!mode) return <div className="squelette squelette--ligne" aria-busy="true" />;
   return (
     <>
-      <div className="segment" role="radiogroup" aria-label="Pilotage par JARVIS">
+      <div className="segment" role="radiogroup" aria-label={t("pilotage.libelle")}>
         {MODES_PILOTAGE.map((o) => (
           <button
             key={o.id}
@@ -73,18 +76,12 @@ export function ReglagePilotage({ surNotifier }: { surNotifier: (m: string) => v
               choisir(o.id);
             }}
           >
-            {o.nom}
+            {t(`pilotage.${o.id}`)}
           </button>
         ))}
       </div>
       <p className="sec-texte">
-        {mode === "oui"
-          ? "Quand vous le lui demandez, JARVIS ouvre la vue ou l'élément tout seul."
-          : mode === "demander"
-            ? "JARVIS propose un bouton « Ouvrir » sous sa réponse ; rien ne bouge sans votre clic."
-            : "JARVIS ne pilote pas l'interface : aucune action sous ses réponses."}{" "}
-        Une mission, un atelier ou une action sensible restent <strong>toujours</strong> des propositions à valider d'un clic, quel que soit ce
-        réglage : un texte lu par JARVIS (page, fichier, souvenir importé) ne peut rien lancer.
+        {mode === "oui" ? t("pilotage.aideOui") : mode === "demander" ? t("pilotage.aideDemander") : t("pilotage.aideNon")} {t("pilotage.aideToujours")}
       </p>
     </>
   );
@@ -95,6 +92,7 @@ export function ReglagePilotage({ surNotifier }: { surNotifier: (m: string) => v
 const VIDE: CommandeRapideEdition = { motif: "", cible: "interface", action: "naviguer", parametres: { vue: "agents" }, priorite: 0, phrase_test: "", actif: true };
 
 function ParametresInterface({ edition, vues, surParametres }: { edition: CommandeRapideEdition; vues: Record<string, string>; surParametres: (p: Record<string, unknown>) => void }) {
+  useLangue();
   const id = useId();
   const p = edition.parametres;
   const valeur = (cle: string) => (typeof p[cle] === "string" ? p[cle] : "");
@@ -102,7 +100,7 @@ function ParametresInterface({ edition, vues, surParametres }: { edition: Comman
     return (
       <div className="rapide-ligne">
         <label className="champ">
-          <span className="champ-etiquette">Vue à ouvrir</span>
+          <span className="champ-etiquette">{t("rapides.vueAOuvrir")}</span>
           <select
             value={valeur("vue")}
             onChange={(e) => {
@@ -118,10 +116,10 @@ function ParametresInterface({ edition, vues, surParametres }: { edition: Comman
         </label>
         {valeur("vue") === "reglages" && (
           <label className="champ">
-            <span className="champ-etiquette">Section (facultatif)</span>
+            <span className="champ-etiquette">{t("rapides.section")}</span>
             <input
               value={valeur("ancre")}
-              placeholder="ex. couts, themes, regles"
+              placeholder={t("rapides.sectionExemple")}
               onChange={(e) => {
                 surParametres({ vue: "reglages", ...(e.target.value ? { ancre: e.target.value } : {}) });
               }}
@@ -134,11 +132,11 @@ function ParametresInterface({ edition, vues, surParametres }: { edition: Comman
   if (edition.action === "rechercher_memoire") {
     return (
       <label className="champ">
-        <span className="champ-etiquette">Recherche</span>
+        <span className="champ-etiquette">{t("rapides.recherche")}</span>
         <input
           id={id}
           value={valeur("requete")}
-          placeholder="{sujet} : le morceau capté par le motif"
+          placeholder={t("rapides.rechercheExemple")}
           onChange={(e) => {
             surParametres({ requete: e.target.value });
           }}
@@ -147,23 +145,23 @@ function ParametresInterface({ edition, vues, surParametres }: { edition: Comman
     );
   }
   const cle = valeur("cle") || "theme";
-  const options = cle === "theme" ? THEMES.map((t) => ({ id: t.id, nom: t.nom })) : CHOIX_ANIMATIONS.map((c) => ({ id: c.id, nom: c.nom }));
+  const options = cle === "theme" ? THEMES.map((x) => ({ id: x.id, nom: t(`theme.${x.id}`) })) : CHOIX_ANIMATIONS.map((c) => ({ id: c.id, nom: t(`animations.${c.id}`) }));
   return (
     <div className="rapide-ligne">
       <label className="champ">
-        <span className="champ-etiquette">Réglage</span>
+        <span className="champ-etiquette">{t("rapides.reglage")}</span>
         <select
           value={cle}
           onChange={(e) => {
             surParametres({ cle: e.target.value, valeur: e.target.value === "theme" ? "jarvis" : "systeme" });
           }}
         >
-          <option value="theme">Thème</option>
-          <option value="animations">Animations</option>
+          <option value="theme">{t("theme.libelle")}</option>
+          <option value="animations">{t("animations.libelle")}</option>
         </select>
       </label>
       <label className="champ">
-        <span className="champ-etiquette">Valeur</span>
+        <span className="champ-etiquette">{t("rapides.valeur")}</span>
         <select
           value={valeur("valeur")}
           onChange={(e) => {
@@ -189,6 +187,7 @@ function defautsAction(cible: "interface" | "core", action: string): Record<stri
 }
 
 function Editeur({ info, initiale, surFini }: { info: InfoPilotage; initiale: CommandeRapide | null; surFini: (m?: string) => void }) {
+  useLangue();
   const [e, setE] = useState<CommandeRapideEdition>(initiale ? { motif: initiale.motif, cible: initiale.cible, action: initiale.action, parametres: initiale.parametres, priorite: initiale.priorite, phrase_test: initiale.phrase_test, actif: initiale.actif } : VIDE);
   const [json, setJson] = useState(() => JSON.stringify(initiale?.cible === "core" ? initiale.parametres : {}, null, 0));
   const [verif, setVerif] = useState<{ valide: boolean; texte: string; conflits: ConflitCommande[] } | null>(null);
@@ -206,10 +205,10 @@ function Editeur({ info, initiale, surFini }: { info: InfoPilotage; initiale: Co
       verifierCommandeRapide(e)
         .then((r) => {
           const autres = (r.conflits ?? []).filter((c) => c.id !== initiale?.id);
-          setVerif(r.valide ? { valide: true, texte: `${EMOJI_NIVEAU[r.action?.niveau ?? "vert"] ?? ""} ${r.action?.libelle ?? ""}`, conflits: autres } : { valide: false, texte: r.erreur ?? "Commande invalide", conflits: [] });
+          setVerif(r.valide ? { valide: true, texte: `${EMOJI_NIVEAU[r.action?.niveau ?? "vert"] ?? ""} ${r.action?.libelle ?? ""}`, conflits: autres } : { valide: false, texte: r.erreur ?? t("rapides.invalide"), conflits: [] });
         })
         .catch((x: unknown) => {
-          setVerif({ valide: false, texte: message(x, "Vérification impossible."), conflits: [] });
+          setVerif({ valide: false, texte: message(x, t("rapides.verificationImpossible")), conflits: [] });
         });
     }, 350);
     return () => {
@@ -225,10 +224,10 @@ function Editeur({ info, initiale, surFini }: { info: InfoPilotage; initiale: Co
     const appel = initiale ? modifierCommandeRapide(initiale.id, e) : creerCommandeRapide(e);
     appel
       .then(() => {
-        surFini(initiale ? "Commande rapide modifiée." : "Commande rapide ajoutée.");
+        surFini(initiale ? t("rapides.modifiee") : t("rapides.ajoutee"));
       })
       .catch((x: unknown) => {
-        setErreur(message(x, "Enregistrement impossible."));
+        setErreur(message(x, t("rapides.enregistrementImpossible")));
       })
       .finally(() => {
         setOccupe(false);
@@ -244,19 +243,19 @@ function Editeur({ info, initiale, surFini }: { info: InfoPilotage; initiale: Co
       }}
     >
       <label className="champ">
-        <span className="champ-etiquette">Quand je dis…</span>
+        <span className="champ-etiquette">{t("rapides.quand")}</span>
         <input
           value={e.motif}
           maxLength={200}
-          placeholder="ex. ouvre * missions, ou : cherche {sujet} dans ta mémoire"
+          placeholder={t("rapides.quandExemple")}
           onChange={(x) => {
             setE({ ...e, motif: x.target.value });
           }}
         />
       </label>
-      <p className="carte-co-detail">« * » : n'importe quels mots · « {"{nom}"} » : un morceau réutilisable dans l'action · accents, majuscules et ponctuation ignorés</p>
+      <p className="carte-co-detail">{t("rapides.aideMotif")}</p>
       <label className="champ">
-        <span className="champ-etiquette">…JARVIS fait</span>
+        <span className="champ-etiquette">{t("rapides.fait")}</span>
         <select
           value={choixAction}
           onChange={(x) => {
@@ -265,12 +264,12 @@ function Editeur({ info, initiale, surFini }: { info: InfoPilotage; initiale: Co
             setJson("{}");
           }}
         >
-          <optgroup label="Interface (🟢, sans rien lancer)">
-            <option value="interface:naviguer">Ouvrir une vue</option>
-            <option value="interface:rechercher_memoire">Chercher dans la mémoire</option>
-            <option value="interface:regler">Changer le thème ou les animations</option>
+          <optgroup label={t("rapides.groupeInterface")}>
+            <option value="interface:naviguer">{t("rapides.ouvrirVue")}</option>
+            <option value="interface:rechercher_memoire">{t("rapides.chercherDansMemoire")}</option>
+            <option value="interface:regler">{t("rapides.changerThemeAnimations")}</option>
           </optgroup>
-          <optgroup label="Actions déclarées (approbation selon le niveau)">
+          <optgroup label={t("rapides.groupeActions")}>
             {info.actions_declarees.map((a) => (
               <option key={a.nom} value={`core:${a.nom}`}>
                 {EMOJI_NIVEAU[a.niveau]} {a.description}
@@ -289,7 +288,7 @@ function Editeur({ info, initiale, surFini }: { info: InfoPilotage; initiale: Co
         />
       ) : (
         <label className="champ">
-          <span className="champ-etiquette">Paramètres (JSON ; {"{nom}"} pour un morceau capté)</span>
+          <span className="champ-etiquette">{t("rapides.parametres")}</span>
           <textarea
             className="rapide-json"
             rows={2}
@@ -309,18 +308,18 @@ function Editeur({ info, initiale, surFini }: { info: InfoPilotage; initiale: Co
       )}
       <div className="rapide-ligne">
         <label className="champ">
-          <span className="champ-etiquette">Phrase de test</span>
+          <span className="champ-etiquette">{t("rapides.phraseTest")}</span>
           <input
             value={e.phrase_test}
             maxLength={200}
-            placeholder="ex. ouvre les missions"
+            placeholder={t("rapides.phraseTestExemple")}
             onChange={(x) => {
               setE({ ...e, phrase_test: x.target.value });
             }}
           />
         </label>
         <label className="champ rapide-priorite">
-          <span className="champ-etiquette">Priorité</span>
+          <span className="champ-etiquette">{t("rapides.priorite")}</span>
           <input
             type="number"
             min={-100}
@@ -334,11 +333,11 @@ function Editeur({ info, initiale, surFini }: { info: InfoPilotage; initiale: Co
       </div>
       {verif && (
         <p className="rapide-verif" data-valide={verif.valide} role="status">
-          {verif.valide ? `La phrase de test déclenche : ${verif.texte}` : verif.texte}
+          {verif.valide ? t("rapides.declenche", { action: verif.texte }) : verif.texte}
           {verif.valide && verif.conflits.length > 0 && (
             <span className="rapide-conflit">
               {" "}
-              · aussi captée par {verif.conflits.map((c) => `« ${c.motif} » (priorité ${String(c.priorite)})`).join(", ")} : la priorité la plus haute l'emporte, puis le motif le plus précis
+              {t("rapides.conflits", { liste: verif.conflits.map((c) => t("rapides.conflit", { motif: c.motif, priorite: c.priorite })).join(", ") })}
             </span>
           )}
         </p>
@@ -356,10 +355,10 @@ function Editeur({ info, initiale, surFini }: { info: InfoPilotage; initiale: Co
             surFini();
           }}
         >
-          Annuler
+          {t("rapides.annuler")}
         </button>
         <button type="submit" className="btn btn-mini" disabled={!verif?.valide || occupe}>
-          {initiale ? "Enregistrer" : "Ajouter"}
+          {initiale ? t("rapides.enregistrer") : t("rapides.ajouter")}
         </button>
       </div>
     </form>
@@ -367,6 +366,7 @@ function Editeur({ info, initiale, surFini }: { info: InfoPilotage; initiale: Co
 }
 
 export function CommandesRapides({ surNotifier }: { surNotifier: (m: string) => void }) {
+  useLangue();
   const [info, setInfo] = useState<InfoPilotage | null>(null);
   const [commandes, setCommandes] = useState<CommandeRapide[] | null>(null);
   const [edition, setEdition] = useState<CommandeRapide | "nouvelle" | null>(null);
@@ -378,7 +378,7 @@ export function CommandesRapides({ surNotifier }: { surNotifier: (m: string) => 
         setCommandes(c.commandes);
       })
       .catch((e: unknown) => {
-        setErreur(message(e, "Commandes illisibles."));
+        setErreur(message(e, t("rapides.illisibles")));
       });
   };
   useEffect(charger, []);
@@ -394,16 +394,16 @@ export function CommandesRapides({ surNotifier }: { surNotifier: (m: string) => 
         charger();
       })
       .catch((e: unknown) => {
-        surNotifier(message(e, "Modification impossible."));
+        surNotifier(message(e, t("rapides.modificationImpossible")));
       });
   };
   const supprimer = (c: CommandeRapide) => {
     supprimerCommandeRapide(c.id)
       .then(() => {
-        fini(`Commande « ${c.motif} » supprimée.`);
+        fini(t("rapides.supprimee", { motif: c.motif }));
       })
       .catch((e: unknown) => {
-        surNotifier(message(e, "Suppression impossible."));
+        surNotifier(message(e, t("rapides.suppressionImpossible")));
       });
   };
 
@@ -411,18 +411,15 @@ export function CommandesRapides({ surNotifier }: { surNotifier: (m: string) => 
   if (!info || !commandes) return <div className="squelette squelette--ligne" aria-busy="true" />;
   return (
     <div className="rapides">
-      <p className="sec-texte">
-        Reconnues avant l'IA, dans la saisie du Dialogue : réponse immédiate, aucun modèle appelé. Une commande ne donne aucun droit en plus : une
-        action 🟡 attend votre accord, une action 🔴 votre clé d'accès. Jamais de commande système.
-      </p>
+      <p className="sec-texte">{t("rapides.intro")}</p>
       {commandes.length === 0 && edition === null && (
         <div className="vide vide--calme">
-          <p className="vide-titre">Aucune commande rapide</p>
-          <p>Ex. « ouvre * missions » → ouvrir les Missions ; « cherche {"{sujet}"} dans ta mémoire » → recherche dans la mémoire.</p>
+          <p className="vide-titre">{t("rapides.aucune")}</p>
+          <p>{t("rapides.exemple")}</p>
         </div>
       )}
       {commandes.length > 0 && (
-        <ul className="rapides-liste" aria-label="Commandes rapides">
+        <ul className="rapides-liste" aria-label={t("rapides.liste")}>
           {commandes.map((c) =>
             edition !== "nouvelle" && edition?.id === c.id ? (
               <li key={c.id}>
@@ -432,13 +429,14 @@ export function CommandesRapides({ surNotifier }: { surNotifier: (m: string) => 
               <li key={c.id} className="carte-co rapide" data-actif={c.actif}>
                 <div className="carte-co-tete">
                   <p className="carte-co-nom">« {c.motif} »</p>
-                  <span className="rapide-niveau" title={`Niveau : ${c.niveau}`}>
+                  <span className="rapide-niveau" title={t("rapides.niveau", { niveau: c.niveau })}>
                     {EMOJI_NIVEAU[c.niveau] ?? "⚠"}
                   </span>
                 </div>
                 <p className="carte-co-detail">
-                  → {c.cible === "interface" ? (c.action === "naviguer" ? `ouvrir ${info.vues[String(c.parametres.vue)] ?? String(c.parametres.vue)}` : c.action === "rechercher_memoire" ? "chercher dans la mémoire" : "changer un réglage") : (info.actions_declarees.find((a) => a.nom === c.action)?.description ?? c.action)}
-                  {" · "}priorité {c.priorite} · test « {c.phrase_test} » · {c.utilisations ? `${String(c.utilisations)} utilisation${c.utilisations > 1 ? "s" : ""}` : "jamais utilisée"}
+                  → {c.cible === "interface" ? (c.action === "naviguer" ? t("rapides.ouvrir", { vue: info.vues[String(c.parametres.vue)] ?? String(c.parametres.vue) }) : c.action === "rechercher_memoire" ? t("rapides.chercherMemoire") : t("rapides.changerReglage")) : (info.actions_declarees.find((a) => a.nom === c.action)?.description ?? c.action)}
+                  {t("rapides.details", { priorite: c.priorite, phrase: c.phrase_test })}
+                  {c.utilisations ? tn("rapides.utilisations", c.utilisations) : t("rapides.jamais")}
                 </p>
                 <div className="carte-co-actions">
                   <label className="carte-co-case carte-co-case--ligne">
@@ -449,7 +447,7 @@ export function CommandesRapides({ surNotifier }: { surNotifier: (m: string) => 
                         basculer(c);
                       }}
                     />
-                    Active
+                    {t("rapides.active")}
                   </label>
                   <button
                     type="button"
@@ -458,7 +456,7 @@ export function CommandesRapides({ surNotifier }: { surNotifier: (m: string) => 
                       setEdition(c);
                     }}
                   >
-                    Modifier
+                    {t("rapides.modifier")}
                   </button>
                   <button
                     type="button"
@@ -467,7 +465,7 @@ export function CommandesRapides({ surNotifier }: { surNotifier: (m: string) => 
                       supprimer(c);
                     }}
                   >
-                    Supprimer
+                    {t("rapides.supprimer")}
                   </button>
                 </div>
               </li>
@@ -485,7 +483,7 @@ export function CommandesRapides({ surNotifier }: { surNotifier: (m: string) => 
             setEdition("nouvelle");
           }}
         >
-          Nouvelle commande rapide
+          {t("rapides.nouvelle")}
         </button>
       )}
     </div>
