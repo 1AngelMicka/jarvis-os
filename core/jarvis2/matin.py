@@ -21,6 +21,14 @@ from .db import Base
 
 journal = logging.getLogger("jarvis2.matin")
 
+
+def _sans_lieu(enregistrement: logging.LogRecord) -> bool:
+    """httpx journalise chaque URL en INFO : celles d'Open-Meteo portent le lieu (ville, coordonnées), privé."""
+    return "open-meteo.com" not in enregistrement.getMessage()
+
+
+logging.getLogger("httpx").addFilter(_sans_lieu)
+
 Mode = Literal["parle", "texte", "desactive"]
 MODES: tuple[Mode, ...] = ("parle", "texte", "desactive")
 URL_PREVISIONS = "https://api.open-meteo.com/v1/forecast"

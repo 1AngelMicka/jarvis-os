@@ -131,8 +131,9 @@ async def test_modes_et_arret_d_urgence(systeme: dict[str, Any]) -> None:
         assert (await client.get("/v1/matin", params=params)).json()["raison"] == "urgence"
 
 
-async def test_localisation_privee(systeme: dict[str, Any], pool: Base) -> None:
+async def test_localisation_privee(systeme: dict[str, Any], pool: Base, caplog: pytest.LogCaptureFixture) -> None:
     client, factice = systeme["client"], systeme["factice"]
+    caplog.set_level("DEBUG")
     assert (await client.get("/v1/matin/reglages")).json()["localisation"] == {
         "nom": VILLE,
         "source": "configuration",
@@ -151,6 +152,7 @@ async def test_localisation_privee(systeme: dict[str, Any], pool: Base) -> None:
     assert effacee["localisation"]["source"] == "configuration"  # retour à la configuration locale
     factice.en_panne = True
     assert (await client.get("/v1/matin/lieux", params={"q": "Ville"})).status_code == 502
+    assert not [r for r in caplog.records if "open-meteo" in r.getMessage() or "43.3" in r.getMessage()]
 
 
 async def test_meteo_en_panne_et_sans_lieu(systeme: dict[str, Any]) -> None:
