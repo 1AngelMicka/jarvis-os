@@ -172,6 +172,8 @@ class MoteurCompatibleOpenAI(Moteur):
         meta: dict[str, Any] = {"source_auth": "cle_api" if self._cle else "local"}
         if calcule is None and self.externe:
             meta["cout_inconnu"] = True
+        elif cout_reel is None and calcule is not None:
+            meta["cout_estime"] = True  # calculé avec les tarifs de la configuration locale
         yield Fin(Reponse(texte, modele_reel, usage, calcule or 0.0, meta))
 
     async def list_models(self) -> list[InfoModele]:

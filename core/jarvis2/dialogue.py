@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from collections import Counter
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
 journal = logging.getLogger("jarvis2.dialogue")
 
 NB_MESSAGES_HISTORIQUE = 40
+# Gardé dans le message pour son pied « transparence » (estimations signalées, équivalent API de l'abonnement)
+META_TRANSPARENCE = ("effort", "source_auth", "cout_estime", "cout_inconnu", "cout_equivalent_api_usd")
 
 CONSIGNES_SYSTEME = """Tu es JARVIS, l'assistant personnel de l'utilisateur : un exocortex qui prolonge sa façon \
 de penser, pas un chatbot. Tu réponds en français, avec précision et concision, en vouvoyant l'utilisateur.
@@ -167,8 +170,30 @@ class ServiceDialogue:
     async def choisir_moteur(
         self, moteur: str | None, conversation: Conversation | None = None, texte: str | None = None
     ) -> MoteurInstrumente:
+        instance, _ = await self.choisir_moteur_detaille(moteur, conversation, texte)
+        return instance
+
+    async def choisir_moteur_detaille(
+        self, moteur: str | None, conversation: Conversation | None = None, texte: str | None = None
+    ) -> tuple[MoteurInstrumente, str | None]:
         """Choix explicite > choix imposé pour la conversation > routeur (jamais un connecteur à risque ; une IA
-        locale seulement pour un sujet privé)."""
+        locale seulement pour un sujet privé). Connecteur choisi au plafond de dépenses : refus clair si aucune
+        autre IA n'est disponible, sinon le routeur passe à une autre IA et l'avertissement est rendu."""
+        instance = await self._choisir(moteur, conversation, texte)
+        if self.connecteurs is None:
+            return instance, None
+        etat = await self.connecteurs.etat_plafond(instance.id_moteur)
+        if not etat or not etat["atteint"]:
+            return instance, None
+        refus = self.connecteurs.message_plafond(instance.id_moteur, etat)
+        autre = await self.connecteurs.router(local=await self.est_prive(texte), exclus=frozenset({instance.id_moteur}))
+        if autre is None or autre not in self.moteurs:
+            raise ErreurMoteur(refus)
+        return self.moteurs[autre], f"{refus} Réponse par « {self.moteurs[autre].interne.nom} »."
+
+    async def _choisir(
+        self, moteur: str | None, conversation: Conversation | None = None, texte: str | None = None
+    ) -> MoteurInstrumente:
         cle = moteur if moteur and moteur != "auto" else None
         if cle is None and moteur is None and conversation is not None and conversation.connecteur:
             cle = conversation.connecteur
@@ -194,6 +219,17 @@ class ServiceDialogue:
                 f"Connecteur « {self.moteurs[cle].interne.nom} » désactivé : activez-le dans Connecteurs"
             )
         return self.moteurs[cle]
+
+    async def _alerte_plafond(self, ident: str) -> dict[str, Any] | None:
+        """État du plafond après la réponse, seulement à partir de 80 % (alerte affichée sous la réponse)."""
+        if self.connecteurs is None:
+            return None
+        try:
+            etat = await self.connecteurs.etat_plafond(ident)
+        except Exception:  # jamais bloquant pour la réponse
+            journal.exception("Plafond non vérifié")
+            return None
+        return etat if etat and etat["alerte"] else None
 
     async def preparer(
         self,
@@ -278,7 +314,9 @@ class ServiceDialogue:
         if not message:
             raise ValueError("Message vide")
         conversation, titre = await self.ouvrir(message, conversation_id)
-        instance = await self.choisir_moteur(moteur, conversation, message)
+        instance, avertissement = await self.choisir_moteur_detaille(moteur, conversation, message)
+        if avertissement:
+            moteur = None  # le choix imposé reste celui de la conversation : il reprendra au plafond relevé
         if moteur == "auto":
             await self.depot.retenir_connecteur(conversation.id, None, None)
         elif moteur:  # choix explicite : il devient celui de la conversation
@@ -307,8 +345,10 @@ class ServiceDialogue:
                 "souvenirs": len(contexte.souvenirs),
                 "noyau": len(contexte.noyau),
                 "masques": dict(masques),
+                **({"avertissement": avertissement} if avertissement else {}),
             },
         )
+        debut = time.perf_counter()
         morceaux: list[str] = []
         termine = False
         try:
@@ -324,7 +364,8 @@ class ServiceDialogue:
                         "cout_usd": rep.cout_usd,
                         "jetons_entree": rep.usage.jetons_entree,
                         "jetons_sortie": rep.usage.jetons_sortie,
-                        **{k: v for k, v in rep.meta.items() if k in ("effort", "source_auth")},
+                        "duree_ms": round((time.perf_counter() - debut) * 1000),
+                        **{k: v for k, v in rep.meta.items() if k in META_TRANSPARENCE},
                         "souvenirs": [r.souvenir.id for r in contexte.souvenirs],
                         "memoire_consultee": contexte.consultee,
                         "masques": dict(masques),
@@ -332,7 +373,16 @@ class ServiceDialogue:
                     }
                     stocke = await self.depot.ajouter_message(conversation.id, "jarvis", rep.texte, meta)
                     termine = True
-                    yield EvenementDialogue("fin", {"message_id": stocke.id, "texte": rep.texte, **meta})
+                    plafond = await self._alerte_plafond(instance.id_moteur)
+                    yield EvenementDialogue(
+                        "fin",
+                        {
+                            "message_id": stocke.id,
+                            "texte": rep.texte,
+                            **meta,
+                            **({"plafond": plafond} if plafond else {}),
+                        },
+                    )
                     if self.titre_auto and not historique and conversation.titre_source == "extrait":
                         # Tâche à part : le titre s'écrit même si l'interface s'est fermée entre-temps
                         tache = asyncio.create_task(

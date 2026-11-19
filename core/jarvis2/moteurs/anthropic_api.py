@@ -115,6 +115,8 @@ class MoteurAnthropic(Moteur):
         meta: dict[str, Any] = {"source_auth": "cle_api"}
         if calcule is None:
             meta["cout_inconnu"] = True
+        else:
+            meta["cout_estime"] = True  # calculé avec les tarifs de la configuration locale
         yield Fin(Reponse(texte, modele, usage, calcule or 0.0, meta))
 
     async def list_models(self) -> list[InfoModele]:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 from uuid import UUID
@@ -90,6 +90,12 @@ class MoteurInstrumente(Moteur):
     def __init__(self, interne: Moteur, enregistreur: Enregistreur) -> None:
         self.interne = interne
         self.enregistreur = enregistreur
+        # Vérification avant chaque appel (plafond de dépenses) : lève `ErreurMoteur` pour refuser clairement
+        self.garde: Callable[[str], Awaitable[None]] | None = None
+
+    async def _garder(self) -> None:
+        if self.garde is not None:
+            await self.garde(self.interne.id)
 
     @property
     def id_moteur(self) -> str:
@@ -132,6 +138,7 @@ class MoteurInstrumente(Moteur):
     async def _stream(
         self, messages: Sequence[Message], options: Options | None, conversation_id: UUID | None
     ) -> AsyncGenerator[Evenement]:
+        await self._garder()
         debut = time.perf_counter()
         premier: int | None = None
         try:
@@ -159,6 +166,7 @@ class MoteurInstrumente(Moteur):
     async def generate(
         self, messages: Sequence[Message], options: Options | None = None, conversation_id: UUID | None = None
     ) -> Reponse:
+        await self._garder()
         debut = time.perf_counter()
         try:
             reponse = await self.interne.generate(messages, options)

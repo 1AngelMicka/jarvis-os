@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import materiel
+from . import couts, materiel
 from .api_securite import appareil_courant
 from .moteurs.base import ErreurMoteur
 from .securite.permissions import ErreurAction
@@ -37,6 +37,10 @@ class Activation(BaseModel):
 
 class Cle(BaseModel):
     cle: str = Field(min_length=8, max_length=500)
+
+
+class Plafond(BaseModel):
+    plafond_usd: float | None = Field(default=None, ge=0, le=100_000)  # None : aucun plafond
 
 
 class Inclusion(BaseModel):
@@ -95,6 +99,18 @@ async def definir_cle(request: Request, ident: str, corps: Cle) -> dict[str, Any
 @routeur.delete("/connecteurs/{ident}/cle")
 async def supprimer_cle(request: Request, ident: str) -> dict[str, Any]:
     return await _agir(gestion(request).supprimer_cle(ident, appareil_courant(request)))
+
+
+@routeur.put("/connecteurs/{ident}/plafond")
+async def definir_plafond(request: Request, ident: str, corps: Plafond) -> dict[str, Any]:
+    """Plafond de dépenses mensuel d'un connecteur payant (alerte à 80 %, refus au-delà)."""
+    return await _agir(gestion(request).definir_plafond(ident, corps.plafond_usd, appareil_courant(request)))
+
+
+@routeur.get("/couts")
+async def lire_couts(request: Request) -> dict[str, Any]:
+    """Dépenses du jour et du mois par connecteur, 30 derniers jours, plafonds, jauges d'abonnement Claude Code."""
+    return await couts.resume(gestion(request))
 
 
 @routeur.get("/materiel")
