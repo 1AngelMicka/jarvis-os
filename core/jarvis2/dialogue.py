@@ -49,8 +49,16 @@ TEXTE_MASQUE = "(réponse confidentielle produite par une IA locale : masquée p
 
 
 def mention_images(nombre: int) -> str:
+    """Trace d'images d'un message PASSÉ. Formulée pour qu'un petit modèle ne l'applique pas aux images du
+    message actuel (« non conservée » seul lui faisait répondre qu'il ne voyait pas l'image jointe)."""
     pluriel = "s" if nombre > 1 else ""
-    return f"[{nombre} image{pluriel} jointe{pluriel} à ce message, non conservée{pluriel}]"
+    return (
+        f"[Ce message précédent était accompagné de {nombre} image{pluriel}, que vous avez vue{pluriel} alors ; "
+        "elle n'est plus jointe ici. Seules les images du nouveau message sont visibles.]"
+        if nombre == 1
+        else f"[Ce message précédent était accompagné de {nombre} images, que vous avez vues alors ; elles ne sont "
+        "plus jointes ici. Seules les images du nouveau message sont visibles.]"
+    )
 
 
 def resume_images(images: Sequence[Image]) -> list[dict[str, Any]]:

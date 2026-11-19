@@ -262,7 +262,7 @@ async def test_dialogue_transmet_les_images_sans_les_garder(pool: Base) -> None:
 
     [e async for e in service.repondre("Et la couleur ?", UUID(conv), "voyant")]
     suite = voyant.recus[1]
-    assert "1 image jointe à ce message, non conservée" in suite[1].contenu
+    assert "accompagné de 1 image" in suite[1].contenu and "Seules les images du nouveau message" in suite[1].contenu
     assert all(not m.images for m in suite)
     # Connecteur sans vision : refus clair, rien n'est envoyé
     with pytest.raises(ErreurMoteur, match="ne lit pas les images"):

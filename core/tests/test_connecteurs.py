@@ -253,6 +253,7 @@ async def test_cartes_et_antigravity_desactive_par_defaut(systeme: dict[str, Any
     assert g["risque"] and not g["actif"] and g["statut"] == "desactive" and g["conditions"]["url"]
     assert "403" in g["conditions"]["texte"] and "clé d'API" in g["conditions"]["texte"]
     assert cartes["cle"]["cle"] == {"requise": True, "enregistree": False, "apercu": None, "url": None}
+    assert g["vision"] is False  # l'interface prévient avant d'envoyer une image à un connecteur aveugle
 
 
 async def test_activation_antigravity_exige_la_case_cochee(systeme: dict[str, Any], pool: Base) -> None:

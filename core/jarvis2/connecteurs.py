@@ -327,6 +327,7 @@ class Connecteurs:
                     "modeles": [{"id": x.id, "nom": x.nom, "defaut": x.defaut} for x in liste],
                     "efforts": list(m.efforts),
                     "effort_defaut": getattr(m, "effort", None),
+                    "vision": m.vision,
                 }
             )
         return cartes
