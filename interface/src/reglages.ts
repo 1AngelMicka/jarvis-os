@@ -112,6 +112,14 @@ export const SECTIONS: readonly Section[] = [
     motsCles: ["micro", "transcription", "whisper", "mains libres", "eveil", "dictee", "ecran", "vision"],
   },
   {
+    id: "eveil",
+    categorie: "voix",
+    titre: "Éveil « Dis Jarvis »",
+    description: "Écoute en fond, relance sans « Jarvis », commandes stop et silence, mémoire d'ambiance",
+    motsCles: ["dis jarvis", "mot d'eveil", "fond", "relance", "veille", "stop", "ambiance", "openwakeword", "juge"],
+    alias: ["dis-jarvis", "ambiance"],
+  },
+  {
     id: "connecteurs",
     categorie: "cerveau",
     titre: "Connecteurs",

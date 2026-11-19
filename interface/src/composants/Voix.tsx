@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { EVENEMENT_ECOUTER, EVENEMENT_ECRAN, prendre } from "../bureau";
-import { decrireImage, transcrireAudio } from "../api";
-import { capturerEcran, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal } from "../voix";
+import { decrireImage, ErreurApi, transcrireAudio } from "../api";
+import { appliquerDecision, ecouterPhrase, EVENEMENT_ECOUTE_FOND, horodatage, lireEcouteFond, signalerEveil, suivreFinDeReponse } from "../eveil";
+import { capturerEcran, couperVoix, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal } from "../voix";
 
 interface Props {
   lecteur: LecteurVocal;
@@ -11,28 +12,32 @@ interface Props {
   /** Serveur sans écran : le Core refuse les captures, le bouton le dit au lieu de disparaître. */
   sansEcran: boolean;
   surEnvoyer: (texte: string) => void;
+  /** « Stop » dit à voix haute : arrête la réponse en cours. */
+  surArreter?: () => void;
   surDescription: (texte: string) => void;
   surNotifier: (message: string) => void;
 }
 
 /** Commandes de voix et de vision de la console : dictée, mains libres (« Jarvis, … »), lecture à voix haute,
  *  description de l'écran sur demande (indisponible en mode sans écran). Tout est transcrit et décrit sur le PC. */
-export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer, surDescription, surNotifier }: Props) {
+export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer, surArreter, surDescription, surNotifier }: Props) {
   const [dictee, setDictee] = useState(false);
   const [mainsLibres, setMainsLibres] = useState(false);
   const [parole, setParole] = useState(lecteur.actif);
   const [ecran, setEcran] = useState(false);
   const enregistreur = useRef<Enregistreur | null>(null);
   const ecoute = useRef<EcouteMainsLibres | null>(null);
-  const arme = useRef(0); // « Jarvis » seul : la phrase suivante (8 s) est la commande
-  const etat = useRef({ enCours, bloquee });
-  etat.current = { enCours, bloquee };
+  const finSuivie = useRef<(() => void) | null>(null); // réponse suivie jusqu'à la fin de la voix de JARVIS
+  const modeleSignale = useRef(false);
+  const etat = useRef({ enCours, bloquee, surEnvoyer, surArreter, surNotifier });
+  etat.current = { enCours, bloquee, surEnvoyer, surArreter, surNotifier };
   const micro = "mediaDevices" in navigator && "getUserMedia" in navigator.mediaDevices && typeof MediaRecorder !== "undefined";
   const partage = "mediaDevices" in navigator && "getDisplayMedia" in navigator.mediaDevices;
 
   useEffect(
     () => () => {
       ecoute.current?.arreter();
+      finSuivie.current?.();
       lecteur.arreter();
     },
     [lecteur],
@@ -60,46 +65,87 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
     };
   }, []);
 
-  const traiterPhrase = (audio: Blob) => {
-    transcrireAudio(audio)
-      .then((t) => {
-        if (etat.current.bloquee) return;
-        if (t.eveil) {
-          if (t.commande) {
-            surEnvoyer(t.commande);
-          } else {
-            arme.current = performance.now() + 8000;
-            surNotifier("Je vous écoute.");
-          }
-        } else if (performance.now() < arme.current && t.texte) {
-          arme.current = 0;
-          surEnvoyer(t.texte);
-        }
+  // Le Core décide (mot d'éveil, relance, « stop », « silence ») sur les horodatages de la phrase
+  const traiterPhrase = (audio: Blob, debut: number, fin: number) => {
+    ecouterPhrase(audio, horodatage(debut), horodatage(fin))
+      .then((d) => {
+        const e = etat.current;
+        if (e.bloquee) return;
+        const repond = appliquerDecision(d, {
+          envoyer: e.surEnvoyer,
+          arreter: () => {
+            lecteur.arreter();
+            e.surArreter?.();
+          },
+          couperVoix: () => {
+            couperVoix(lecteur);
+          },
+          notifier: e.surNotifier,
+        });
+        if (!repond) return;
+        finSuivie.current?.();
+        finSuivie.current = suivreFinDeReponse(
+          () => etat.current.enCours || lecteur.parle,
+          (t) => {
+            finSuivie.current = null;
+            void signalerEveil("parole_fin", t).catch(() => undefined);
+          },
+        );
       })
-      .catch(() => {
-        /* phrase incomprise : ignorée en mains libres */
+      .catch((e: unknown) => {
+        // Modèle de transcription absent : dit une fois ; une phrase incomprise est ignorée en mains libres
+        if (e instanceof ErreurApi && e.statut === 409 && !modeleSignale.current) {
+          modeleSignale.current = true;
+          etat.current.surNotifier(e.message);
+        }
       });
   };
 
-  const basculerMainsLibres = () => {
-    if (mainsLibres) {
-      ecoute.current?.arreter();
-      ecoute.current = null;
-      setMainsLibres(false);
-      return;
-    }
-    const e = new EcouteMainsLibres(traiterPhrase, () => lecteur.parle || etat.current.enCours);
+  // L'écoute se met en pause pendant que JARVIS parle (écho) ; pendant qu'il réfléchit, « stop » reste entendu
+  const demarrerEcoute = (annonce: boolean) => {
+    if (ecoute.current) return;
+    const e = new EcouteMainsLibres(traiterPhrase, () => lecteur.parle);
+    ecoute.current = e;
     e.demarrer()
       .then(() => {
-        ecoute.current = e;
         setMainsLibres(true);
         basculerParole(true);
-        surNotifier("Mains libres : dites « Jarvis, … ».");
+        if (annonce) surNotifier("Mains libres : dites « Jarvis, … ».");
       })
       .catch(() => {
+        ecoute.current = null;
         surNotifier("Micro refusé ou indisponible.");
       });
   };
+
+  const arreterEcoute = () => {
+    ecoute.current?.arreter();
+    ecoute.current = null;
+    finSuivie.current?.();
+    finSuivie.current = null;
+    setMainsLibres(false);
+  };
+
+  const basculerMainsLibres = () => {
+    if (mainsLibres) arreterEcoute();
+    else demarrerEcoute(true);
+  };
+
+  // « Dis Jarvis » en fond (préférence de l'appareil) : l'écoute démarre avec l'interface et suit les Réglages
+  const ecouteFond = useRef({ demarrerEcoute, arreterEcoute });
+  ecouteFond.current = { demarrerEcoute, arreterEcoute };
+  useEffect(() => {
+    if (!micro) return;
+    if (lireEcouteFond()) ecouteFond.current.demarrerEcoute(false);
+    const suivre = (e: Event) => {
+      if ((e as CustomEvent<unknown>).detail === true) ecouteFond.current.demarrerEcoute(true);
+      else ecouteFond.current.arreterEcoute();
+    };
+    window.addEventListener(EVENEMENT_ECOUTE_FOND, suivre);
+    return () => {
+      window.removeEventListener(EVENEMENT_ECOUTE_FOND, suivre);
+    };
+  }, [micro]);
 
   const basculerDictee = () => {
     if (!dictee) {
@@ -198,7 +244,7 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
           className="segment-btn"
           aria-pressed={mainsLibres}
           disabled={bloquee}
-          title="Mains libres : dites « Jarvis, … » ; la réponse est lue à voix haute"
+          title="Mains libres : dites « Jarvis, … » ; la réponse est lue à voix haute, puis la suite se dit sans « Jarvis »"
           onClick={basculerMainsLibres}
         >
           Mains libres

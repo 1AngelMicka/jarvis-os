@@ -1453,6 +1453,7 @@ function Hud() {
                       bloquee={urgence}
                       sansEcran={etat?.sans_ecran === true}
                       surEnvoyer={envoyer}
+                      surArreter={arreter}
                       surNotifier={notifier}
                       surDescription={(texte) => {
                         setMessages((ms) => [...ms, { cle: nouvelleCle(), role: "jarvis", texte: `Votre écran : ${texte}` }]);

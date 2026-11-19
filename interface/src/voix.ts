@@ -188,7 +188,8 @@ export class EcouteMainsLibres {
   private debut = 0;
 
   constructor(
-    private readonly surPhrase: (audio: Blob) => void,
+    /** `debut` / `fin` : instants `performance.now()` du premier et du dernier son de la phrase. */
+    private readonly surPhrase: (audio: Blob, debut: number, fin: number) => void,
     private readonly enPause: () => boolean,
   ) {}
 
@@ -234,8 +235,10 @@ export class EcouteMainsLibres {
     const rec = this.rec;
     if (!rec) return;
     this.rec = null;
+    const debut = this.debut;
+    const fin = this.dernierSon;
     rec.onstop = () => {
-      if (garder) this.surPhrase(new Blob(this.morceaux, { type: rec.mimeType }));
+      if (garder) this.surPhrase(new Blob(this.morceaux, { type: rec.mimeType }), debut, fin);
     };
     rec.stop();
   }
