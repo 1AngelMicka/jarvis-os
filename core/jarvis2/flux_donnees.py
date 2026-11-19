@@ -90,17 +90,19 @@ def destination_url(url: str | None) -> Destination:
     return "internet"
 
 
-def _connecteurs(c: Contexte) -> tuple[list[Flux], int]:
-    """Connecteurs d'IA réellement utilisables : actifs, et avec leur clé pour ceux qui en demandent une."""
+async def _connecteurs(c: Contexte) -> tuple[list[Flux], int]:
+    """Connecteurs d'IA réellement utilisables : actifs, installés (programme ou serveur présent), et avec leur clé
+    pour ceux qui en demandent une. Seuls les connecteurs actifs sont sondés (8 s au plus chacun, en parallèle)."""
     gestion = c.connecteurs
     if gestion is None:
         return [], 0
+    installes = {e.id for e in await gestion.etats(tous=False) if e.sante.installe}
     flux: list[Flux] = []
     inactifs = 0
     for ident, d in gestion.definitions.items():
         m = d.moteur.interne
         cle_absente = d.cle is not None and not gestion.coffre.lire(d.cle)
-        if not gestion.actif(ident) or cle_absente:
+        if ident not in installes or cle_absente:
             inactifs += 1
             continue
         url = getattr(m, "url", None)
@@ -177,18 +179,20 @@ async def _meteo(c: Contexte) -> list[Flux]:
 
 def _recherche(c: Contexte) -> list[Flux]:
     url = c.recherche.url
+    instance = {"pc": "sur ce PC", "reseau": "sur votre réseau"}.get(destination_url(url) if url else "", "en ligne")
     flux = [
         Flux(
             id="searxng",
             categorie="recherche",
             fonction="Recherche web des missions",
             service="Votre instance SearXNG, puis les moteurs de recherche qu'elle interroge",
-            destination=destination_url(url) if url else "internet",
+            # Les requêtes finissent chez les moteurs de recherche : Internet, quel que soit l'endroit de l'instance
+            destination="internet",
             etat="actif" if url else "inactif",
             envoie=["Les requêtes de recherche des missions (jamais pour un sujet privé)"],
-            jamais=["Votre mémoire, vos conversations"],
+            jamais=["Votre mémoire, vos conversations, votre adresse IP (masquée par SearXNG)"],
             desactiver=Desactivation("Retirer « searxng » de la section [recherche] de la configuration locale"),
-            detail=None if url else "Aucune instance déclarée : aucune recherche web.",
+            detail=f"Instance {instance}." if url else "Aucune instance déclarée : aucune recherche web.",
         )
     ]
     sources = c.scientifique
@@ -340,7 +344,7 @@ async def _mcp(c: Contexte) -> list[Flux]:
 
 
 async def decrire(c: Contexte, p: Parametres) -> dict[str, Any]:
-    connecteurs, inactifs = _connecteurs(c)
+    connecteurs, inactifs = await _connecteurs(c)
     flux = [
         *connecteurs,
         *_recherche(c),

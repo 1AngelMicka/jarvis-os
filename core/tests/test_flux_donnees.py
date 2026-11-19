@@ -46,13 +46,16 @@ SEARXNG = "http://192.168.1.20:8888"
 
 
 class Faux(Moteur):
-    def __init__(self, ident: str, famille: str, vision: bool = True, url: str | None = None) -> None:
+    def __init__(
+        self, ident: str, famille: str, vision: bool = True, url: str | None = None, installe: bool = True
+    ) -> None:
         self.id, self.nom, self.famille = ident, f"Faux {ident}", famille  # type: ignore[assignment]
         self.externe = famille != "local"
         self.vision = vision
         self.actif_par_defaut = True
         if url:
             self.url = url
+        self.installe = installe
         self.recus: list[Sequence[Message]] = []
 
     async def stream(self, messages: Sequence[Message], options: Options | None = None) -> AsyncGenerator[Evenement]:
@@ -64,7 +67,7 @@ class Faux(Moteur):
         return []
 
     async def health(self) -> EtatSante:
-        return EtatSante(True)
+        return EtatSante(self.installe, installe=self.installe)
 
 
 @pytest.fixture
@@ -73,6 +76,7 @@ async def systeme(pool: Base, tmp_path: Path) -> dict[str, Any]:
         "compte": Faux("compte", "cli"),
         "cle": Faux("cle", "api"),
         "sanscle": Faux("sanscle", "api"),
+        "absent": Faux("absent", "cli", installe=False),
         "maison": Faux("maison", "local", url="http://192.168.1.30:11434"),
         "local": Faux("local", "local", url="http://127.0.0.1:11434"),
     }
@@ -139,7 +143,9 @@ async def test_flux_depuis_la_configuration_reelle(systeme: dict[str, Any]) -> N
     flux = {f["id"]: f for f in corps["flux"]}
     # Connecteurs : actifs et avec leur clé seulement (« sanscle » n'a pas de clé : rien ne part)
     assert {"connecteur:compte", "connecteur:cle", "connecteur:maison", "connecteur:local"} <= set(flux)
-    assert "connecteur:sanscle" not in flux and corps["resume"]["connecteurs_inactifs"] == 1
+    # « absent » : programme non installé, rien ne peut partir
+    assert "connecteur:sanscle" not in flux and "connecteur:absent" not in flux
+    assert corps["resume"]["connecteurs_inactifs"] == 2
     assert flux["connecteur:local"]["destination"] == "pc" and flux["connecteur:local"]["local"] is True
     assert flux["connecteur:maison"]["destination"] == "reseau"
     assert flux["connecteur:cle"]["destination"] == "internet" and flux["connecteur:cle"]["jamais"]
@@ -147,7 +153,8 @@ async def test_flux_depuis_la_configuration_reelle(systeme: dict[str, Any]) -> N
     assert flux["connecteur:local"]["images"] is None  # local : aucun accord à donner
     assert flux["connecteur:cle"]["desactiver"]["reglage"] == "connecteurs"
     # Recherche, météo, MCP, téléchargements, locaux
-    assert flux["searxng"]["etat"] == "actif" and flux["searxng"]["destination"] == "reseau"
+    assert flux["searxng"]["etat"] == "actif" and flux["searxng"]["destination"] == "internet"
+    assert flux["searxng"]["detail"] == "Instance sur votre réseau."
     assert flux["scientifique"]["etat"] == "inactif"  # pas de sources dans ce contexte
     assert flux["meteo"]["etat"] == "actif" and flux["meteo"]["desactiver"]["reglage"] == "accueil-matin"
     assert flux["mcp:fichiers"]["destination"] == "variable" and flux["mcp:fichiers"]["etat"] == "inactif"
