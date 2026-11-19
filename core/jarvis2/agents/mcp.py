@@ -25,6 +25,7 @@ from typing import Any
 
 from ..db import Executant
 from ..moteurs.sousprocessus import environnement
+from ..securite import barriere
 
 journal = logging.getLogger("jarvis2.mcp")
 
@@ -234,6 +235,7 @@ class GestionnaireMCP:
         if (serveur, outil) not in await self.actifs(base):
             raise ErreurMCP(f"Outil MCP « {serveur}/{outil} » inactif : activez-le d'abord")
         resultat = await self.client(serveur).appeler(outil, arguments)
+        barriere.marquer("mcp", f"{serveur}/{outil}")  # résultat lu : le tour courant ne peut plus agir
         return {"texte": texte_resultat(resultat), "erreur_outil": bool(resultat.get("isError"))}
 
     async def fermer(self) -> None:

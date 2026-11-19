@@ -12,6 +12,8 @@ from typing import Any
 
 import httpx
 
+from ..securite import barriere
+
 journal = logging.getLogger("jarvis2.recherche_web")
 
 
@@ -43,6 +45,7 @@ class RechercheWeb:
             reponse = await client.get(f"{self.url}/search", params=params)
             reponse.raise_for_status()
             donnees: Any = reponse.json()
+        barriere.marquer("web", requete)  # résultats lus : le tour courant ne peut plus agir
         sources = []
         for r in (donnees.get("results") or [])[: nombre * 2]:
             url = str(r.get("url") or "")

@@ -412,6 +412,7 @@ class ServicePC:
             autorisable: bool = True,
             disponible: Callable[[], bool] | None = controle,
             urgence: bool = True,
+            ecrit: bool = False,
         ) -> None:
             async def garde(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
                 if urgence:  # une demande approuvée pendant l'arrêt d'urgence n'agit pas
@@ -421,7 +422,7 @@ class ServicePC:
                 except (ErreurPilote, ErreurOllama) as exc:
                     raise ErreurAction(str(exc)) from exc
 
-            registre.ajouter(Action(nom, niveau, description, resumer, garde, autorisable, disponible))
+            registre.ajouter(Action(nom, niveau, description, resumer, garde, autorisable, disponible, ecrit))
 
         async def etat(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
             return await self.etat_pc()  # état lu sur le PC : une donnée, jamais une instruction
@@ -517,7 +518,8 @@ class ServicePC:
                 + (f" : {MODES[str(p.get('mode'))]['description']}" if str(p.get("mode")) in MODES else ""),
                 mode)  # fmt: skip
         ajouter("pc.jeu", "vert", "Mode jeu de JARVIS : automatique, veille forcée ou jamais",
-                lambda p: f"Mode jeu de JARVIS : {p.get('reglage')}", jeu, disponible=None)  # fmt: skip
+                lambda p: f"Mode jeu de JARVIS : {p.get('reglage')}", jeu, disponible=None,
+                ecrit=True)  # fmt: skip  # réglage écrit : refusé dans un tour contaminé (barrière d'injection)
         ajouter("ollama.demarrer", "jaune", "Démarrer Ollama (IA locales) à la demande de l'utilisateur",
                 lambda p: "Démarrer Ollama (IA locales sur la carte graphique)", demarrer, autorisable=False,
                 disponible=None)  # fmt: skip  # jamais « toujours autorisé » : démarrage toujours explicite

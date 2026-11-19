@@ -25,7 +25,7 @@ from .embeddings import Encodeur
 from .memoire import ContexteMemoire, ReglagesRecherche, lire_noyau, rechercher_multi
 from .moteurs.base import Delta, ErreurMoteur, Fin, Image, Message, Options
 from .moteurs.telemetrie import MoteurInstrumente
-from .securite import invente
+from .securite import barriere, invente
 from .securite.filtre import masquer
 
 if TYPE_CHECKING:
@@ -431,6 +431,15 @@ class ServiceDialogue:
                 journal.exception("Bloc d'actions non inscrit à l'audit")
         return extraction.texte, extraction.meta()
 
+    async def bloquer_actions(self, actions: list[dict[str, Any]]) -> None:
+        try:
+            await barriere.bloquer_pilotage(self.depot.pool, actions)
+        except Exception:  # audit illisible : on bloque quand même (la marque est posée avant l'écriture)
+            journal.exception("Refus de la barrière non inscrit à l'audit")
+            for a in actions:
+                if barriere.pilotage_agit(str(a.get("type"))):
+                    a.setdefault("bloquee", "Barrière d'injection : relancez l'action vous-même.")
+
     async def repere_actions(self) -> int | None:
         """Début du tour pour le détecteur d'exécution inventée : dernière entrée d'audit (None : audit illisible)."""
         try:
@@ -491,7 +500,20 @@ class ServiceDialogue:
         images: Sequence[Image] = (),
     ) -> AsyncIterator[EvenementDialogue]:
         """`images` : gardées en mémoire le temps de cette réponse seulement ; l'historique n'en garde que le
-        nombre, le type et le poids."""
+        nombre, le type et le poids. Chaque réponse est un tour de la barrière d'injection (`securite/barriere.py`)."""
+        with barriere.tour("dialogue") as tour:
+            async for evenement in self._repondre(tour, message, conversation_id, moteur, options, images):
+                yield evenement
+
+    async def _repondre(
+        self,
+        tour: barriere.Tour,
+        message: str,
+        conversation_id: UUID | None,
+        moteur: str | None,
+        options: Options | None,
+        images: Sequence[Image],
+    ) -> AsyncIterator[EvenementDialogue]:
         message = message.strip()
         if len(images) > NB_MAX_JOINTES:
             raise ValueError(f"{NB_MAX_JOINTES} images au plus par message")
@@ -519,6 +541,13 @@ class ServiceDialogue:
         msg_utilisateur = await self.depot.ajouter_message(
             conversation.id, "utilisateur", message, {"images": resume_images(images)} if images else None
         )
+        # Contenu non fiable lu par ce tour : images (capture d'écran, fichier), partage reçu (ici ou plus haut)
+        if images:
+            barriere.marquer("ecran", f"images jointes : {len(images)}")
+        barriere.marquer_message(message, detail="dans ce message")
+        for ancien in historique:
+            if ancien.role == "utilisateur":
+                barriere.marquer_message(ancien.contenu, detail="plus haut dans la conversation")
         envoi = await self.preparer(
             instance, message, historique, None if historique else conversation.id, images=images, pilotage=True
         )
@@ -573,6 +602,9 @@ class ServiceDialogue:
                         **({"domaines": domaines_evoques(contexte)} if contexte.domaines else {}),
                     }
                     meta.update(meta_actions)
+                    if tour.contamine:  # barrière d'injection : les propositions qui agissent sont bloquées
+                        await self.bloquer_actions(meta.get("actions") or [])
+                        meta["barriere"] = tour.bilan()
                     inventees = await self.verifier_actions(texte_final, repere, rep.meta)
                     if inventees:  # signalé, jamais corrigé : la réponse reste telle que le modèle l'a écrite
                         meta["invente"] = [a.en_dict() for a in inventees]

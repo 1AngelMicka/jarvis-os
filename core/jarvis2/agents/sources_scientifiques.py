@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 
+from ..securite import barriere
 from .recherche_web import Source
 
 journal = logging.getLogger("jarvis2.sources_scientifiques")
@@ -281,6 +282,7 @@ class SourcesScientifiques:
 
     async def chercher(self, requete: str, par_base: int = 3) -> list[Source]:
         lots = await asyncio.gather(*(b.chercher(requete, par_base) for b in self.bases))
+        barriere.marquer("science", requete)  # résumés lus : le tour courant ne peut plus agir
         vues: set[str] = set()
         sources: list[Source] = []
         for rang in range(max((len(lot) for lot in lots), default=0)):

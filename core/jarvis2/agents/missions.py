@@ -25,7 +25,7 @@ from ..db import Base
 from ..dialogue import ServiceDialogue
 from ..moteurs.base import Message
 from ..moteurs.telemetrie import MoteurInstrumente
-from ..securite import invente
+from ..securite import barriere, invente
 from ..securite.filtre import masquer
 from ..securite.urgence import ArretUrgence
 from .recherche_web import RechercheWeb, Source
@@ -166,6 +166,12 @@ class ServiceMissions:
         return reponse.texte.strip()
 
     async def executer(self, ident: UUID) -> None:
+        """Une mission est un tour de la barrière d'injection : après une recherche web ou scientifique, aucune
+        action qui agit n'est permise jusqu'à sa fin."""
+        with barriere.tour("mission", str(ident)) as tour:
+            await self._executer(ident, tour)
+
+    async def _executer(self, ident: UUID, tour: barriere.Tour) -> None:
         mission = await self.obtenir(ident)
         if mission is None:
             return
@@ -226,6 +232,9 @@ class ServiceMissions:
             if inventees:  # signalé dans le résultat et l'audit ; le rapport reste intact
                 extra["invente"] = [a.en_dict() for a in inventees]
                 await invente.signaler(self.base, inventees, acteur=f"mission:{instance.id_moteur}", cible=str(ident))
+            bilan = tour.bilan()
+            if bilan is not None:  # contenu externe lu : la mission l'indique (sources, actions refusées)
+                extra["barriere"] = bilan
             souvenir = await self._ranger(ident, mission["type"], objectif, rapport, instance, prive)
             resultat = {
                 "rapport": rapport,

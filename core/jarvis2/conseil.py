@@ -20,6 +20,7 @@ from uuid import UUID
 from .dialogue import NB_MESSAGES_HISTORIQUE, TEXTE_MASQUE, EvenementDialogue, ServiceDialogue
 from .moteurs.base import Delta, ErreurMoteur, Fin, Message
 from .moteurs.telemetrie import MoteurInstrumente
+from .securite import barriere
 
 journal = logging.getLogger("jarvis2.conseil")
 
@@ -115,6 +116,18 @@ class ServiceConseil:
         experts: Sequence[str] | None = None,
         synthese: str | None = None,
     ) -> AsyncIterator[EvenementDialogue]:
+        """Un tour de la barrière d'injection : la synthèse lit la sortie d'autres sessions (les experts)."""
+        with barriere.tour("conseil"):
+            async for evenement in self._repondre(question, conversation_id, experts, synthese):
+                yield evenement
+
+    async def _repondre(
+        self,
+        question: str,
+        conversation_id: UUID | None,
+        experts: Sequence[str] | None,
+        synthese: str | None,
+    ) -> AsyncIterator[EvenementDialogue]:
         question = question.strip()
         if not question:
             raise ValueError("Question vide")
@@ -152,6 +165,7 @@ class ServiceConseil:
                 "erreur", {"message": "Aucun expert n'a pu répondre", "conversation_id": str(conversation.id)}
             )
             return
+        barriere.marquer("session", f"avis de {len(valides)} expert{'s' if len(valides) > 1 else ''}")
         envoi = await d.preparer(synthetiseur, question, historique)
         envoi.messages[-1] = Message("utilisateur", consigne_synthese(question, avis, synthetiseur.interne.externe))
         if synthetiseur.interne.externe:
@@ -177,6 +191,9 @@ class ServiceConseil:
                         "masques": dict(envoi.masques),
                         **{k: v for k, v in rep.meta.items() if k in ("effort", "source_auth")},
                     }
+                    tour = barriere.courant()
+                    if tour is not None and tour.contamine:
+                        meta["barriere"] = tour.bilan()
                     stocke = await d.depot.ajouter_message(conversation.id, "jarvis", rep.texte, meta)
                     yield EvenementDialogue("fin", {"message_id": stocke.id, "texte": rep.texte, **meta})
         except ErreurMoteur as exc:
