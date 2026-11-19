@@ -456,10 +456,23 @@ async def client(
 @pytest.mark.base
 async def test_api_transcription_et_fin_de_tour(pool: Base, tmp_path: Path) -> None:
     m = FauxModele(["Quelle heure est-il ?"])
-    c, _ = await client(pool, tmp_path, robuste(tmp_path, {"cpu": m}))
+    c, ctx = await client(pool, tmp_path, robuste(tmp_path, {"cpu": m}))
     etat = (await c.get("/v1/voix/transcription")).json()
     assert etat["modele"] == "small" and etat["appareil"]["famille"] == "processeur"
     assert (await c.post("/v1/voix/prechauffer")).json()["prechauffe"] is True
+    absent = robuste(tmp_path, {"cpu": m})
+
+    def sans_modele() -> Path:
+        raise ModeleAbsent("non téléchargé")
+
+    absent._source = sans_modele  # type: ignore[method-assign]
+    ctx.transcripteur = absent
+    assert (await c.post("/v1/voix/prechauffer")).json() == {
+        "prechauffe": False,
+        "duree_ms": 0,
+        "raison": "non téléchargé",
+    }
+    ctx.transcripteur = robuste(tmp_path, {"cpu": m})
     a = (await c.post("/v1/voix/anticipee", content=b"PPPPP..")).json()
     assert a["texte"] == "Quelle heure est-il ?" and a["fin_de_tour"]["fini"] is True
     appels = m.appels

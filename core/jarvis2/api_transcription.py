@@ -81,6 +81,8 @@ async def prechauffer(request: Request) -> dict[str, Any]:
         return {"prechauffe": True, "duree_ms": 0}
     try:
         duree = await t.prechauffer()
+    except ModeleAbsent as exc:  # pas une erreur : rien à préchauffer tant que l'utilisateur n'a pas accepté
+        return {"prechauffe": False, "duree_ms": 0, "raison": str(exc)}
     except Exception as exc:
         raise _erreur(exc) from exc
     return {"prechauffe": True, "duree_ms": round(duree)}

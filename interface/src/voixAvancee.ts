@@ -75,7 +75,7 @@ export interface ResultatDictee {
 }
 
 export const lireTranscription = () => appeler<EtatTranscription>("/v1/voix/transcription");
-export const prechaufferVoix = () => envoyer<{ prechauffe: boolean; duree_ms: number }>("/v1/voix/prechauffer");
+export const prechaufferVoix = () => envoyer<{ prechauffe: boolean; duree_ms: number; raison?: string }>("/v1/voix/prechauffer");
 export const anticiperPhrase = (audio: Blob) => posterAudio<Anticipation>("/v1/voix/anticipee", audio);
 
 export const lireProprietaire = () => appeler<EtatProprietaire>("/v1/voix/proprietaire");
