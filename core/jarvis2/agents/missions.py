@@ -25,6 +25,7 @@ from ..db import Base
 from ..dialogue import ServiceDialogue
 from ..moteurs.base import Message
 from ..moteurs.telemetrie import MoteurInstrumente
+from ..securite import invente
 from ..securite.filtre import masquer
 from ..securite.urgence import ArretUrgence
 from .recherche_web import RechercheWeb, Source
@@ -176,6 +177,7 @@ class ServiceMissions:
             if self.urgence.actif:
                 raise RuntimeError("Arrêt d'urgence actif")
             await self.base.execute("UPDATE missions SET statut = 'en_cours', demarre_le = now() WHERE id = $1", ident)
+            repere = await self.dialogue.repere_actions()  # détecteur d'exécution inventée : début de la mission
             with self.urgence.suivre():
                 domaine = await self._domaine(parametres)
                 if domaine is not None and self.connaissances is not None:
@@ -220,6 +222,10 @@ class ServiceMissions:
                     gabarit = BRAINSTORM if mission["type"] == "brainstorm" else REVUE
                     texte = await self._demander(instance, gabarit.format(objectif=objectif))
             rapport = texte + (f"\n\n## Sources\n{liste_sources(sources)}" if sources else "")
+            inventees = await self.dialogue.verifier_actions(texte, repere, {})
+            if inventees:  # signalé dans le résultat et l'audit ; le rapport reste intact
+                extra["invente"] = [a.en_dict() for a in inventees]
+                await invente.signaler(self.base, inventees, acteur=f"mission:{instance.id_moteur}", cible=str(ident))
             souvenir = await self._ranger(ident, mission["type"], objectif, rapport, instance, prive)
             resultat = {
                 "rapport": rapport,

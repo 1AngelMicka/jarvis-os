@@ -159,6 +159,29 @@ async def test_mission_de_recherche_sourcee_rangee_en_memoire(pool: Base, tmp_pa
     assert trouves[0].souvenir.id == m["resultat"]["souvenir_id"]
 
 
+class Menteur(Scenario):
+    """Rapport qui prétend avoir agi."""
+
+    async def stream(self, messages: Sequence[Message], options: Options | None = None) -> AsyncGenerator[Evenement]:
+        texte = "Trois idées pour le potager. J'ai envoyé ce rapport par e-mail à votre équipe."
+        yield Delta(texte)
+        yield Fin(Reponse(texte, f"{self.id}-1"))
+
+
+async def test_mission_signale_une_execution_inventee(pool: Base, tmp_path: Path) -> None:
+    s = await systeme(pool, tmp_path, {"cle": Menteur("cle", "api")})
+    missions = ServiceMissions(pool, s["service"], RechercheWeb(None), ArretUrgence())
+    ident = await missions.lancer("brainstorm", "Idées pour le potager", "appareil:test", attendre=True)
+    m = await missions.obtenir(ident)
+    assert m is not None and m["statut"] == "terminee"
+    assert "J'ai envoyé ce rapport" in m["resultat"]["rapport"]  # le rapport reste intact
+    assert [a["verbe"] for a in m["resultat"]["invente"]] == ["envoyer"]
+    entree = await pool.fetchrow(
+        "SELECT acteur, niveau FROM audit WHERE action = 'dialogue.execution_inventee' AND cible = $1", str(ident)
+    )
+    assert entree is not None and entree["acteur"] == "mission:cle" and entree["niveau"] == "jaune"
+
+
 def test_requetes_du_plan() -> None:
     assert requetes_du_plan('Bien sûr : ["a", "b"]', "x") == ["a", "b"]
     assert requetes_du_plan("pas de JSON", "objectif") == ["objectif"]

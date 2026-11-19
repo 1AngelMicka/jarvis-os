@@ -1,6 +1,8 @@
 """Dialogue : un message de l'utilisateur -> réponse diffusée, historique stocké.
 
-Le service produit des événements (`debut`, `delta`, `fin`, `erreur`) que l'API transforme en SSE.
+Le service produit des événements (`debut`, `delta`, `fin`, `invente`, `erreur`) que l'API transforme en SSE.
+`invente` suit `fin` quand la réponse affirme une action qu'aucune action réelle du tour n'appuie
+(voir securite/invente.py).
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from .embeddings import Encodeur
 from .memoire import ContexteMemoire, ReglagesRecherche, lire_noyau, rechercher_multi
 from .moteurs.base import Delta, ErreurMoteur, Fin, Image, Message, Options
 from .moteurs.telemetrie import MoteurInstrumente
+from .securite import invente
 from .securite.filtre import masquer
 
 if TYPE_CHECKING:
@@ -353,6 +356,43 @@ class ServiceDialogue:
         await self.depot.renommer(conversation_id, titre, "auto")
         return titre
 
+    async def repere_actions(self) -> int | None:
+        """Début du tour pour le détecteur d'exécution inventée : dernière entrée d'audit (None : audit illisible)."""
+        try:
+            return await invente.repere_audit(self.depot.pool)
+        except Exception:
+            journal.exception("Audit illisible : exécution inventée non vérifiée pour ce tour")
+            return None
+
+    async def verifier_actions(
+        self, texte: str, repere: int | None, meta_moteur: Mapping[str, Any]
+    ) -> list[invente.Affirmation]:
+        """Affirmations d'action accomplie que ni l'audit du tour ni les outils déclarés par le moteur n'appuient."""
+        if repere is None:
+            return []
+        try:
+            if not invente.affirmations(texte):  # cas courant : aucune lecture de l'audit
+                return []
+            reel = await invente.journal_depuis(self.depot.pool, repere, invente.outils_du_moteur(meta_moteur))
+            return invente.inventees(texte, reel)
+        except Exception:  # le détecteur ne doit jamais empêcher de répondre
+            journal.exception("Détecteur d'exécution inventée en échec")
+            return []
+
+    async def signaler_inventees(
+        self, inventees: Sequence[invente.Affirmation], message_id: int, moteur: str, conversation_id: UUID
+    ) -> None:
+        try:
+            await invente.signaler(
+                self.depot.pool,
+                inventees,
+                acteur=f"moteur:{moteur}",
+                cible=str(message_id),
+                details={"conversation_id": str(conversation_id)},
+            )
+        except Exception:
+            journal.exception("Exécution inventée non inscrite à l'audit")
+
     async def ouvrir(self, message: str, conversation_id: UUID | None) -> tuple[Conversation, str]:
         """Conversation existante (titre provisoire si elle est vide) ou nouvelle."""
         if conversation_id is None:
@@ -427,6 +467,7 @@ class ServiceDialogue:
         debut = time.perf_counter()
         morceaux: list[str] = []
         termine = False
+        repere = await self.repere_actions()
         try:
             async for evenement in instance.stream(messages, options, conversation_id=conversation.id):
                 if isinstance(evenement, Delta):
@@ -449,8 +490,13 @@ class ServiceDialogue:
                         # Domaines de connaissance évoqués : l'interface propose de les réviser
                         **({"domaines": domaines_evoques(contexte)} if contexte.domaines else {}),
                     }
+                    inventees = await self.verifier_actions(rep.texte, repere, rep.meta)
+                    if inventees:  # signalé, jamais corrigé : la réponse reste telle que le modèle l'a écrite
+                        meta["invente"] = [a.en_dict() for a in inventees]
                     stocke = await self.depot.ajouter_message(conversation.id, "jarvis", rep.texte, meta)
                     termine = True
+                    if inventees:
+                        await self.signaler_inventees(inventees, stocke.id, instance.id_moteur, conversation.id)
                     plafond = await self._alerte_plafond(instance.id_moteur)
                     yield EvenementDialogue(
                         "fin",
@@ -461,6 +507,8 @@ class ServiceDialogue:
                             **({"plafond": plafond} if plafond else {}),
                         },
                     )
+                    if inventees:
+                        yield EvenementDialogue("invente", {"message_id": stocke.id, "affirmations": meta["invente"]})
                     if self.titre_auto and not historique and conversation.titre_source == "extrait":
                         # Tâche à part : le titre s'écrit même si l'interface s'est fermée entre-temps
                         tache = asyncio.create_task(

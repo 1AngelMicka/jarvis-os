@@ -146,3 +146,23 @@ html[data-animations="reduites"] .palette[open], html[data-animations="reduites"
 .visionneuse-cadre img { display: block; min-height: 0; max-width: 100%; max-height: calc(100dvh - 2 * var(--e-4) - var(--cible) - var(--e-10)); margin: 0 auto; object-fit: contain; background: rgb(var(--c-creux)); }
 .visionneuse-legende { padding: var(--e-3) var(--e-5) 0; font: var(--t-mini)/1.3 var(--f-donnees); color: var(--texte-2); overflow-wrap: anywhere; }
 .visionneuse-actions { display: flex; justify-content: flex-end; gap: var(--e-3); padding: var(--e-3) var(--e-4) var(--e-4); }
+
+/* ---------- Exécution inventée : avertissement discret sous la réponse ---------- */
+.msg-invente { margin: var(--e-3) 0 0; font: var(--t-mini)/1.4 var(--f-ui); color: var(--ambre-texte); }
+.msg-invente summary {
+  display: inline-flex; align-items: center; gap: var(--e-2); min-height: var(--e-7); cursor: pointer;
+  list-style: none; border-radius: var(--r-1);
+}
+.msg-invente summary::-webkit-details-marker { display: none; }
+.msg-invente summary::before {
+  content: ""; flex: none; width: var(--e-3); height: var(--e-3); border-radius: var(--r-rond); background: var(--ambre);
+}
+.msg-invente summary:hover .msg-invente-titre { text-decoration: underline; text-underline-offset: var(--e-1); }
+.msg-invente summary:focus-visible { outline: var(--l-fort) solid var(--ambre); outline-offset: var(--e-1); }
+.msg-invente-texte { margin: var(--e-2) 0 0; color: var(--texte-2); }
+.msg-invente-liste {
+  margin: var(--e-2) 0 0; padding: 0 0 0 var(--e-5); border-left: var(--l-fin) solid rgb(var(--c-ambre) / .5);
+  list-style: none; color: var(--texte-2); font-family: var(--f-donnees); overflow-wrap: anywhere;
+}
+.msg-invente-liste li + li { margin-top: var(--e-1); }
+@media (pointer: coarse) { .msg-invente summary { min-height: var(--cible); } }

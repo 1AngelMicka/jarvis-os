@@ -1,5 +1,12 @@
 # Décisions techniques
 
+## Détecteur d'« exécution inventée » (phase 14 · B, point 8)
+
+- **Signaler, jamais corriger** : la réponse reste telle que le modèle l'a écrite ; le signalement va dans la meta du message (`invente`), un événement SSE `invente` après `fin`, et l'audit (🟡 `dialogue.execution_inventee`, cible = message ou mission, détails = catégories et verbes seulement, le texte pouvant être privé).
+- **Journal réel du tour** = entrées d'audit écrites entre le début et la fin de la réponse (repère : dernier identifiant d'audit), plus les outils que le moteur déclare dans `meta["outils"]`. Ne comptent pas : une action en échec, une simple demande (`demande.*`), un signalement précédent. Une action d'une autre catégorie n'appuie pas l'affirmation (supprimer ≠ envoyer), sauf un outil au sens inconnu (MCP, action enregistrée au nom non reconnu) qui appuie tout : mieux vaut rater une invention que crier au loup.
+- **Règles plutôt que modèle** : expressions régulières sur des verbes d'action (envoyer, supprimer, lancer, installer, payer, programmer…), sans appel à une IA (rapide, déterministe, local). Faux positifs écartés : futur, conditionnel, négation, questions, hypothèses (« si », « par exemple »), citations et code ; les verbes qui servent aussi à travailler le texte (créer, ajouter, modifier, supprimer…) n'entrent en compte qu'avec un objet concret (fichier, rappel, agenda…) et jamais quand la phrase montre le résultat (« voici », « ci-dessous ») ou que la réponse contient du code. Lire et chercher ne sont pas des actions à vérifier ; « j'ai bien enregistré votre demande » non plus (politesse), mais « j'ai enregistré votre préférence dans ma mémoire » oui (aucune écriture en mémoire pendant le tour).
+- Le détecteur ne bloque jamais une réponse : audit illisible ou erreur = pas de vérification pour ce tour (journalisé).
+
 ## Application de bureau et publication (phase 11)
 
 - **Coque Tauri 2** (`app/`) : une fenêtre sur l'interface du Core local ; le Core n'est pas embarqué (installé par le script, `uv tool install`) : l'application le lance s'il ne tourne pas (sans console) et n'arrête que celui qu'elle a lancé. L'interface est une page distante pour l'application : aucune permission native (`capabilities/default.json` vide). Icône de notification (Ouvrir, Quitter), fermer = cacher, Ctrl+Maj+J, une seule instance.

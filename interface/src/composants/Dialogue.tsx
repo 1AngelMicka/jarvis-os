@@ -4,7 +4,7 @@ import { analyserCommande, type IdCommande, suggererSlash, texteAEnvoyer } from 
 import { ErreurImage, type ImageJointe, imagesDe, NB_MAX_IMAGES, places, preparerImage, TYPES_ACCEPTES } from "../images";
 import { TexteRiche } from "../texte";
 import { DomainesEvoques } from "./Connaissances";
-import type { AvisExpert, InfoMoteur, MetaMessage } from "../types";
+import type { AffirmationInventee, AvisExpert, InfoMoteur, MetaMessage } from "../types";
 import { type ImageAffichee, Vignettes, versAffichees } from "./PiecesJointes";
 import { PiedReponse } from "./PiedReponse";
 
@@ -61,6 +61,27 @@ function Avis({ avis }: { avis: AvisExpert[] }) {
   );
 }
 
+/** Exécution inventée : la réponse affirme avoir agi, mais le journal du tour ne montre aucune action. Discret,
+ * jamais une correction de la réponse : le détail (phrases en cause) se déplie. */
+export function AvertissementInvente({ affirmations }: { affirmations: AffirmationInventee[] }) {
+  const phrases = [...new Set(affirmations.map((a) => a.extrait))]; // une phrase peut affirmer plusieurs actions
+  return (
+    <details className="msg-invente">
+      <summary>
+        <span className="msg-invente-titre">JARVIS dit avoir agi, mais aucune action n'a été faite</span>
+      </summary>
+      <p className="msg-invente-texte">
+        Aucun outil ni aucune action n'a été exécuté pendant cette réponse. Phrase{phrases.length > 1 ? "s" : ""} en cause :
+      </p>
+      <ul className="msg-invente-liste">
+        {phrases.map((p) => (
+          <li key={p}>{p}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
   const local = moteurs.find((x) => x.id === m.meta?.moteur)?.famille === "local";
   return (
@@ -78,6 +99,7 @@ function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
           {m.meta.images.length} image{m.meta.images.length > 1 ? "s" : ""} jointe{m.meta.images.length > 1 ? "s" : ""} · non conservée{m.meta.images.length > 1 ? "s" : ""}
         </p>
       )}
+      {m.role === "jarvis" && !m.enCours && m.meta?.invente && m.meta.invente.length > 0 && <AvertissementInvente affirmations={m.meta.invente} />}
       {m.meta?.conseil && m.meta.conseil.length > 0 && <Avis avis={m.meta.conseil} />}
       {m.role === "jarvis" && !m.enCours && m.meta && (
         <div className="msg-pied">

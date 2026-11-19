@@ -406,6 +406,9 @@ function Hud() {
           setConversations((cs) => cs.map((c, i) => (i === 0 ? { ...c, nb_messages: c.nb_messages + 1 } : c)));
           setAnnonce("Réponse de JARVIS terminée.");
           break;
+        case "invente": // déjà dans la meta de « fin » ; repris ici si l'ordre des événements change
+          setMessages((ms) => ms.map((m) => (m.cle === cleJarvis ? { ...m, meta: { ...m.meta, invente: ev.donnees.affirmations } } : m)));
+          break;
         case "titre":
           setConversations((cs) => cs.map((c) => (c.id === ev.donnees.conversation_id ? { ...c, titre: ev.donnees.titre, titre_source: "auto" } : c)));
           break;
