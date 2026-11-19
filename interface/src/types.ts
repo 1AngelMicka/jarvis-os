@@ -1,5 +1,7 @@
 // Types partagés avec l'API du Core (core/jarvis2/api.py).
 
+import type { EtatPlafond } from "./couts";
+
 export interface InfoModele {
   id: string;
   nom: string;
@@ -141,6 +143,12 @@ export interface MetaMessage {
   masques?: Record<string, number>;
   prive?: boolean;
   conseil?: AvisExpert[];
+  // Transparence (lot N) : durée vue par le Core, estimation signalée, équivalent API de l'abonnement, plafond
+  duree_ms?: number;
+  cout_estime?: boolean;
+  cout_inconnu?: boolean;
+  cout_equivalent_api_usd?: number;
+  plafond?: EtatPlafond;
   /** Images jointes à un message de l'utilisateur : seulement leur type et leur poids (le Core ne les garde pas). */
   images?: { type: string; octets: number }[];
   domaines?: { id: string; nom: string; niveau: number }[]; // domaines de connaissance évoqués
@@ -170,7 +178,7 @@ export interface DemandeDialogue {
 }
 
 export type EvenementDialogue =
-  | { type: "debut"; donnees: { conversation_id: string; titre: string; moteur: string; modele: string | null } }
+  | { type: "debut"; donnees: { conversation_id: string; titre: string; moteur: string; modele: string | null; avertissement?: string } }
   | { type: "delta"; donnees: { texte: string } }
   | { type: "fin"; donnees: MetaMessage & { message_id: number; texte: string } }
   | { type: "erreur"; donnees: { message: string; conversation_id?: string } }

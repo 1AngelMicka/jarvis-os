@@ -6,7 +6,9 @@ Scénario choisi par la variable FAUX_CLAUDE (lue dans l'environnement transmis 
 - erreur      : résultat is_error ;
 - lent        : attend 30 s avant de répondre (délai dépassé) ;
 - sans_init   : texte sans événement init ;
-- echo        : renvoie le prompt reçu sur l'entrée standard (morceau unique).
+- echo        : renvoie le prompt reçu sur l'entrée standard (morceau unique) ;
+- limites     : comme ok, avec deux `rate_limit_event` (5 h mesurée, 7 jours sans utilisation donnée) ;
+- refuse      : `rate_limit_event` rejeté (limite 5 h atteinte) puis résultat en erreur.
 Écrit son PID dans FAUX_CLAUDE_PID si défini. Signale toute clé API présente dans son environnement.
 """
 
@@ -48,6 +50,23 @@ def main() -> int:
     ecrire(
         {"type": "system", "subtype": "init", "apiKeySource": "ANTHROPIC_API_KEY" if scenario == "cle_api" else "none"}
     )
+    if scenario in ("limites", "refuse"):
+        ecrire(
+            {
+                "type": "rate_limit_event",
+                "rate_limit_info": {
+                    "status": "rejected" if scenario == "refuse" else "allowed_warning",
+                    "rateLimitType": "five_hour",
+                    "utilization": 1.0 if scenario == "refuse" else 0.42,
+                    "resetsAt": int(time.time()) + 3600,
+                },
+            }
+        )
+    if scenario == "refuse":
+        ecrire({"type": "result", "is_error": True, "result": "Limite de 5 heures atteinte"})
+        return 1
+    if scenario == "limites":
+        ecrire({"type": "rate_limit_event", "rate_limit_info": {"status": "allowed", "rateLimitType": "seven_day"}})
     if scenario == "lent":
         time.sleep(30)
     if scenario == "erreur":

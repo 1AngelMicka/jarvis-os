@@ -20,7 +20,7 @@ from .config import Parametres
 from .config_locale import ConfigLocale
 from .db import Base, Ligne
 from .moteurs import anthropic_api, antigravity, claude_code, codex, compatible_openai, ollama
-from .moteurs.base import EtatSante, InfoModele
+from .moteurs.base import ErreurMoteur, EtatSante, InfoModele
 from .moteurs.telemetrie import Enregistreur, MoteurInstrumente
 from .securite import audit
 from .securite.appareils import Appareil
@@ -197,11 +197,15 @@ class EtatConnecteur:
         return self.actif and self.sante.disponible
 
 
-def choisir(etats: list[EtatConnecteur], prefere: str | None = None, local: bool = False) -> str | None:
+def choisir(
+    etats: list[EtatConnecteur], prefere: str | None = None, local: bool = False, exclus: frozenset[str] = frozenset()
+) -> str | None:
     """Routeur : le connecteur préféré s'il est utilisable, sinon le premier utilisable par famille
     (compte > clé d'API > local). Jamais un connecteur à risque : celui-là se choisit à la main.
-    `local` : sujet privé, seules les IA du PC sont candidates."""
-    candidats = [e for e in etats if e.utilisable and not e.risque and (not local or e.famille == "local")]
+    `local` : sujet privé, seules les IA du PC sont candidates. `exclus` : plafond de dépenses atteint."""
+    candidats = [
+        e for e in etats if e.utilisable and not e.risque and (not local or e.famille == "local") and e.id not in exclus
+    ]
     for e in candidats:
         if e.id == prefere:
             return e.id
@@ -216,6 +220,10 @@ class Connecteurs:
     coffre: Coffre
     prefere: str | None = None
     _reglages: dict[str, Ligne] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for d in self.definitions.values():  # chaque appel d'un connecteur payant vérifie d'abord son plafond
+            d.moteur.garde = self.verifier_plafond
 
     @property
     def moteurs(self) -> dict[str, MoteurInstrumente]:
@@ -273,12 +281,74 @@ class Connecteurs:
             for (i, d), s in zip(definitions, sorties, strict=True)
         ]
 
-    async def router(self, local: bool = False, images: bool = False) -> str | None:
-        """`images` : seuls les connecteurs qui savent lire les images jointes sont candidats."""
+    async def router(
+        self, local: bool = False, images: bool = False, exclus: frozenset[str] = frozenset()
+    ) -> str | None:
+        """`images` : seuls les connecteurs qui savent lire les images jointes sont candidats. `exclus` et
+        connecteurs au plafond de dépenses : jamais choisis."""
         etats = await self.etats(tous=False)
         if images:
             etats = [e for e in etats if self.definitions[e.id].moteur.interne.vision]
-        return choisir(etats, self.prefere, local=local)
+        atteints = {e.id for e in etats if e.utilisable and await self.plafond_atteint(e.id)}
+        return choisir(etats, self.prefere, local=local, exclus=exclus | atteints)
+
+    # --- Plafond de dépenses (connecteurs payants) -----------------------------------------------------------
+
+    def payant(self, ident: str) -> bool:
+        d = self.definitions.get(ident)
+        return d is not None and d.moteur.interne.famille == "api"
+
+    def plafond(self, ident: str) -> float | None:
+        r = self._reglages.get(ident)
+        valeur = r.get("plafond_mensuel_usd") if r is not None else None
+        return float(valeur) if valeur is not None and self.payant(ident) else None
+
+    async def etat_plafond(self, ident: str) -> dict[str, Any] | None:
+        from . import couts
+
+        plafond = self.plafond(ident)
+        if plafond is None:
+            return None
+        return couts.etat_plafond(await couts.depense(self.pool, ident, couts.debut_mois()), plafond)
+
+    async def plafond_atteint(self, ident: str) -> bool:
+        etat = await self.etat_plafond(ident)
+        return bool(etat and etat["atteint"])
+
+    def message_plafond(self, ident: str, etat: dict[str, Any]) -> str:
+        nom = self.definitions[ident].moteur.interne.nom
+        return (
+            f"Plafond de dépenses atteint pour « {nom} » : {etat['depense_usd']:.2f} $ sur "
+            f"{etat['plafond_usd']:.2f} $ ce mois-ci. Relevez-le dans Coûts ou choisissez une autre IA."
+        )
+
+    async def verifier_plafond(self, ident: str) -> None:
+        """Garde de chaque appel : refus clair au-delà du plafond (dialogue, titres, conseil, missions)."""
+        etat = await self.etat_plafond(ident)
+        if etat and etat["atteint"]:
+            raise ErreurMoteur(self.message_plafond(ident, etat))
+
+    async def definir_plafond(self, ident: str, valeur: float | None, appareil: Appareil) -> None:
+        d = self._verifier(ident)
+        if not self.payant(ident):
+            raise ErreurAction("Seuls les connecteurs payants (clé d'API) ont un plafond de dépenses")
+        if valeur is not None and not 0 <= valeur <= 100_000:
+            raise ErreurAction("Plafond invalide : entre 0 et 100 000 $ par mois")
+        await self.pool.execute(
+            "INSERT INTO connecteurs (id, actif, plafond_mensuel_usd) VALUES ($1, $2, $3)"
+            " ON CONFLICT (id) DO UPDATE SET plafond_mensuel_usd = $3, maj_le = now()",
+            ident,
+            self.actif(ident) if ident in self._reglages else d.moteur.interne.actif_par_defaut,
+            valeur,
+        )
+        await self.charger()
+        await audit.journaliser(
+            self.pool,
+            acteur=appareil.acteur,
+            action="connecteur.plafond",
+            cible=ident,
+            details={"plafond_mensuel_usd": valeur},
+        )
 
     async def decrire(self, tous: bool = True) -> list[dict[str, Any]]:
         """Cartes de la page Connecteurs (aucune clé : seulement « enregistrée » et un aperçu)."""
@@ -327,6 +397,8 @@ class Connecteurs:
                     "modeles": [{"id": x.id, "nom": x.nom, "defaut": x.defaut} for x in liste],
                     "efforts": list(m.efforts),
                     "effort_defaut": getattr(m, "effort", None),
+                    "payant": self.payant(e.id),
+                    "plafond_mensuel_usd": self.plafond(e.id),
                     "vision": m.vision,
                 }
             )

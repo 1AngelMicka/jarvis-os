@@ -21,6 +21,8 @@ import sys
 import tempfile
 import time
 from collections.abc import AsyncGenerator, Mapping, Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -167,6 +169,69 @@ def analyser_resultat(donnees: Mapping[str, Any], demande: str | None) -> Repons
     )
 
 
+@dataclass(frozen=True, slots=True)
+class Jauge:
+    """Limite d'abonnement lue dans un `rate_limit_event` de NOS appels (jamais dans les identifiants de la CLI).
+
+    `utilisation` : fraction de 0 à 1, ou None si la CLI ne l'a pas donnée (jamais 0 par défaut)."""
+
+    type: str  # five_hour, seven_day, seven_day_opus…
+    statut: str  # allowed, allowed_warning, rejected…
+    utilisation: float | None
+    reinitialisation: datetime | None
+    mesure_le: datetime
+
+    def en_dict(self) -> dict[str, Any]:
+        return {
+            "type": self.type,
+            "statut": self.statut,
+            "utilisation": self.utilisation,
+            "reinitialisation": self.reinitialisation.isoformat() if self.reinitialisation else None,
+            "mesure_le": self.mesure_le.isoformat(),
+        }
+
+    @classmethod
+    def depuis_dict(cls, d: Mapping[str, Any]) -> Jauge | None:
+        try:
+            reinit = d.get("reinitialisation")
+            return cls(
+                str(d["type"]),
+                str(d.get("statut") or "inconnu"),
+                float(d["utilisation"]) if isinstance(d.get("utilisation"), int | float) else None,
+                datetime.fromisoformat(reinit) if isinstance(reinit, str) else None,
+                datetime.fromisoformat(str(d["mesure_le"])),
+            )
+        except (KeyError, ValueError, TypeError):
+            return None
+
+
+def lire_limite(evenement: Mapping[str, Any], maintenant: datetime | None = None) -> Jauge | None:
+    """`{"type": "rate_limit_event", "rate_limit_info": {...}}` -> `Jauge`, sinon None. Tolérant : utilisation en
+    fraction (0,42) ou en pourcentage (42), réinitialisation en secondes Unix ou en texte ISO."""
+    if evenement.get("type") != "rate_limit_event":
+        return None
+    info = evenement.get("rate_limit_info")
+    if not isinstance(info, dict):
+        info = evenement
+    genre = info.get("rateLimitType") or info.get("rate_limit_type")
+    if not isinstance(genre, str) or not genre:
+        return None
+    brut = info.get("utilization", info.get("utilisation"))
+    utilisation: float | None = None
+    if isinstance(brut, int | float) and not isinstance(brut, bool) and brut >= 0:
+        utilisation = min(float(brut) / 100 if brut > 1 else float(brut), 1.0)
+    reinit: datetime | None = None
+    valeur = info.get("resetsAt", info.get("resets_at"))
+    try:
+        if isinstance(valeur, int | float) and not isinstance(valeur, bool):
+            reinit = datetime.fromtimestamp(valeur / 1000 if valeur > 1e11 else valeur, UTC)
+        elif isinstance(valeur, str) and valeur:
+            reinit = datetime.fromisoformat(valeur)
+    except (ValueError, OverflowError, OSError):
+        reinit = None
+    return Jauge(genre, str(info.get("status") or "inconnu"), utilisation, reinit, maintenant or datetime.now(UTC))
+
+
 def ecrire_images(images: Sequence[Image], parent: Path | None = None) -> Path:
     """Images jointes → dossier temporaire propre à cette réponse (`jarvis2-images-*`), effacé juste après."""
     if parent is not None:
@@ -239,6 +304,7 @@ class MoteurClaudeCode(Moteur):
         self.delai_long = delai_long
         self._env_source = env
         self._sante: tuple[float, EtatSante] | None = None
+        self.jauges: dict[str, Jauge] = {}  # dernière mesure par type de limite (mémoire du Core)
 
     def arguments(self, modele: str | None, effort: str | None, outils: str = "") -> list[str]:
         args = list(self.commande)
@@ -314,6 +380,7 @@ class MoteurClaudeCode(Moteur):
         echeance = time.monotonic() + delai
         resultat: dict[str, Any] | None = None
         source_auth: str | None = None
+        limites: dict[str, Jauge] = {}
         termine = False
         try:
             proc.stdin.write(prompt.encode("utf-8"))
@@ -347,6 +414,8 @@ class MoteurClaudeCode(Moteur):
                     yield Delta(texte)
                 elif evenement.get("type") == "result":
                     resultat = evenement
+                elif (jauge := lire_limite(evenement)) is not None:
+                    limites[jauge.type] = self.jauges[jauge.type] = jauge
             await asyncio.wait_for(proc.wait(), timeout=max(1.0, echeance - time.monotonic()))
             termine = True
         except TimeoutError as exc:
@@ -373,6 +442,8 @@ class MoteurClaudeCode(Moteur):
             raise ErreurMoteur(f"La CLI claude s'est arrêtée sans résultat (code {proc.returncode})")
         reponse = analyser_resultat(resultat, modele)
         reponse.meta["source_auth"] = source_auth
+        if limites:
+            reponse.meta["limites"] = [j.en_dict() for j in limites.values()]
         if effort:
             reponse.meta["effort"] = effort
         yield Fin(reponse)

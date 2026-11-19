@@ -3,6 +3,7 @@
 // quand React rejoue les effets en mode strict.
 
 import { EVENEMENT_NON_AUTORISE, ecrireJeton, lireJeton } from "./auth";
+import type { ResumeCouts } from "./couts";
 import { LecteurSSE } from "./sse";
 import type {
   Activite,
@@ -166,6 +167,9 @@ export const inclureAuConseil = (id: string, inclus: boolean) =>
 export const enregistrerCleApi = (id: string, cle: string) =>
   appeler<{ ok: boolean }>(`/v1/connecteurs/${id}/cle`, { methode: "PUT", corps: { cle } });
 export const supprimerCleApi = (id: string) => appeler<{ ok: boolean }>(`/v1/connecteurs/${id}/cle`, { methode: "DELETE" });
+export const lireCouts = () => unSeul("couts", () => appeler<ResumeCouts>("/v1/couts"));
+export const definirPlafond = (id: string, plafond_usd: number | null) =>
+  appeler<{ ok: boolean }>(`/v1/connecteurs/${id}/plafond`, { methode: "PUT", corps: { plafond_usd } });
 export const lireMateriel = () => unSeul("materiel", () => appeler<Materiel>("/v1/materiel"));
 
 // --- Premier lancement : assistant, diagnostic, téléphone ---
