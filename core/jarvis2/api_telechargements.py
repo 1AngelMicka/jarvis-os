@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from . import telechargements
 from .config import Parametres
+from .proprietaire import modele_proprietaire
 from .securite import audit
 from .securite.appareils import Appareil
 
@@ -32,6 +33,7 @@ def modeles(p: Parametres) -> dict[str, telechargements.Modele]:
     return {
         "embeddings": telechargements.modele_embeddings(p.dossier_modeles, p.modele_embeddings),
         "voix": telechargements.modele_whisper(p.dossier_modeles, p.modele_voix),
+        "proprietaire": modele_proprietaire(p.dossier_modeles),  # reconnaissance du propriétaire (lot K3)
     }
 
 

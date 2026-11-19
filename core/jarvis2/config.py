@@ -86,6 +86,9 @@ class Parametres(BaseSettings):
     modele_embeddings: str = Field(MODELE_EMBEDDINGS, alias="JARVIS2_MODELE_EMBEDDINGS")
     # Voix : modèle Whisper de la transcription locale (tiny, base, small, medium…)
     modele_voix: str = Field("base", alias="JARVIS2_MODELE_VOIX")
+    # Lot K3 : carte de la transcription (auto, cpu, cuda) ; petit modèle Ollama de fin de tour (vide : règle seule)
+    voix_appareil: str = Field("auto", alias="JARVIS2_VOIX_APPAREIL")
+    modele_fin_tour: str = Field("", alias="JARVIS2_MODELE_FIN_TOUR")
 
     def url_base(self, role: str = "app", base: str | None = None) -> str:
         """URL de connexion : `role` = « app » (Core) ou « proprio » (migrations uniquement)."""

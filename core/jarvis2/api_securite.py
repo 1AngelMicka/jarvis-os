@@ -9,6 +9,7 @@ import segno
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .proprietaire import voix_annoncee
 from .securite import appareils, audit, cles
 from .securite.appareils import Appareil, ErreurJumelage
 from .securite.permissions import ErreurAction
@@ -233,6 +234,9 @@ async def lister_actions(request: Request) -> dict[str, Any]:
 async def demander_action(request: Request, corps: DemandeAction) -> dict[str, Any]:
     c = ctx(request)
     try:
+        if voix_annoncee(request.headers):  # demandée à la voix : reconnaissance du propriétaire (lot K3)
+            niveau = c.approbations.registre.get(corps.action).niveau
+            await c.proprietaire.garder("", niveau, True, appareil_courant(request).acteur)
         return await c.approbations.demander(corps.action, corps.parametres, appareil_courant(request))
     except ErreurAction as exc:
         raise HTTPException(422, str(exc)) from exc
