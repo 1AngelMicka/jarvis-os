@@ -20,6 +20,10 @@ sujets_prives = [
 # id = "monsite"
 # nom = "Mon site"
 # chemin = "C:/Projets/monsite"
+# Facultatif, pour l'amélioration continue : commande des tests du projet (sans shell, sans clé d'API) et sous-dossier
+# où la lancer. Une amélioration n'est mise en service que si ces tests ont réussi sur le contenu exact de l'atelier.
+# tests = "npm test"
+# dossier_tests = ""
 #
 # Veille de VOS sessions Claude Code (lecture seule, à activer dans Ateliers ou Réglages › Appareils) : seul le
 # dossier des fichiers d'état est lu (par défaut ~/.claude/sessions, ou CLAUDE_CONFIG_DIR/sessions), jamais vos
