@@ -4,7 +4,8 @@ import { analyserCommande, type IdCommande, suggererSlash, texteAEnvoyer } from 
 import { ErreurImage, type ImageJointe, imagesDe, NB_MAX_IMAGES, places, preparerImage, TYPES_ACCEPTES } from "../images";
 import { TexteRiche } from "../texte";
 import { DomainesEvoques } from "./Connaissances";
-import type { AffirmationInventee, AvisExpert, InfoMoteur, MetaMessage } from "../types";
+import type { ActionPilotage, AffirmationInventee, AvisExpert, InfoMoteur, MetaMessage } from "../types";
+import { ActionsJarvis } from "./ActionsJarvis";
 import { type ImageAffichee, Vignettes, versAffichees } from "./PiecesJointes";
 import { PiedReponse } from "./PiedReponse";
 
@@ -16,7 +17,14 @@ export interface MessageAffiche {
   enCours?: boolean;
   /** Images jointes (gardées dans cette page seulement : le Core ne les conserve pas). */
   images?: ImageAffichee[];
+  /** Actions immédiates déjà appliquées seules (mode de pilotage « oui ») : leurs boutons disent « Rouvrir ». */
+  actionsAppliquees?: boolean;
+  /** Réponse d'une commande rapide (aucune IA) : gardée dans cette page seulement. */
+  rapide?: boolean;
 }
+
+/** Applique une action proposée par JARVIS ; renvoie un compte rendu court ou lève une erreur affichable. */
+export type SurActionPilotage = (a: ActionPilotage) => Promise<string | undefined>;
 
 const NOMS_EFFORT: Record<string, string> = {
   low: "Rapide",
@@ -82,11 +90,14 @@ export function AvertissementInvente({ affirmations }: { affirmations: Affirmati
   );
 }
 
-function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
+function Message({ m, moteurs, surAction }: { m: MessageAffiche; moteurs: InfoMoteur[]; surAction?: SurActionPilotage | undefined }) {
   const local = moteurs.find((x) => x.id === m.meta?.moteur)?.famille === "local";
   return (
     <article className={`msg msg--${m.role}`} data-interlocuteur={m.role === "jarvis" ? (local ? "local" : "jarvis") : undefined} aria-busy={m.enCours || undefined}>
-      <span className="msg-auteur">{m.role === "utilisateur" ? "Vous" : m.role === "erreur" ? "Incident" : "JARVIS"}</span>
+      <span className="msg-auteur">
+        {m.role === "utilisateur" ? "Vous" : m.role === "erreur" ? "Incident" : "JARVIS"}
+        {m.rapide && <span className="msg-rapide"> · commande rapide, sans IA</span>}
+      </span>
       {m.images && m.images.length > 0 && <Vignettes images={m.images} libelle="Images jointes" className="vignettes--fil" />}
       {(m.texte || m.role !== "utilisateur" || !m.images?.length) && (
         <div className="msg-corps">
@@ -101,6 +112,9 @@ function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
       )}
       {m.role === "jarvis" && !m.enCours && m.meta?.invente && m.meta.invente.length > 0 && <AvertissementInvente affirmations={m.meta.invente} />}
       {m.meta?.conseil && m.meta.conseil.length > 0 && <Avis avis={m.meta.conseil} />}
+      {m.role === "jarvis" && !m.enCours && surAction && (m.meta?.actions?.length || m.meta?.actions_ecartees?.length) ? (
+        <ActionsJarvis actions={m.meta.actions ?? []} ecartees={m.meta.actions_ecartees} appliquees={m.actionsAppliquees ?? false} surAction={surAction} />
+      ) : null}
       {m.role === "jarvis" && !m.enCours && m.meta && (
         <div className="msg-pied">
           <span className="msg-meta">{nomModele(moteurs, m.meta)}</span>
@@ -135,9 +149,11 @@ interface FilProps {
   reflexion: boolean;
   chargement: boolean;
   etapeReflexion?: string;
+  /** Boutons des actions de JARVIS sous ses réponses (sans : pas de boutons). */
+  surAction?: SurActionPilotage;
 }
 
-export function Fil({ messages, moteurs, reflexion, chargement, etapeReflexion }: FilProps) {
+export function Fil({ messages, moteurs, reflexion, chargement, etapeReflexion, surAction }: FilProps) {
   const zone = useRef<HTMLDivElement>(null);
   const collee = useRef(true);
 
@@ -192,7 +208,7 @@ export function Fil({ messages, moteurs, reflexion, chargement, etapeReflexion }
     >
       <div className="fil-colonne">
         {messages.map((m) => (
-          <Message key={m.cle} m={m} moteurs={moteurs} />
+          <Message key={m.cle} m={m} moteurs={moteurs} surAction={surAction} />
         ))}
         {reflexion && (
           <div className="reflexion" role="status">

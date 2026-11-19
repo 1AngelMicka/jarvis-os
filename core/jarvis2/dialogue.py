@@ -30,6 +30,7 @@ from .securite.filtre import masquer
 
 if TYPE_CHECKING:
     from .connecteurs import Connecteurs
+    from .pilotage import ServicePilotage
 
 journal = logging.getLogger("jarvis2.dialogue")
 
@@ -169,6 +170,7 @@ class ServiceDialogue:
         self.sujets_prives = sujets_prives
         self.titre_auto = True  # titre écrit par l'IA après le premier échange
         self._taches: set[asyncio.Task[Any]] = set()  # titres en cours (gardés jusqu'à leur fin)
+        self.pilotage: ServicePilotage | None = None  # bloc d'actions de JARVIS et règles de protection (lot F)
 
     async def est_prive(self, texte: str | None) -> bool:
         """Sujet privé : il nomme un sujet privé de l'utilisateur, ou des souvenirs privés y répondent."""
@@ -185,8 +187,9 @@ class ServiceDialogue:
         )
 
     async def consignes(
-        self, texte: str, externe: bool, conversation_id: UUID | None = None
+        self, texte: str, externe: bool, conversation_id: UUID | None = None, pilotage: bool = False
     ) -> tuple[str, ContexteMemoire]:
+        """`pilotage` : réponse du dialogue, qui peut finir par un bloc d'actions (les autres usages n'en ont pas)."""
         contexte = (
             await self.memoire.contexte(texte, externe)
             if self.memoire is not None
@@ -197,7 +200,16 @@ class ServiceDialogue:
             nouveautes = await self.nouveautes(conversation_id, externe)
             if nouveautes:
                 bloc = "\n\n".join(b for b in (bloc, nouveautes) if b)
-        return CONSIGNES_SYSTEME.format(maintenant=maintenant_paris(), memoire=bloc), contexte
+        consignes = CONSIGNES_SYSTEME.format(maintenant=maintenant_paris(), memoire=bloc)
+        if pilotage and self.pilotage is not None:
+            try:
+                extra = await self.pilotage.consignes()
+            except Exception:  # le pilotage ne doit jamais empêcher de répondre
+                journal.exception("Consignes de pilotage indisponibles")
+                extra = ""
+            if extra:
+                consignes = "\n\n".join((consignes, extra))
+        return consignes, contexte
 
     async def nouveautes(self, conversation_id: UUID, externe: bool) -> str:
         """Début d'une conversation : ce que la mémoire a appris depuis la conversation précédente (missions,
@@ -314,12 +326,15 @@ class ServiceDialogue:
         historique: list[MessageStocke],
         conversation_id: UUID | None = None,
         images: Sequence[Image] = (),
+        pilotage: bool = False,
     ) -> Envoi:
         """Consignes + mémoire + historique + message ; pour un connecteur externe : souvenirs privés exclus,
         réponses locales privées masquées, secrets et données personnelles remplacés. `conversation_id` d'une
         conversation qui commence : les nouveautés de la mémoire s'y ajoutent."""
         externe = instance.interne.externe
-        consignes, contexte = await self.consignes(message, externe=externe, conversation_id=conversation_id)
+        consignes, contexte = await self.consignes(
+            message, externe=externe, conversation_id=conversation_id, pilotage=pilotage
+        )
         messages = [Message("systeme", consignes)]
         for m in historique:
             contenu = m.contenu
@@ -369,6 +384,34 @@ class ServiceDialogue:
             return None
         await self.depot.renommer(conversation_id, titre, "auto")
         return titre
+
+    async def extraire_actions(self, texte: str) -> tuple[str, dict[str, Any]]:
+        """(réponse sans bloc d'actions, meta « actions ») ; sans pilotage, ou en cas d'échec, tout bloc est retiré."""
+        from .pilotage import retirer_bloc
+
+        if self.pilotage is None:
+            return retirer_bloc(texte)[0], {}
+        try:
+            extraction = await self.pilotage.extraire(texte)
+        except Exception:
+            journal.exception("Bloc d'actions non validé : écarté")
+            return retirer_bloc(texte)[0], {}
+        if extraction.bloc:
+            try:
+                from .securite import audit
+
+                await audit.journaliser(
+                    self.depot.pool,
+                    acteur="jarvis",
+                    action="pilotage.actions",
+                    details={
+                        "types": [a["type"] for a in extraction.actions],
+                        "ecartees": len(extraction.ecartees),
+                    },
+                )
+            except Exception:
+                journal.exception("Bloc d'actions non inscrit à l'audit")
+        return extraction.texte, extraction.meta()
 
     async def repere_actions(self) -> int | None:
         """Début du tour pour le détecteur d'exécution inventée : dernière entrée d'audit (None : audit illisible)."""
@@ -459,7 +502,7 @@ class ServiceDialogue:
             conversation.id, "utilisateur", message, {"images": resume_images(images)} if images else None
         )
         envoi = await self.preparer(
-            instance, message, historique, None if historique else conversation.id, images=images
+            instance, message, historique, None if historique else conversation.id, images=images, pilotage=True
         )
         messages, contexte, masques, prive = envoi.messages, envoi.contexte, envoi.masques, envoi.prive
         if self.memoire is not None and contexte.souvenirs:  # base de l'oubli : ce qui sert n'est jamais archivé
@@ -495,6 +538,7 @@ class ServiceDialogue:
                     yield EvenementDialogue("delta", {"texte": evenement.texte})
                 elif isinstance(evenement, Fin):
                     rep = evenement.reponse
+                    texte_final, meta_actions = await self.extraire_actions(rep.texte)
                     meta = {
                         "moteur": instance.id_moteur,
                         "modele": rep.modele,
@@ -510,10 +554,11 @@ class ServiceDialogue:
                         # Domaines de connaissance évoqués : l'interface propose de les réviser
                         **({"domaines": domaines_evoques(contexte)} if contexte.domaines else {}),
                     }
-                    inventees = await self.verifier_actions(rep.texte, repere, rep.meta)
+                    meta.update(meta_actions)
+                    inventees = await self.verifier_actions(texte_final, repere, rep.meta)
                     if inventees:  # signalé, jamais corrigé : la réponse reste telle que le modèle l'a écrite
                         meta["invente"] = [a.en_dict() for a in inventees]
-                    stocke = await self.depot.ajouter_message(conversation.id, "jarvis", rep.texte, meta)
+                    stocke = await self.depot.ajouter_message(conversation.id, "jarvis", texte_final, meta)
                     termine = True
                     if inventees:
                         await self.signaler_inventees(inventees, stocke.id, instance.id_moteur, conversation.id)
@@ -522,7 +567,7 @@ class ServiceDialogue:
                         "fin",
                         {
                             "message_id": stocke.id,
-                            "texte": rep.texte,
+                            "texte": texte_final,
                             **meta,
                             **({"plafond": plafond} if plafond else {}),
                         },
@@ -536,7 +581,7 @@ class ServiceDialogue:
                                 conversation.id,
                                 instance,
                                 message,
-                                rep.texte,
+                                texte_final,
                                 prive,
                                 options.modele if options else None,
                             )

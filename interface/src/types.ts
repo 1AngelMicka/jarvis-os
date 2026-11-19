@@ -113,6 +113,8 @@ export interface Demande {
   cree_le: string;
   expire_le: string;
   resultat: Record<string, unknown> | null;
+  /** La case « Toujours autoriser » peut être proposée (action 🟡 autorisable). */
+  toujours_possible?: boolean;
 }
 
 export interface EtatUrgence {
@@ -137,8 +139,8 @@ export interface DemandeAction {
 }
 
 export type ReponseAction =
-  | { statut: "executee"; resultat: Record<string, unknown> }
-  | { statut: "en_attente"; demande: Demande }
+  | { statut: "executee"; resultat: Record<string, unknown>; toujours_autorisee?: boolean }
+  | { statut: "en_attente"; demande: Demande; regle?: string }
   | { statut: "refusee" };
 
 export interface Etat {
@@ -181,6 +183,9 @@ export interface MetaMessage {
   domaines?: { id: string; nom: string; niveau: number }[]; // domaines de connaissance évoqués
   /** Exécution inventée : phrases qui affirment une action qu'aucune action réelle du tour n'appuie. */
   invente?: AffirmationInventee[];
+  /** Bloc d'actions de JARVIS, validé par le Core (lot F) ; `actions_ecartees` : raisons, jamais le contenu. */
+  actions?: ActionPilotage[];
+  actions_ecartees?: string[];
 }
 
 export interface AffirmationInventee {
@@ -508,4 +513,76 @@ export interface CarteFlux {
   genere_le: string;
   resume: { flux: number; locaux: number; sortants_actifs: number; internet_actifs: number; connecteurs_inactifs: number };
   flux: FluxDonnee[];
+}
+
+// --- Lot F : pilotage de l'interface, règles de protection, commandes rapides, « toujours autoriser » ---
+
+export type NiveauAction = "vert" | "jaune" | "rouge";
+export type TypeImmediat = "naviguer" | "ouvrir" | "rechercher_memoire" | "regler";
+export type TypeProposition = "proposer_mission" | "proposer_atelier" | "demander_action" | "ajouter_regle";
+
+/** Action validée par le Core : `immediate` (appliquée seule en mode « oui »), `proposition` (toujours un clic). */
+export interface ActionPilotage {
+  type: TypeImmediat | TypeProposition;
+  genre: "immediate" | "proposition";
+  niveau: NiveauAction;
+  libelle: string;
+  parametres: Record<string, unknown>;
+}
+
+export type ModePilotage = "oui" | "demander" | "non";
+
+export interface InfoPilotage {
+  mode: ModePilotage;
+  vues: Record<string, string>;
+  actions_interface: string[];
+  actions_declarees: { nom: string; niveau: NiveauAction; description: string; toujours_possible: boolean }[];
+}
+
+export interface RegleProtection {
+  id: string;
+  genre: "interdire" | "demander";
+  motif: string;
+  libelle: string;
+  origine: "utilisateur" | "jarvis";
+  cree_par: string;
+  cree_le: string;
+}
+
+export interface AutorisationPermanente {
+  action: string;
+  description: string;
+  cree_le: string;
+  utilisations: number;
+  derniere_utilisation: string | null;
+}
+
+export interface CommandeRapide {
+  id: string;
+  motif: string;
+  cible: "interface" | "core";
+  action: string;
+  parametres: Record<string, unknown>;
+  priorite: number;
+  phrase_test: string;
+  actif: boolean;
+  utilisations: number;
+  derniere_utilisation: string | null;
+  niveau: NiveauAction | "inconnu";
+}
+
+export type CommandeRapideEdition = Pick<CommandeRapide, "motif" | "cible" | "action" | "parametres" | "priorite" | "phrase_test" | "actif">;
+
+export interface ConflitCommande {
+  id: string;
+  motif: string;
+  priorite: number;
+}
+
+export interface ResultatCommande {
+  trouvee: boolean;
+  commande?: CommandeRapide;
+  action?: ActionPilotage | { type: string; niveau: NiveauAction; libelle: string; parametres: Record<string, unknown> };
+  resultat?: ReponseAction;
+  erreur?: string;
 }

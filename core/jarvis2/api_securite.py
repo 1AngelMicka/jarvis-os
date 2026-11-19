@@ -75,6 +75,7 @@ class DemandeAction(BaseModel):
 
 class Decision(BaseModel):
     credential: dict[str, Any] | None = None
+    toujours: bool = False  # « Toujours autoriser » cette action 🟡 (jamais 🔴, jamais un clic à l'écran)
 
 
 # --- Appareils et jumelage ---------------------------------------------------------------------------------
@@ -185,7 +186,17 @@ async def enregistrer_cle(request: Request, corps: EnregistrementCle) -> dict[st
 @routeur.get("/actions")
 async def lister_actions(request: Request) -> dict[str, Any]:
     actions = ctx(request).approbations.registre.actions.values()
-    return {"actions": [{"nom": x.nom, "niveau": x.niveau, "description": x.description} for x in actions]}
+    return {
+        "actions": [
+            {
+                "nom": x.nom,
+                "niveau": x.niveau,
+                "description": x.description,
+                "toujours_possible": x.peut_etre_toujours_autorisee,
+            }
+            for x in actions
+        ]
+    }
 
 
 @routeur.post("/actions")
@@ -237,7 +248,7 @@ async def approuver(request: Request, demande_id: UUID, corps: Decision) -> dict
             raise HTTPException(403, str(exc)) from exc
         methode = "cle_acces"
     try:
-        return await c.approbations.decider(demande_id, a, approuver=True, methode=methode)
+        return await c.approbations.decider(demande_id, a, approuver=True, methode=methode, toujours=corps.toujours)
     except ErreurAction as exc:
         raise HTTPException(409, str(exc)) from exc
 

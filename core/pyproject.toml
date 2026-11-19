@@ -92,6 +92,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S105", "S106", "S108", "S608", "ASYNC240"]  # fixtures SQL constantes ; fichiers de test
 "jarvis2/securite/*" = ["S608"]  # listes de colonnes constantes, valeurs toujours en paramètres $n
+"jarvis2/commandes_rapides.py" = ["S608"]  # idem
 
 [tool.mypy]
 python_version = "3.13"

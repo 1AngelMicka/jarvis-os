@@ -335,8 +335,10 @@ class JournalTour:
         for e in entrees_audit:
             nom = str(e.get("action", ""))
             resultat = str(e.get("resultat") or "ok")
-            if nom == ACTION_AUDIT or nom.startswith("demande.") or resultat.startswith("echec"):
-                continue  # un signalement, une demande en attente ou un échec ne sont pas des actions faites
+            if nom == ACTION_AUDIT or nom.startswith(("demande.", "pilotage.")) or resultat.startswith("echec"):
+                # un signalement, une demande en attente, un échec ou une action seulement PROPOSÉE par JARVIS (bloc
+                # d'actions) ne sont pas des actions faites
+                continue
             actions.append(ActionReelle(nom, categorie_action(nom, generique=resultat == "execute")))
         for outil in outils:
             actions.append(ActionReelle(f"outil:{outil}", categorie_action(outil, generique=True)))

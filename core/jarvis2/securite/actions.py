@@ -97,6 +97,7 @@ def creer_registre(
         )
     )
     _ajouter_chantiers(registre)
+    _ajouter_regles(registre)
     if mcp is not None:
         _ajouter_mcp(registre, mcp)
     if ateliers is not None:
@@ -136,6 +137,27 @@ def _ajouter_chantiers(registre: Registre) -> None:
             "Supprimer définitivement un chantier",
             lambda p: f"Supprimer DÉFINITIVEMENT le chantier « {p.get('titre') or p.get('chantier_id')} »",
             supprimer,
+        )
+    )
+
+
+def _ajouter_regles(registre: Registre) -> None:
+    from . import regles
+
+    async def supprimer(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
+        regle = await regles.supprimer(conn, _uuid(p, "regle_id"))
+        if regle is None:
+            raise ErreurAction("Règle introuvable ou déjà retirée")
+        return {"regle_id": str(regle.id), "libelle": regle.libelle}
+
+    registre.ajouter(
+        Action(
+            "regle.supprimer",
+            "jaune",
+            "Retirer une règle de protection (la protection qu'elle donnait disparaît)",
+            lambda p: f"Retirer la règle de protection « {p.get('libelle') or p.get('regle_id')} »",
+            supprimer,
+            autorisable=False,  # affaiblir une protection se décide à chaque fois
         )
     )
 
@@ -185,5 +207,6 @@ def _ajouter_mcp(registre: Registre, mcp: GestionnaireMCP) -> None:
                 f"{json.dumps(p.get('arguments') or {}, ensure_ascii=False)[:300]}"
             ),
             appeler_outil,
+            autorisable=False,  # un outil MCP peut cliquer, naviguer ou écrire : chaque appel reste approuvé
         )
     )

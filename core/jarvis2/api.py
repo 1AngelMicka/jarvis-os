@@ -51,10 +51,12 @@ from .api_matin import routeur as routeur_matin
 from .api_medias import routeur as routeur_medias
 from .api_medias import routeur_pages as routeur_creations
 from .api_memoire import routeur as routeur_memoire
+from .api_pilotage import routeur as routeur_pilotage
 from .api_profil import routeur as routeur_profil
 from .api_securite import routeur as routeur_securite
 from .api_telechargements import routeur as routeur_telechargements
 from .ateliers.gestionnaire import GestionnaireAteliers, Projet
+from .commandes_rapides import ServiceCommandes
 from .config import Parametres
 from .config_locale import charger as charger_config_locale
 from .config_locale import chemin_config
@@ -71,6 +73,7 @@ from .memoire_v2 import EtatBascule, basculer, modele_actif, modele_majoritaire
 from .moteurs.base import ErreurMoteur, Options
 from .moteurs.telemetrie import EnregistreurBase, MoteurInstrumente
 from .nuit import taches_memoire
+from .pilotage import ServicePilotage
 from .securite import appareils
 from .securite.actions import creer_registre
 from .securite.coffre import Coffre
@@ -123,10 +126,22 @@ class Contexte:
     connaissances: ServiceConnaissances = field(init=False)
     missions: ServiceMissions = field(init=False)
     planificateur: Planificateur | None = field(init=False)
+    pilotage: ServicePilotage = field(init=False)
+    commandes: ServiceCommandes = field(init=False)
 
     def __post_init__(self) -> None:
         self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp, self.ateliers))
         self.conseil = ServiceConseil(self.service)
+        expurgateur = self.memoire.reglages.expurgateur if self.memoire is not None else None
+        ateliers = self.ateliers
+        self.pilotage = ServicePilotage(
+            self.pool,
+            lambda: self.approbations.registre.actions,
+            (lambda: {i: p.nom for i, p in ateliers.projets.items()}) if ateliers is not None else dict,
+            (lambda t: not expurgateur.mentionne(t)) if expurgateur is not None else None,
+        )
+        self.service.pilotage = self.pilotage  # bloc d'actions des réponses, validé par le Core
+        self.commandes = ServiceCommandes(self.pool, self.approbations.registre, self.pilotage)
         self.connaissances = ServiceConnaissances(self.pool, self.service)
         self.missions = ServiceMissions(
             self.pool, self.service, self.recherche, self.urgence, self.scientifique, self.connaissances
@@ -164,7 +179,14 @@ CHEMINS_PUBLICS = frozenset(
     {"/v1/sante", "/v1/auth/etat", "/v1/appareils/premier", "/v1/jumelage/echanger", "/v1/ateliers-autorisation"}
 )  # autorisation des ateliers : jeton propre à chaque exécution, PC seulement
 # Écritures permises pendant l'arrêt d'urgence : ce qui sert à le lever ou à retirer un accès
-ECRITURES_EN_URGENCE = ("/v1/urgence/", "/v1/demandes/", "/v1/cles/", "/v1/appareils/")
+ECRITURES_EN_URGENCE = (
+    "/v1/urgence/",
+    "/v1/demandes/",
+    "/v1/cles/",
+    "/v1/appareils/",
+    "/v1/autorisations/",
+    "/v1/regles",
+)
 
 
 def origines_autorisees(p: Parametres) -> set[str]:
@@ -540,6 +562,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_matin)
     app.include_router(routeur_telechargements)
     app.include_router(routeur_donnees)
+    app.include_router(routeur_pilotage)
 
     dossier = parametres.dossier_interface
     if (dossier / "index.html").is_file():

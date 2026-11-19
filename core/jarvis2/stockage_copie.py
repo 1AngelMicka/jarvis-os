@@ -43,6 +43,9 @@ TABLES = (
     "demandes",
     "etat_systeme",
     "connecteurs",
+    "regles_protection",
+    "commandes_rapides",
+    "autorisations_permanentes",
     "audit",
 )
 SEQUENCES = ("messages", "telemetrie", "imports", "audit")  # identifiants entiers auto-incrémentés (PostgreSQL)

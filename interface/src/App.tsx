@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { accorderImages, arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, listerDemandes, resumerConversation, sonderCore } from "./api";
+import { accorderImages, ajouterRegle, arreterUrgence, conseiller, creerAtelier, demanderAction, dialoguer, ErreurApi, executerCommandeRapide, lancerMission, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, lirePilotage, listerDemandes, resumerConversation, sonderCore } from "./api";
+import { choisirAnimations, estChoixAnimations } from "./animations";
+import { aAppliquerSeules, EVENEMENT_PILOTAGE, texteVisible } from "./pilotage";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
 import { type CibleActivite, PanneauActivite } from "./composants/Activite";
@@ -32,7 +34,7 @@ import { CommandesVoix } from "./composants/Voix";
 import { SelecteurTheme } from "./composants/SelecteurTheme";
 import { ecrirePreferences, lirePreferences } from "./preferences";
 import { couperVoix, LecteurVocal } from "./voix";
-import type { Activite, AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
+import type { ActionPilotage, Activite, AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ModePilotage, ReponseAction, ResumeConversation } from "./types";
 
 let compteur = 0;
 const nouvelleCle = () => `m${String(++compteur)}`;
@@ -107,6 +109,25 @@ function Hud() {
   const lecteur = useRef(new LecteurVocal()).current;
   const [rejouerMatin, setRejouerMatin] = useState(0); // « Rejouer l'accueil » du matin (panneau État)
   const minuterieNotif = useRef<number | undefined>(undefined);
+  // Pilotage par JARVIS (lot F) : mode lu au démarrage et suivi quand il change dans les Réglages
+  const modePilotage = useRef<ModePilotage>("demander");
+  const [rechercheMemoire, setRechercheMemoire] = useState<{ texte: string; jeton: number } | null>(null);
+  useEffect(() => {
+    const lire = () => {
+      lirePilotage()
+        .then((p) => {
+          modePilotage.current = p.mode;
+        })
+        .catch(() => {
+          /* Core ancien ou injoignable : « Me demander » (prudent) */
+        });
+    };
+    lire();
+    window.addEventListener(EVENEMENT_PILOTAGE, lire);
+    return () => {
+      window.removeEventListener(EVENEMENT_PILOTAGE, lire);
+    };
+  }, []);
 
   const notifier = useCallback((message: string) => {
     setNotif(message);
@@ -399,6 +420,52 @@ function Hud() {
   };
 
   const envoyer = (texte: string, images: ImageJointe[] = []) => {
+    // Commande rapide : une phrase courte, sans image, hors conseil, reconnue par le Core SANS IA
+    if (images.length || conseil || texte.length > 300) {
+      envoyerIA(texte, images);
+      return;
+    }
+    setEnCours(true);
+    executerCommandeRapide(texte)
+      .then(async (r) => {
+        if (!r.trouvee || !r.commande) {
+          envoyerIA(texte, images);
+          return;
+        }
+        setEnCours(false);
+        const reponse = await suiteCommandeRapide(r.action, r.resultat, r.erreur);
+        setMessages((ms) => [
+          ...ms,
+          { cle: nouvelleCle(), role: "utilisateur", texte },
+          { cle: nouvelleCle(), role: "jarvis", texte: reponse, rapide: true },
+        ]);
+        setAnnonce(reponse);
+      })
+      .catch(() => {
+        envoyerIA(texte, images); // Core ancien ou erreur : la phrase part à l'IA, qui dira ce qui ne va pas
+      });
+  };
+
+  const suiteCommandeRapide = async (action: { type: string; libelle: string; genre?: string } | undefined, resultat: ReponseAction | undefined, erreur: string | undefined): Promise<string> => {
+    if (erreur) return `Commande reconnue, mais refusée : ${erreur}`;
+    if (!action) return "Commande reconnue.";
+    if (resultat) {
+      if (resultat.statut === "en_attente") {
+        montrerDemandes();
+        rafraichir();
+        return `${resultat.demande.niveau === "rouge" ? "🔴" : "🟡"} En attente de votre accord : ${resultat.demande.resume}`;
+      }
+      rafraichir();
+      return `Fait : ${action.libelle}.`;
+    }
+    try {
+      return (await appliquerAction(action as ActionPilotage)) ?? `${action.libelle}.`;
+    } catch (e: unknown) {
+      return e instanceof Error ? e.message : "Action impossible.";
+    }
+  };
+
+  const envoyerIA = (texte: string, images: ImageJointe[] = []) => {
     const cleJarvis = nouvelleCle();
     const cleUtilisateur = nouvelleCle();
     const affichees = images.map(({ id, nom, dataUrl, poids }) => ({ id, nom, dataUrl, poids }));
@@ -411,6 +478,9 @@ function Hud() {
     const moteurInfo = etat?.moteurs.find((m) => m.id === moteur);
 
     const avis: AvisExpert[] = [];
+    // Flux brut : le bloc d'actions de JARVIS n'est ni affiché ni lu à voix haute (le Core le retire à la fin)
+    let brut = "";
+    let lu = 0;
     const surEvenement = (ev: EvenementDialogue) => {
       switch (ev.type) {
         case "avis":
@@ -432,21 +502,38 @@ function Hud() {
           });
           break;
         }
-        case "delta":
-          lecteur.pousser(ev.donnees.texte);
+        case "delta": {
+          brut += ev.donnees.texte;
+          const visible = texteVisible(brut);
+          if (visible.length > lu) {
+            lecteur.pousser(visible.slice(lu));
+            lu = visible.length;
+          }
           setPremierMorceau(true);
           setMessages((ms) => {
             const dernier = ms.at(-1);
-            if (dernier?.cle === cleJarvis) return [...ms.slice(0, -1), { ...dernier, texte: dernier.texte + ev.donnees.texte }];
-            return [...ms, { cle: cleJarvis, role: "jarvis", texte: ev.donnees.texte, enCours: true, ...(avis.length ? { meta: { conseil: [...avis] } } : {}) }];
+            if (dernier?.cle === cleJarvis) return [...ms.slice(0, -1), { ...dernier, texte: visible }];
+            return [...ms, { cle: cleJarvis, role: "jarvis", texte: visible, enCours: true, ...(avis.length ? { meta: { conseil: [...avis] } } : {}) }];
           });
           break;
-        case "fin":
+        }
+        case "fin": {
           lecteur.finir();
-          setMessages((ms) => [...ms.filter((m) => m.cle !== cleJarvis), { cle: cleJarvis, role: "jarvis", texte: ev.donnees.texte, meta: ev.donnees }]);
+          // Mode « oui » : la vue ou l'élément demandé s'ouvre seul ; les propositions attendent toujours un clic
+          const seules = aAppliquerSeules(ev.donnees.actions, modePilotage.current);
+          for (const a of seules) {
+            appliquerAction(a).catch((e: unknown) => {
+              notifier(e instanceof Error ? e.message : "Action impossible.");
+            });
+          }
+          setMessages((ms) => [
+            ...ms.filter((m) => m.cle !== cleJarvis),
+            { cle: cleJarvis, role: "jarvis", texte: ev.donnees.texte, meta: ev.donnees, ...(seules.length ? { actionsAppliquees: true } : {}) },
+          ]);
           setConversations((cs) => cs.map((c, i) => (i === 0 ? { ...c, nb_messages: c.nb_messages + 1 } : c)));
           setAnnonce("Réponse de JARVIS terminée.");
           break;
+        }
         case "invente": // déjà dans la meta de « fin » ; repris ici si l'ordre des événements change
           setMessages((ms) => ms.map((m) => (m.cle === cleJarvis ? { ...m, meta: { ...m.meta, invente: ev.donnees.affirmations } } : m)));
           break;
@@ -582,6 +669,81 @@ function Hud() {
   };
   const executerRef = useRef(executer);
   executerRef.current = executer;
+
+  // --- JARVIS pilote l'interface : actions validées par le Core (lot F) ---
+  const appliquerAction = async (a: ActionPilotage): Promise<string | undefined> => {
+    const p = a.parametres;
+    const texte = (cle: string) => (typeof p[cle] === "string" ? p[cle] : "");
+    switch (a.type) {
+      case "naviguer": {
+        const v = texte("vue");
+        if (v === "reglages") {
+          const ancre = texte("ancre");
+          ouvrirReglages(ancre ? (resoudreReglage(ancre) ?? { recherche: ancre }) : {});
+        } else if (v === "historique" || v === "demandes" || v === "securite") {
+          executer(v as IdCommande);
+        } else if (v === "activite") {
+          setOnglet("activite");
+          setLateralOuvert(true);
+        } else {
+          setVue(v as typeof vue);
+          setLateralOuvert(false);
+        }
+        return a.libelle;
+      }
+      case "ouvrir": {
+        const id = texte("id");
+        const objet = texte("objet");
+        if (objet === "conversation") ouvrir(id);
+        else if (objet === "atelier") {
+          setVue("ateliers");
+          setCible({ vue: "ateliers", id });
+        } else {
+          setVue("agents");
+          setCible({ vue: "agents", type: objet === "creation" ? "creation" : "mission", id });
+        }
+        setLateralOuvert(false);
+        return a.libelle;
+      }
+      case "rechercher_memoire":
+        setRechercheMemoire({ texte: texte("requete"), jeton: Date.now() });
+        setVue("memoire");
+        return a.libelle;
+      case "regler": {
+        const valeur = texte("valeur");
+        if (texte("cle") === "theme") {
+          const t = themeDepuis(valeur);
+          if (t) changerTheme(t);
+        } else if (estChoixAnimations(valeur)) choisirAnimations(valeur);
+        return a.libelle;
+      }
+      case "proposer_mission": {
+        const type = texte("mission") as "recherche" | "brainstorm" | "revue";
+        await lancerMission(type, texte("objectif"));
+        rafraichirActivite();
+        return "Mission lancée";
+      }
+      case "proposer_atelier": {
+        const atelier = await creerAtelier(texte("projet"), texte("nom"));
+        setVue("ateliers");
+        setCible({ vue: "ateliers", id: atelier.id });
+        return "Atelier ouvert";
+      }
+      case "demander_action": {
+        const parametres = (typeof p.parametres === "object" && p.parametres ? p.parametres : {}) as Record<string, unknown>;
+        const r = await demanderAction({ action: texte("action"), parametres });
+        suiteAction(r, "Fait.");
+        return r.statut === "en_attente" ? "En attente de votre accord" : "Fait";
+      }
+      case "ajouter_regle": {
+        const genre = texte("genre") === "demander" ? "demander" : "interdire";
+        await ajouterRegle({ genre, motif: texte("motif"), libelle: texte("libelle"), origine: "jarvis" });
+        return "Règle ajoutée";
+      }
+      default:
+        return undefined;
+    }
+  };
 
   // Depuis la palette : elle se ferme d'abord (le focus revient), puis la commande agit
   const depuisPalette = (action: () => void) => {
@@ -920,7 +1082,7 @@ function Hud() {
             }
           >
             <div className="panneau-corps">
-              <VueMemoire surChangement={rafraichir} />
+              <VueMemoire surChangement={rafraichir} demande={rechercheMemoire} />
             </div>
           </Panneau>
         ) : vue === "connaissances" ? (
@@ -1101,6 +1263,7 @@ function Hud() {
                 reflexion={enCours && !premierMorceau}
                 chargement={chargement || !etat}
                 {...(avisEnCours ? { etapeReflexion: `Conseil : ${String(avisEnCours.recus)} avis sur ${String(avisEnCours.attendus)}…` } : {})}
+                surAction={appliquerAction}
               />
                 <Console
                   moteurs={moteurs}
