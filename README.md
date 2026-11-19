@@ -11,7 +11,7 @@ Plan : [docs/PLAN.md](docs/PLAN.md) · décisions : [docs/DECISIONS.md](docs/DEC
 Windows :
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File install.ps1 -Source <jarvis2-x.y.z-py3-none-any.whl>
+powershell -ExecutionPolicy Bypass -File install.ps1 --source <jarvis2-x.y.z-py3-none-any.whl>
 ```
 
 macOS, Linux :
@@ -20,7 +20,12 @@ macOS, Linux :
 sh install.sh --source <jarvis2-x.y.z-py3-none-any.whl>
 ```
 
-Le script installe [uv](https://docs.astral.sh/uv/) s'il manque (après confirmation), puis JARVIS 2 (`uv tool install`, Python 3.13 géré par uv), prépare la base SQLite et le modèle d'embeddings (environ 220 Mo, une seule fois), et lance `jarvis2` : l'interface s'ouvre dans le navigateur, sur `http://localhost:8765`.
+Le script installe ce qui manque (uv, par winget sous Windows et Homebrew sous macOS s'ils sont là, sinon par le script officiel d'Astral, après confirmation), puis JARVIS 2 (`uv tool install`, Python 3.13 géré par uv), ajoute la commande `jarvis2` au PATH (sous Windows, le PATH de la session est relu depuis le registre : pas besoin de rouvrir le terminal), prépare la base SQLite et le modèle d'embeddings (environ 220 Mo, une seule fois), et lance `jarvis2` : l'interface s'ouvre dans le navigateur, sur `http://localhost:8765`.
+
+- **Ollama et un premier modèle** sont seulement **proposés**, par une case à cocher décochée par défaut ; le modèle est choisi pour votre PC par la table matériel → modèle de JARVIS (`jarvis2 materiel`). Sans réponse possible (CI, `--oui`), rien n'est coché. Le script ne démarre jamais Ollama.
+- **Reprise** : chaque étape est notée dans `installation.etat` (dossier de configuration) ; après une coupure, relancer le script reprend là où il s'était arrêté (`--recommencer` pour tout refaire).
+- **Bilan honnête** à la fin : ce qui est fait, refusé, en échec, et ce qui reste à faire.
+- Options communes aux deux scripts : `--oui` (ne rien demander), `--avec-ollama` / `--sans-ollama`, `--essai` (à blanc : affiche ce qui serait fait, n'exécute rien), `--sans-demarrer`, `--sans-modifier-path`, `--recommencer`. Codes de sortie : 0 installé, 1 une étape a échoué (relancer reprend), 2 option invalide, 3 outil indispensable refusé.
 
 Avec [pipx](https://pipx.pypa.io) plutôt que les scripts (même roue, interface incluse) :
 
@@ -32,12 +37,12 @@ jarvis2
 
 Au premier lancement, le navigateur du PC s'associe d'un clic, puis l'**assistant d'installation** vérifie tout (avec des boutons « Réparer »), aide à choisir une IA et à associer le téléphone. Il reste accessible depuis le panneau État (« Installation »).
 
-Commandes utiles : `jarvis2` (démarrer et ouvrir l'interface), `jarvis2 docteur` (diagnostic ; `--json`, `--reparer`), `jarvis2 jumeler` (lien d'association d'un appareil), `jarvis2 verifier-audit`, `jarvis2 lever-urgence` (secours si la clé d'accès est perdue), `jarvis2 serveur --sans-ecran` (serveur domestique sans écran : voir [docs/SERVEUR.md](docs/SERVEUR.md)).
+Commandes utiles : `jarvis2` (démarrer et ouvrir l'interface), `jarvis2 docteur` (diagnostic ; `--json`, `--reparer`), `jarvis2 materiel` (matériel du PC et modèles conseillés, lecture seule), `jarvis2 jumeler` (lien d'association d'un appareil), `jarvis2 verifier-audit`, `jarvis2 lever-urgence` (secours si la clé d'accès est perdue), `jarvis2 serveur --sans-ecran` (serveur domestique sans écran : voir [docs/SERVEUR.md](docs/SERVEUR.md)).
 
 Facultatif, détecté mais jamais installé par JARVIS :
 
 - [Claude Code](https://code.claude.com), connecté à **votre** compte (`claude /login`), pour utiliser votre abonnement Claude. Un avertissement (usage personnel) est à lire et à cocher une fois.
-- [Ollama](https://ollama.com) pour des modèles locaux.
+- [Ollama](https://ollama.com) pour des modèles locaux (le script d'installation le propose, case décochée ; JARVIS lui-même ne l'installe ni ne le démarre jamais seul).
 - [Tailscale](https://tailscale.com/download) pour le téléphone (voir ci-dessous).
 
 ## Application de bureau
