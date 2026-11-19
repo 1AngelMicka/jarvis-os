@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ecrireBloc, lancerTacheMemoire, lireEtatMemoire, listerBlocs, noyauEnBlocs } from "../api";
 import type { BlocMemoire, EtatMemoire } from "../types";
+import { Telechargements } from "./Telechargements";
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -116,6 +117,7 @@ export function SectionMemoire({ surChangement }: { surChangement: (m?: string) 
           {etat.bascule?.erreur && ` · bascule interrompue : ${etat.bascule.erreur}`}
         </p>
       )}
+      <Telechargements ids={["embeddings"]} surMessage={surChangement} />
       {etat && etat.taches.length > 0 && (
         <ul className="cartes-co">
           {etat.taches.map((t) => (

@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from . import telechargements
 from .db import ErreurBaseOuReseau, Executant, lister_migrations, version_schema
 from .securite import audit
 
@@ -117,18 +118,72 @@ def modele_present(dossier: Path, nom_modele: str) -> bool:
     return dossier.is_dir() and any(cle in d.name.lower() for d in dossier.iterdir() if d.is_dir())
 
 
+def _mo(octets: int) -> str:
+    return f"{octets / 1_000_000:.0f} Mo" if octets >= 1_000_000 else f"{octets / 1000:.0f} ko"
+
+
+def decrire_telechargement(e: telechargements.Etat) -> str:
+    """Phrase d'état d'un téléchargement, lue sur ses marqueurs (aussi depuis un autre processus)."""
+    if e.statut == "en_cours":
+        part = f"{_mo(e.octets)} sur {_mo(e.total)} ({e.pourcentage} %)" if e.total else _mo(e.octets)
+        essai = f", essai {e.essai}/{telechargements.ESSAIS}" if e.essai and e.essai > 1 else ""
+        return f"téléchargement en cours : {part}{essai}"
+    if e.statut == "interrompu":
+        return f"téléchargement interrompu à {_mo(e.octets)} (reprise possible)"
+    if e.statut == "echoue":
+        return f"téléchargement échoué : {e.raison or 'raison inconnue'}"
+    return "présent"
+
+
+def _verifier_telechargeable(
+    id_verif: str,
+    titre: str,
+    e: telechargements.Etat,
+    ancien_cache: bool,
+    reparation: str,
+    a_telecharger: str,
+    statut_absent: Statut,
+) -> Verification:
+    nom = e.nom.rsplit("/", 1)[-1]
+    if e.statut == "pret" or (e.statut == "absent" and ancien_cache):
+        return Verification(id_verif, titre, "ok", f"{nom} présent")
+    if e.statut == "en_cours":
+        return Verification(id_verif, titre, "info", f"{nom} : {decrire_telechargement(e)}")
+    if e.statut in ("interrompu", "echoue"):
+        return Verification(id_verif, titre, "attention", f"{nom} : {decrire_telechargement(e)}", reparation=reparation)
+    return Verification(id_verif, titre, statut_absent, f"{nom} {a_telecharger}", reparation=reparation)
+
+
 def verifier_modele(dossier: Path, nom_modele: str, chargement: str | None = None) -> Verification:
-    nom = nom_modele.rsplit("/", 1)[-1]
-    if chargement == "en_cours":
-        return Verification("modele", "Mémoire (modèle d'embeddings)", "info", f"{nom} : téléchargement en cours…")
-    if modele_present(dossier, nom_modele):
-        return Verification("modele", "Mémoire (modèle d'embeddings)", "ok", f"{nom} présent")
-    return Verification(
+    titre = "Mémoire (modèle d'embeddings)"
+    e = telechargements.lire_etat(telechargements.modele_embeddings(dossier, nom_modele))
+    if chargement == "en_cours" and e.statut != "en_cours":
+        return Verification("modele", titre, "info", f"{nom_modele.rsplit('/', 1)[-1]} : chargement…")
+    return _verifier_telechargeable(
         "modele",
-        "Mémoire (modèle d'embeddings)",
+        titre,
+        e,
+        modele_present(dossier, nom_modele),
+        "telecharger_modele",
+        "à télécharger (environ 220 Mo, une seule fois ; rien ne part sans votre accord)",
         "attention",
-        f"{nom} à télécharger (environ 220 Mo, une seule fois)",
-        reparation="telecharger_modele",
+    )
+
+
+def verifier_voix(dossier: Path, nom_modele: str) -> Verification:
+    """Modèle Whisper de la dictée : facultatif, proposé, jamais téléchargé sans accord."""
+    e = telechargements.lire_etat(telechargements.modele_whisper(dossier, nom_modele))
+    ancien = (dossier / "whisper").is_dir() and any(
+        nom_modele.lower() in d.name.lower() for d in (dossier / "whisper").iterdir() if d.is_dir()
+    )
+    return _verifier_telechargeable(
+        "voix",
+        "Dictée (modèle Whisper)",
+        e,
+        ancien,
+        "telecharger_voix",
+        "à télécharger pour la dictée (facultatif ; rien ne part sans votre accord)",
+        "info",
     )
 
 
@@ -262,6 +317,7 @@ async def diagnostiquer(
         stockage,
         verifier_interface(p.dossier_interface),
         verifier_modele(p.dossier_modeles, p.modele_embeddings, chargement_modele),
+        verifier_voix(p.dossier_modeles, p.modele_voix),
         *cerveaux,
         materiel,
         verifier_reseau(p),

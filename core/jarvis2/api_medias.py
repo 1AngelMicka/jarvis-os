@@ -15,6 +15,7 @@ from . import creations, vision, voix
 from .moteurs.base import ErreurMoteur
 from .securite import audit
 from .securite.appareils import Appareil
+from .telechargements import ModeleAbsent
 
 if TYPE_CHECKING:
     from .api import Contexte
@@ -145,8 +146,10 @@ async def transcrire(request: Request) -> dict[str, Any]:
         raise HTTPException(422, "Enregistrement vide")
     try:
         resultat = await voix.transcrire(c.transcripteur, audio)
+    except ModeleAbsent as exc:  # jamais téléchargé en silence : l'utilisateur l'accepte dans le diagnostic
+        raise HTTPException(409, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(413, str(exc)) from exc
-    except Exception as exc:  # décodage audio, modèle absent…
+    except Exception as exc:  # décodage audio…
         raise HTTPException(500, f"Transcription impossible : {type(exc).__name__}") from exc
     return resultat.en_dict()

@@ -63,6 +63,12 @@ function Aide({ aide }: { aide: string }) {
   return <span className="verif-aide">{aide}</span>;
 }
 
+/** Un téléchargement n'est jamais lancé sans ce clic : le bouton dit ce qu'il fait. */
+function libelleReparation(v: Verification): string {
+  if (!v.reparation?.startsWith("telecharger_")) return "Réparer";
+  return /échoué|interrompu/.test(v.detail) ? "Réessayer" : "Télécharger";
+}
+
 function Verifications({ surChangement }: { surChangement: (message?: string) => void }) {
   const [liste, setListe] = useState<Verification[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -79,8 +85,8 @@ function Verifications({ surChangement }: { surChangement: (message?: string) =>
   }, []);
   useEffect(charger, [charger]);
 
-  // Téléchargement du modèle en cours : on relit l'état toutes les 3 s jusqu'à la fin
-  const enCours = liste?.some((v) => v.id === "modele" && v.statut === "info") ?? false;
+  // Téléchargement (ou chargement) d'un modèle en cours : on relit l'état toutes les 3 s jusqu'à la fin
+  const enCours = liste?.some((v) => (v.id === "modele" || v.id === "voix") && v.statut === "info" && !v.reparation) ?? false;
   useEffect(() => {
     if (!enCours) return;
     const minuterie = window.setInterval(charger, 3000);
@@ -133,7 +139,7 @@ function Verifications({ surChangement }: { surChangement: (message?: string) =>
                       lancer(v.reparation ?? "");
                     }}
                   >
-                    {occupe === v.reparation ? "En cours…" : "Réparer"}
+                    {occupe === v.reparation ? "En cours…" : libelleReparation(v)}
                   </button>
                 )}
                 {v.aide && <Aide aide={v.aide} />}

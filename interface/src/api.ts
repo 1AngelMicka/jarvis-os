@@ -21,6 +21,7 @@ import type {
   EtatAccueil,
   EtatTailscale,
   Jumelage,
+  Telechargement,
   Verification,
   Atelier,
   AttenteOutil,
@@ -177,6 +178,11 @@ export const lireAccueil = () => unSeul("accueil", () => appeler<EtatAccueil>("/
 export const terminerAccueil = () => envoyer<{ termine: boolean }>("/v1/accueil/terminer");
 export const lireDiagnostic = () => unSeul("diagnostic", () => appeler<{ verifications: Verification[] }>("/v1/diagnostic"));
 export const reparer = (id: string) => envoyer<{ verifications: Verification[] }>(`/v1/diagnostic/reparer/${encodeURIComponent(id)}`);
+export const lireTelechargements = () =>
+  unSeul("telechargements", () => appeler<{ telechargements: Telechargement[] }>("/v1/telechargements"));
+/** Le clic de l'utilisateur vaut accord : rien n'est jamais téléchargé sans lui. */
+export const lancerTelechargement = (id: string) =>
+  envoyer<{ telechargements: Telechargement[] }>(`/v1/telechargements/${encodeURIComponent(id)}`);
 export const lireTailscale = () => appeler<EtatTailscale>("/v1/tailscale");
 export const choisirPrereglages = (choix: Prereglage[]) =>
   envoyer<{ prereglages: Prereglage[]; recette: "creee" | "existante" | null }>("/v1/accueil/prereglages", { choix });
