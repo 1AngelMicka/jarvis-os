@@ -15,6 +15,7 @@ import type { ImageJointe } from "./images";
 import { choisirTheme, lireTheme, THEMES, type Theme } from "./theme";
 import { ListeConversations } from "./composants/Historique";
 import { VueMemoire } from "./composants/VueMemoire";
+import { VueConnaissances } from "./composants/Connaissances";
 import { EcranJumelage } from "./composants/Jumelage";
 import { Panneau } from "./composants/Panneau";
 import { type EtatNoyau, Reacteur } from "./composants/Reacteur";
@@ -78,7 +79,7 @@ function Hud() {
   const [alerte, setAlerte] = useState(false);
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
-  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire">("dialogue");
+  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire" | "connaissances">("dialogue");
   const [conseil, setConseil] = useState(false);
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
   const [annonce, setAnnonce] = useState("");
@@ -629,6 +630,16 @@ function Hud() {
           <button
             type="button"
             className="btn btn-discret btn-mini btn-connecteurs"
+            aria-pressed={vue === "connaissances"}
+            onClick={() => {
+              setVue((v) => (v === "connaissances" ? "dialogue" : "connaissances"));
+            }}
+          >
+            Savoir
+          </button>
+          <button
+            type="button"
+            className="btn btn-discret btn-mini btn-connecteurs"
             aria-pressed={vue === "agents"}
             onClick={() => {
               setVue((v) => (v === "agents" ? "dialogue" : "agents"));
@@ -802,6 +813,29 @@ function Hud() {
           >
             <div className="panneau-corps">
               <VueMemoire surChangement={rafraichir} />
+            </div>
+          </Panneau>
+        ) : vue === "connaissances" ? (
+          <Panneau
+            titre="Connaissances"
+            className="panneau-scene"
+            ordre={2}
+            id="connaissances"
+            meta="domaines, cartes, fiches, révisions"
+            actions={
+              <button
+                type="button"
+                className="btn btn-mini"
+                onClick={() => {
+                  setVue("dialogue");
+                }}
+              >
+                Retour au dialogue
+              </button>
+            }
+          >
+            <div className="panneau-corps">
+              <VueConnaissances surChangement={rafraichir} />
             </div>
           </Panneau>
         ) : vue === "agents" ? (

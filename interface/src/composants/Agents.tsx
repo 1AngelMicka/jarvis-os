@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { activerOutilMcp, demanderAction, lancerMission, lancerRecette, listerMissions, listerOutilsMcp, listerRecettes } from "../api";
+import { listerDomaines, reviserDomaine } from "../connaissances";
+import type { ResumeDomaine } from "../connaissances";
 import { TexteRiche } from "../texte";
 import type { Mission, OutilMcp, Recette, ReponseAction, ServeurMcp } from "../types";
 import { SectionCreations } from "./Creations";
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const TYPES: { id: Mission["type"]; nom: string; aide: string }[] = [
-  { id: "recherche", nom: "Recherche", aide: "Cherche sur le web (SearXNG), puis un rapport qui cite ses sources." },
+  { id: "recherche", nom: "Recherche", aide: "Cherche sur le web (SearXNG) et dans les bases scientifiques, puis un rapport qui cite ses sources." },
   { id: "brainstorm", nom: "Brainstorm", aide: "Dix idées, les trois meilleures et une première étape." },
-  { id: "revue", nom: "Revue", aide: "Points forts, risques, questions ouvertes, recommandations." },
+  { id: "revue", nom: "Revue", aide: "Points forts, risques, questions ouvertes, recommandations ; sur un domaine : sa révision." },
 ];
 const STATUTS: Record<Mission["statut"], { texte: string; ton?: string }> = {
   en_file: { texte: "En file" },
@@ -28,6 +30,10 @@ const EXECUTION: Record<string, { texte: string; ton?: string }> = {
 function Missions({ surChangement, initiale }: { surChangement: (m?: string) => void; initiale?: string | undefined }) {
   const [liste, setListe] = useState<Mission[] | null>(null);
   const [web, setWeb] = useState(false);
+  const [bases, setBases] = useState<string[]>([]);
+  const [scientifique, setScientifique] = useState(true);
+  const [domaines, setDomaines] = useState<ResumeDomaine[]>([]);
+  const [domaine, setDomaine] = useState("");
   const [type, setType] = useState<Mission["type"]>("recherche");
   const [objectif, setObjectif] = useState("");
   const [ouverte, setOuverte] = useState<string | null>(initiale ?? null);
@@ -45,12 +51,24 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
       .then((r) => {
         setListe(r.missions);
         setWeb(r.recherche_web);
+        setBases(r.scientifique);
       })
       .catch((e: unknown) => {
         setErreur(e instanceof Error ? e.message : "Lecture impossible.");
       });
   }, []);
   useEffect(charger, [charger]);
+  useEffect(() => {
+    listerDomaines()
+      .then((r) => {
+        setDomaines(r.domaines);
+      })
+      .catch(() => {
+        /* sans la liste des domaines, une mission reste possible */
+      });
+  }, []);
+  const revision = type === "revue" && domaine !== "";
+  const nomDomaine = (id?: string) => domaines.find((d) => d.id === id)?.nom;
   const actives = liste?.some((m) => m.statut === "en_cours" || m.statut === "en_file") ?? false;
   useEffect(() => {
     if (!actives) return;
@@ -67,14 +85,14 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
       </h3>
       <p className="sec-texte">
         Une mission travaille en tâche de fond et range son rapport dans la mémoire. Un sujet privé est confié à une IA locale.
-        {type === "recherche" && !web && " Recherche web non configurée ([recherche] searxng) : le rapport dira qu'il n'est pas sourcé."}
+        {type === "recherche" && !web && (bases.length ? " Recherche web non configurée ([recherche] searxng) : seules les bases scientifiques seront interrogées." : " Recherche web non configurée ([recherche] searxng) : le rapport dira qu'il n'est pas sourcé.")}
       </p>
       <form
         className="mission-form"
         onSubmit={(e) => {
           e.preventDefault();
           setErreur(null);
-          lancerMission(type, objectif.trim())
+          (revision ? reviserDomaine(domaine) : lancerMission(type, objectif.trim(), { scientifique, ...(domaine && type !== "brainstorm" ? { domaine_id: domaine } : {}) }))
             .then(() => {
               setObjectif("");
               surChangement("Mission lancée.");
@@ -102,20 +120,52 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
             </button>
           ))}
         </div>
+        {type !== "brainstorm" && domaines.length > 0 && (
+          <label className="mission-option">
+            <span>Domaine</span>
+            <select
+              className="select"
+              value={domaine}
+              onChange={(e) => {
+                setDomaine(e.target.value);
+              }}
+            >
+              <option value="">{type === "revue" ? "Aucun (revue libre)" : "Selon l'objectif"}</option>
+              {domaines.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.nom}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {type === "recherche" && bases.length > 0 && (
+          <label className="carte-co-case carte-co-case--ligne">
+            <input
+              type="checkbox"
+              checked={scientifique}
+              onChange={(e) => {
+                setScientifique(e.target.checked);
+              }}
+            />
+            <span>Bases scientifiques ({bases.join(", ")})</span>
+          </label>
+        )}
         <label className="visuellement-cache" htmlFor="mission-objectif">
           Objectif de la mission
         </label>
         <textarea
           id="mission-objectif"
           rows={2}
+          hidden={revision}
           value={objectif}
           placeholder={type === "recherche" ? "Que faut-il chercher ? (ex. réussir des tomates anciennes)" : "Sur quoi porter la mission ?"}
           onChange={(e) => {
             setObjectif(e.target.value);
           }}
         />
-        <button type="submit" className="btn btn-principal btn-mini" disabled={objectif.trim().length < 3}>
-          Lancer
+        <button type="submit" className="btn btn-principal btn-mini" disabled={!revision && objectif.trim().length < 3}>
+          {revision ? "Réviser le domaine" : "Lancer"}
         </button>
       </form>
       {erreur && (
@@ -136,6 +186,12 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
                 <div className="carte-co-tete">
                   <h4 className="carte-co-nom">{m.objectif}</h4>
                   <span className="badge-co">{TYPES.find((t) => t.id === m.type)?.nom}</span>
+                  {m.parametres?.domaine_id && nomDomaine(m.parametres.domaine_id) && <span className="badge-co">{nomDomaine(m.parametres.domaine_id)}</span>}
+                  {m.resultat?.score !== undefined && (
+                    <span className="badge-co" data-ton="ok">
+                      {m.resultat.score}/10
+                    </span>
+                  )}
                   <span className="badge-co" data-ton={s.ton}>
                     {s.texte}
                   </span>

@@ -85,12 +85,18 @@ async def lancer_recette(request: Request, ident: str) -> dict[str, Any]:
 class DemandeMission(BaseModel):
     type: Literal["recherche", "brainstorm", "revue"]
     objectif: str = Field(min_length=3, max_length=4000)
+    scientifique: bool = True  # recherche : bases scientifiques en plus du web
+    domaine_id: UUID | None = None  # domaine de connaissance (revue : sa révision ; recherche : l'enrichit)
 
 
 @routeur.get("/missions")
 async def missions(request: Request) -> dict[str, Any]:
     c = _ctx(request)
-    return {"missions": [_propre(m) for m in await c.missions.lister()], "recherche_web": c.recherche.disponible}
+    return {
+        "missions": [_propre(m) for m in await c.missions.lister()],
+        "recherche_web": c.recherche.disponible,
+        "scientifique": c.scientifique.noms if c.scientifique is not None else [],
+    }
 
 
 @routeur.get("/missions/{ident}")
@@ -104,7 +110,14 @@ async def mission(request: Request, ident: UUID) -> dict[str, Any]:
 @routeur.post("/missions")
 async def lancer_mission(request: Request, corps: DemandeMission) -> dict[str, Any]:
     c, a = _ctx(request), _appareil(request)
-    ident = await c.missions.lancer(corps.type, corps.objectif, a.acteur)
+    parametres: dict[str, Any] = {"scientifique": corps.scientifique}
+    if corps.domaine_id is not None:
+        from .connaissances import obtenir
+
+        if await obtenir(c.pool, corps.domaine_id) is None:
+            raise HTTPException(404, "Domaine introuvable")
+        parametres["domaine_id"] = str(corps.domaine_id)
+    ident = await c.missions.lancer(corps.type, corps.objectif, a.acteur, parametres=parametres)
     await audit.journaliser(
         c.pool, acteur=a.acteur, action="mission.lancee", cible=str(ident), details={"type": corps.type}
     )

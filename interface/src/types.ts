@@ -143,6 +143,7 @@ export interface MetaMessage {
   conseil?: AvisExpert[];
   /** Images jointes à un message de l'utilisateur : seulement leur type et leur poids (le Core ne les garde pas). */
   images?: { type: string; octets: number }[];
+  domaines?: { id: string; nom: string; niveau: number }[]; // domaines de connaissance évoqués
 }
 
 export interface MessageStocke {
@@ -239,10 +240,21 @@ export interface Mission {
   id: string;
   type: "recherche" | "brainstorm" | "revue";
   objectif: string;
+  parametres?: { scientifique?: boolean; domaine_id?: string };
   statut: "en_file" | "en_cours" | "terminee" | "echec" | "annulee";
   progression: number;
   etapes: { nom: string; le: string }[];
-  resultat: { rapport: string; sources: { titre: string; url: string }[]; souvenir_id: string | null; moteur: string } | null;
+  resultat: {
+    rapport: string;
+    sources: { titre: string; url: string }[];
+    souvenir_id: string | null;
+    moteur: string;
+    // Révision d'un domaine de connaissance
+    score?: number;
+    lacunes?: string[];
+    suggestions?: string[];
+    domaine_id?: string;
+  } | null;
   erreur: string | null;
   cree_le: string;
   termine_le: string | null;

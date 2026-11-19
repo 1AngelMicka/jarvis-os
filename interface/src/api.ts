@@ -89,7 +89,7 @@ function entetes(extra: Record<string, string> = {}): Record<string, string> {
   return { Accept: "application/json", ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}), ...extra };
 }
 
-async function appeler<T>(chemin: string, init: { methode?: string; corps?: unknown } = {}): Promise<T> {
+export async function appeler<T>(chemin: string, init: { methode?: string; corps?: unknown } = {}): Promise<T> {
   let rep: Response;
   try {
     rep = await fetch(chemin, {
@@ -104,7 +104,7 @@ async function appeler<T>(chemin: string, init: { methode?: string; corps?: unkn
   return (await rep.json()) as T;
 }
 
-const envoyer = <T>(chemin: string, corps: unknown = {}) => appeler<T>(chemin, { methode: "POST", corps });
+export const envoyer = <T>(chemin: string, corps: unknown = {}) => appeler<T>(chemin, { methode: "POST", corps });
 
 export const lireEtat = () => unSeul("etat", () => appeler<Etat>("/v1/etat"));
 /** Le Core répond-il ? (route publique, légère : surveillance de la connexion) */
@@ -174,8 +174,10 @@ export const listerRecettes = () =>
   unSeul("recettes", () => appeler<{ dossier: string | null; recettes: Recette[]; erreurs: string[] }>("/v1/recettes"));
 export const lancerRecette = (id: string) => envoyer<{ lancee: string }>(`/v1/recettes/${encodeURIComponent(id)}/lancer`);
 export const listerMissions = () =>
-  unSeul("missions", () => appeler<{ missions: Mission[]; recherche_web: boolean }>("/v1/missions"));
-export const lancerMission = (type: Mission["type"], objectif: string) => envoyer<{ id: string }>("/v1/missions", { type, objectif });
+  unSeul("missions", () => appeler<{ missions: Mission[]; recherche_web: boolean; scientifique: string[] }>("/v1/missions"));
+/** `scientifique` : bases scientifiques en plus du web ; `domaine_id` : domaine de connaissance (revue = révision). */
+export const lancerMission = (type: Mission["type"], objectif: string, options: { scientifique?: boolean; domaine_id?: string } = {}) =>
+  envoyer<{ id: string }>("/v1/missions", { type, objectif, ...options });
 export const listerOutilsMcp = () => unSeul("mcp", () => appeler<{ serveurs: ServeurMcp[] }>("/v1/mcp/outils"));
 export const activerOutilMcp = (serveur: string, outil: string, actif: boolean) =>
   envoyer<{ actif: boolean }>(`/v1/mcp/outils/${encodeURIComponent(serveur)}/${encodeURIComponent(outil)}/actif`, { actif });

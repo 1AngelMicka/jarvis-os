@@ -3,6 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { analyserCommande, type IdCommande, suggererSlash, texteAEnvoyer } from "../commandes";
 import { ErreurImage, type ImageJointe, imagesDe, NB_MAX_IMAGES, places, preparerImage, TYPES_ACCEPTES } from "../images";
 import { TexteRiche } from "../texte";
+import { DomainesEvoques } from "./Connaissances";
 import type { AvisExpert, InfoMoteur, MetaMessage } from "../types";
 import { type ImageAffichee, Vignettes, versAffichees } from "./PiecesJointes";
 
@@ -85,6 +86,7 @@ function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
               {m.meta.souvenirs.length} souvenir{m.meta.souvenirs.length > 1 ? "s" : ""}
             </span>
           ) : null}
+          {m.meta.domaines?.length ? <DomainesEvoques domaines={m.meta.domaines} /> : null}
           {m.meta.memoire_consultee === false && <span className="msg-meta msg-meta--ambre">mémoire indisponible</span>}
           {m.meta.jetons_sortie ? <span className="msg-meta">{m.meta.jetons_sortie} jetons</span> : null}
           {nbMasques(m.meta) > 0 && (
