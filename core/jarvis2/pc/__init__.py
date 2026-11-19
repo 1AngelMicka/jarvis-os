@@ -413,6 +413,9 @@ class ServicePC:
             disponible: Callable[[], bool] | None = controle,
             urgence: bool = True,
             ecrit: bool = False,
+            annuler: Callable[[Connexion, dict[str, Any], dict[str, Any]], Awaitable[dict[str, Any]]] | None = None,
+            annulation: str = "",
+            annulable: Callable[[dict[str, Any], dict[str, Any]], bool] | None = None,
         ) -> None:
             async def garde(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
                 if urgence:  # une demande approuvée pendant l'arrêt d'urgence n'agit pas
@@ -422,21 +425,60 @@ class ServicePC:
                 except (ErreurPilote, ErreurOllama) as exc:
                     raise ErreurAction(str(exc)) from exc
 
-            registre.ajouter(Action(nom, niveau, description, resumer, garde, autorisable, disponible, ecrit))
+            garde_annulation = None
+            if annuler is not None:
+                defaire = annuler
+
+                async def garde_annulation(conn: Connexion, p: dict[str, Any], r: dict[str, Any]) -> dict[str, Any]:
+                    self._hors_urgence()  # « Annuler » agit aussi sur le PC : jamais pendant l'arrêt d'urgence
+                    try:
+                        return await defaire(conn, p, r)
+                    except (ErreurPilote, ErreurOllama) as exc:
+                        raise ErreurAction(str(exc)) from exc
+
+            registre.ajouter(
+                Action(
+                    nom, niveau, description, resumer, garde, autorisable, disponible, ecrit,
+                    annuler=garde_annulation, annulation=annulation, annulable=annulable,
+                )
+            )  # fmt: skip
+
+        def avec_avant(p: dict[str, Any], r: dict[str, Any]) -> bool:
+            return r.get("avant") is not None
 
         async def etat(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
             return await self.etat_pc()  # état lu sur le PC : une donnée, jamais une instruction
 
+        async def volume_avant() -> Any:
+            return await self.lire("volume", self._pilote().lire_volume)
+
         async def volume(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
             n = _entier(p, "niveau", 0, 100)
+            avant = await volume_avant()
+            v = (await self.regler_volume(n)).en_dict()
+            return {"niveau": n, **v, "avant": avant.niveau if avant is not None else None}
+
+        async def volume_revenir(conn: Connexion, p: dict[str, Any], r: dict[str, Any]) -> dict[str, Any]:
+            n = int(r["avant"])
             return {"niveau": n, **(await self.regler_volume(n)).en_dict()}
 
         async def muet(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
             m = _booleen(p, "muet")
+            avant = await volume_avant()
+            v = (await self.regler_muet(m)).en_dict()
+            return {"muet": m, **v, "avant": avant.muet if avant is not None else None}
+
+        async def muet_revenir(conn: Connexion, p: dict[str, Any], r: dict[str, Any]) -> dict[str, Any]:
+            m = bool(r["avant"])
             return {"muet": m, **(await self.regler_muet(m)).en_dict()}
 
         async def luminosite(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
             n = _entier(p, "niveau", 0, 100)
+            avant = await self.lire("luminosité", self._pilote().lire_luminosite)
+            return {"niveau": n, **(await self.regler_luminosite(n)).en_dict(), "avant": avant}
+
+        async def luminosite_revenir(conn: Connexion, p: dict[str, Any], r: dict[str, Any]) -> dict[str, Any]:
+            n = int(r["avant"])
             return {"niveau": n, **(await self.regler_luminosite(n)).en_dict()}
 
         def fenetre(action: ActionFenetre) -> Callable[[Connexion, dict[str, Any]], Awaitable[dict[str, Any]]]:
@@ -445,6 +487,21 @@ class ServicePC:
                 return {"id": ident, "action": action, **(await self.agir_fenetre(ident, action)).en_dict()}
 
             return executer
+
+        def fenetre_inverse(
+            action: ActionFenetre,
+        ) -> Callable[[Connexion, dict[str, Any], dict[str, Any]], Awaitable[dict[str, Any]]]:
+            async def annuler(conn: Connexion, p: dict[str, Any], r: dict[str, Any]) -> dict[str, Any]:
+                ident = _entier(p, "id", 1, 2**63)
+                return {"id": ident, "action": action, **(await self.agir_fenetre(ident, action)).en_dict()}
+
+            return annuler
+
+        inverse_media = {"lecture": "pause", "pause": "lecture", "bascule": "bascule"}
+
+        async def media_revenir(conn: Connexion, p: dict[str, Any], r: dict[str, Any]) -> dict[str, Any]:
+            commande = inverse_media[str(p.get("commande"))]
+            return {"commande": commande, **(await self.commande_media(commande)).en_dict()}  # type: ignore[arg-type]
 
         async def media(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
             commande = str(p.get("commande", ""))
@@ -464,7 +521,17 @@ class ServicePC:
             return await self.annuler_extinction()
 
         async def mode(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
-            return await self.appliquer_mode(conn, str(p.get("mode", "")))
+            avant = str(self.etat.get("mode") or "normal")
+            return {**(await self.appliquer_mode(conn, str(p.get("mode", "")))), "avant": avant}
+
+        async def mode_revenir(conn: Connexion, p: dict[str, Any], r: dict[str, Any]) -> dict[str, Any]:
+            return await self.appliquer_mode(conn, str(r.get("avant") or "normal"))
+
+        async def ollama_revenir(conn: Connexion, p: dict[str, Any], r: dict[str, Any]) -> dict[str, Any]:
+            return await self.ollama.arreter()
+
+        async def extinction_revenir(conn: Connexion, p: dict[str, Any], r: dict[str, Any]) -> dict[str, Any]:
+            return await self.annuler_extinction()
 
         async def jeu(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
             return await self.regler_jeu(conn, str(p.get("reglage", "")))
@@ -485,46 +552,60 @@ class ServicePC:
         ajouter("pc.etat", "vert", "Lire l'état du PC (volume, luminosité, média, fenêtres, mode)",
                 lambda p: "Lire l'état du PC", etat)  # fmt: skip
         ajouter("pc.volume", "jaune", "Régler le volume du PC (0 à 100)",
-                lambda p: f"Régler le volume du PC à {p.get('niveau')} %", volume)  # fmt: skip
+                lambda p: f"Régler le volume du PC à {p.get('niveau')} %", volume, annuler=volume_revenir,
+                annulation="Remettre le volume d'avant", annulable=avec_avant)  # fmt: skip
         ajouter("pc.sourdine", "jaune", "Couper ou remettre le son du PC",
-                lambda p: "Couper le son du PC" if _booleen(p, "muet") else "Remettre le son du PC", muet)  # fmt: skip
+                lambda p: "Couper le son du PC" if _booleen(p, "muet") else "Remettre le son du PC", muet,
+                annuler=muet_revenir, annulation="Remettre le son comme avant", annulable=avec_avant)  # fmt: skip
         ajouter("pc.luminosite", "jaune", "Régler la luminosité de l'écran (0 à 100)",
-                lambda p: f"Régler la luminosité de l'écran à {p.get('niveau')} %", luminosite)  # fmt: skip
+                lambda p: f"Régler la luminosité de l'écran à {p.get('niveau')} %", luminosite,
+                annuler=luminosite_revenir, annulation="Remettre la luminosité d'avant",
+                annulable=avec_avant)  # fmt: skip
 
         def resume_fenetre(verbe: str) -> Callable[[dict[str, Any]], str]:
             return lambda p: f"{verbe} la fenêtre {titre(p)}"
 
-        verbes: tuple[tuple[ActionFenetre, str], ...] = (
-            ("activer", "Mettre au premier plan"),
-            ("minimiser", "Réduire"),
-            ("restaurer", "Restaurer"),
-        )
-        for action, verbe in verbes:  # agir sur une fenêtre = un clic à l'écran : jamais « toujours autorisé »
+        # (action, verbe, inverse pour « Annuler » ou None, texte de l'annulation)
+        verbes: tuple[tuple[ActionFenetre, str, ActionFenetre | None, str], ...] = (
+            ("activer", "Mettre au premier plan", None,
+             "Irréversible : la fenêtre qui était au premier plan n'est pas connue"),
+            ("minimiser", "Réduire", "restaurer", "Restaurer la fenêtre"),
+            ("restaurer", "Restaurer", "minimiser", "Réduire de nouveau la fenêtre"),
+        )  # fmt: skip
+        for action, verbe, inverse, texte in verbes:  # agir sur une fenêtre = un clic à l'écran : jamais « toujours »
             ajouter(f"pc.fenetre.{action}", "jaune", f"{verbe} une fenêtre du PC", resume_fenetre(verbe),
-                    fenetre(action), autorisable=False)  # fmt: skip
+                    fenetre(action), autorisable=False,
+                    annuler=fenetre_inverse(inverse) if inverse else None, annulation=texte)  # fmt: skip
         ajouter("pc.fenetre.fermer", "jaune", "Fermer une fenêtre (l'application peut proposer d'enregistrer)",
-                lambda p: f"Fermer la fenêtre {titre(p)}", fenetre("fermer"), autorisable=False)  # fmt: skip
+                lambda p: f"Fermer la fenêtre {titre(p)}", fenetre("fermer"), autorisable=False,
+                annulation="Irréversible : rouvrez l'application à la main")  # fmt: skip
         ajouter("pc.media", "jaune", "Lecture, pause, morceau suivant ou précédent du média en cours",
-                lambda p: f"Média en cours : {p.get('commande')}", media)  # fmt: skip
+                lambda p: f"Média en cours : {p.get('commande')}", media, annuler=media_revenir,
+                annulation="Commande inverse (pause ↔ lecture) ; suivant et précédent ne s'annulent pas",
+                annulable=lambda p, r: str(p.get("commande")) in inverse_media)  # fmt: skip
         ajouter("pc.verrouiller", "jaune", "Verrouiller la session Windows",
-                lambda p: "Verrouiller le PC", verrouiller)  # fmt: skip
+                lambda p: "Verrouiller le PC", verrouiller,
+                annulation="Irréversible par conception : JARVIS ne déverrouille jamais la session")  # fmt: skip
         ajouter("pc.eteindre", "rouge", "Éteindre le PC après un délai (annulable jusqu'au bout)",
                 lambda p: f"ÉTEINDRE le PC dans {p.get('delai_s', DELAI_EXTINCTION_DEFAUT)} s (annulable)",
-                eteindre)  # fmt: skip
+                eteindre, annuler=extinction_revenir,
+                annulation="Annuler l'extinction tant que le délai court")  # fmt: skip
         ajouter("pc.extinction.annuler", "vert", "Annuler une extinction planifiée",
                 lambda p: "Annuler l'extinction planifiée du PC", annuler, urgence=False)  # fmt: skip
         ajouter("pc.mode", "jaune", "Passer Windows dans un mode (jeu, concentration, nuit, normal)",
                 lambda p: f"Passer le PC en mode « {MODES.get(str(p.get('mode')), {}).get('titre', p.get('mode'))} »"
                 + (f" : {MODES[str(p.get('mode'))]['description']}" if str(p.get("mode")) in MODES else ""),
-                mode)  # fmt: skip
+                mode, annuler=mode_revenir, annulation="Revenir au mode d'avant")  # fmt: skip
         ajouter("pc.jeu", "vert", "Mode jeu de JARVIS : automatique, veille forcée ou jamais",
                 lambda p: f"Mode jeu de JARVIS : {p.get('reglage')}", jeu, disponible=None,
                 ecrit=True)  # fmt: skip  # réglage écrit : refusé dans un tour contaminé (barrière d'injection)
         ajouter("ollama.demarrer", "jaune", "Démarrer Ollama (IA locales) à la demande de l'utilisateur",
                 lambda p: "Démarrer Ollama (IA locales sur la carte graphique)", demarrer, autorisable=False,
-                disponible=None)  # fmt: skip  # jamais « toujours autorisé » : démarrage toujours explicite
+                disponible=None, annuler=ollama_revenir, annulation="Arrêter l'Ollama démarré par JARVIS",
+                annulable=lambda p, r: r.get("lance_par_jarvis") is True)  # fmt: skip  # jamais « toujours autorisé »
         ajouter("ollama.arreter", "jaune", "Arrêter l'Ollama démarré par JARVIS",
-                lambda p: "Arrêter Ollama (démarré par JARVIS)", arreter, disponible=None)  # fmt: skip
+                lambda p: "Arrêter Ollama (démarré par JARVIS)", arreter, disponible=None,
+                annulation="Pour le relancer : nouvelle demande « Démarrer Ollama » (jamais automatique)")  # fmt: skip
         ajouter("ollama.decharger", "vert", "Décharger un modèle Ollama (ou tous) de la mémoire",
                 lambda p: f"Décharger {p.get('modele') or 'tous les modèles'} d'Ollama", decharger,
                 disponible=None, urgence=False)  # fmt: skip  # libérer la mémoire protège : permis en urgence

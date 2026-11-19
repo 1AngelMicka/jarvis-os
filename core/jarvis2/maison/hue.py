@@ -219,6 +219,49 @@ class PontHue:
         else:
             raise ErreurHue("Cible : « lumiere » ou « groupe »")
 
+    async def capturer(self, cible: str, ident: str) -> list[dict[str, Any]]:
+        """États des lampes visées, lus AVANT une commande : la pile d'annulation y revient."""
+        if not re.fullmatch(r"[0-9]{1,4}", ident):
+            raise ErreurHue("Identifiant de lampe ou de groupe invalide")
+        lumieres = await self._appel("GET", self._chemin("lights"))
+        if not isinstance(lumieres, dict):
+            raise ErreurHue("État des lampes illisible")
+        if cible == "lumiere":
+            ids = [ident]
+        elif ident == "0":
+            ids = list(lumieres)
+        else:
+            groupes = await self._appel("GET", self._chemin("groups"))
+            groupe = groupes.get(ident) if isinstance(groupes, dict) else None
+            ids = [str(i) for i in groupe.get("lights") or []] if isinstance(groupe, dict) else []
+        etats = []
+        for i in ids:
+            etat = (lumieres.get(str(i)) or {}).get("state") or {}
+            garde: dict[str, Any] = {"on": bool(etat.get("on"))}
+            if isinstance(etat.get("bri"), int):
+                garde["bri"] = etat["bri"]
+            mode = etat.get("colormode")
+            if mode == "xy" and isinstance(etat.get("xy"), list):
+                garde["xy"] = etat["xy"]
+            elif mode == "ct" and isinstance(etat.get("ct"), int):
+                garde["ct"] = etat["ct"]
+            elif mode == "hs" and isinstance(etat.get("hue"), int) and isinstance(etat.get("sat"), int):
+                garde.update(hue=etat["hue"], sat=etat["sat"])
+            etats.append({"id": str(i), "etat": garde})
+        return etats
+
+    async def restaurer(self, etats: list[dict[str, Any]]) -> int:
+        """Remet chaque lampe dans l'état capturé (une lampe éteinte reçoit seulement « off »)."""
+        n = 0
+        for e in etats:
+            ident, etat = str(e.get("id", "")), e.get("etat") or {}
+            if not re.fullmatch(r"[0-9]{1,4}", ident) or not isinstance(etat, dict):
+                continue
+            corps = etat if etat.get("on") else {"on": False}
+            await self._appel("PUT", self._chemin(f"lights/{ident}/state"), corps)
+            n += 1
+        return n
+
     async def scene(self, ident: str) -> dict[str, Any]:
         scenes = await self._appel("GET", self._chemin("scenes"))
         if not isinstance(scenes, dict) or ident not in scenes:

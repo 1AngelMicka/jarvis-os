@@ -254,10 +254,18 @@ async def test_action_jaune_approuvee_d_un_clic(systeme: dict[str, Any], pool: B
     assert rep["statut"] == "en_attente" and rep["demande"]["niveau"] == "jaune"
     assert await pool.fetchval("SELECT archivee FROM conversations WHERE id = $1::uuid", conv) is False
     assert [d["id"] for d in (await client.get("/v1/etat")).json()["demandes"]] == [rep["demande"]["id"]]
-    ok = (await client.post(f"/v1/demandes/{rep['demande']['id']}/approuver", json={})).json()
+    ok = (
+        await client.post(
+            f"/v1/demandes/{rep['demande']['id']}/approuver", json={"empreinte": rep["demande"]["empreinte"]}
+        )
+    ).json()
     assert ok["statut"] == "executee"
     assert await pool.fetchval("SELECT archivee FROM conversations WHERE id = $1::uuid", conv) is True
-    assert (await client.post(f"/v1/demandes/{rep['demande']['id']}/approuver", json={})).status_code == 409
+    assert (
+        await client.post(
+            f"/v1/demandes/{rep['demande']['id']}/approuver", json={"empreinte": rep["demande"]["empreinte"]}
+        )
+    ).status_code == 409
     assert await nb_audit(pool, "conversation.archiver") >= 1
 
 
@@ -275,7 +283,7 @@ async def test_action_rouge_exige_une_cle_d_acces(systeme: dict[str, Any], pool:
     demande = (await demander(client, "conversation.supprimer", conv))["demande"]
     assert demande["niveau"] == "rouge"
     # Un clic ne suffit pas
-    refus = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={})
+    refus = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"empreinte": demande["empreinte"]})
     assert refus.status_code == 409 and "clé d'accès" in refus.json()["detail"]
     # Sans clé enregistrée : le défi est refusé avec une explication
     sans = await client.post(f"/v1/demandes/{demande['id']}/options")
@@ -284,7 +292,10 @@ async def test_action_rouge_exige_une_cle_d_acces(systeme: dict[str, Any], pool:
     cle = await enregistrer_cle(client)
     defi = (await client.post(f"/v1/demandes/{demande['id']}/options")).json()
     assert defi["rpId"] == "localhost" and defi["userVerification"] == "required"
-    ok = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"credential": cle.signer(defi)})
+    ok = await client.post(
+        f"/v1/demandes/{demande['id']}/approuver",
+        json={"empreinte": demande["empreinte"], "credential": cle.signer(defi)},
+    )
     assert ok.status_code == 200 and ok.json()["statut"] == "executee"
     assert await pool.fetchval("SELECT count(*) FROM conversations WHERE id = $1::uuid", conv) == 0
     assert await pool.fetchval("SELECT methode FROM demandes WHERE id = $1::uuid", demande["id"]) == "cle_acces"
@@ -297,17 +308,31 @@ async def test_signature_rejouee_ou_detournee_refusee(systeme: dict[str, Any], p
     d2 = (await demander(client, "conversation.supprimer", await creer_conversation(pool)))["demande"]
     signee = cle.signer((await client.post(f"/v1/demandes/{d1['id']}/options")).json())
     # Signature d'un défi émis pour la demande 1, présentée pour la demande 2 : refusée
-    assert (await client.post(f"/v1/demandes/{d2['id']}/approuver", json={"credential": signee})).status_code == 403
+    assert (
+        await client.post(
+            f"/v1/demandes/{d2['id']}/approuver", json={"empreinte": d2["empreinte"], "credential": signee}
+        )
+    ).status_code == 403
     # Le défi n'a pas été consommé par cet échec ; présenté pour la bonne demande, il passe une fois…
-    assert (await client.post(f"/v1/demandes/{d1['id']}/approuver", json={"credential": signee})).status_code == 200
+    assert (
+        await client.post(
+            f"/v1/demandes/{d1['id']}/approuver", json={"empreinte": d1["empreinte"], "credential": signee}
+        )
+    ).status_code == 200
     # … et jamais deux : la demande est traitée et le défi consommé
-    assert (await client.post(f"/v1/demandes/{d1['id']}/approuver", json={"credential": signee})).status_code == 403
+    assert (
+        await client.post(
+            f"/v1/demandes/{d1['id']}/approuver", json={"empreinte": d1["empreinte"], "credential": signee}
+        )
+    ).status_code == 403
     # Une autre clé qui se fait passer pour la clé enregistrée est refusée
     faux = Authentificateur()
     faux.id = cle.id
     defi = (await client.post(f"/v1/demandes/{d2['id']}/options")).json()
     assert (
-        await client.post(f"/v1/demandes/{d2['id']}/approuver", json={"credential": faux.signer(defi)})
+        await client.post(
+            f"/v1/demandes/{d2['id']}/approuver", json={"empreinte": d2["empreinte"], "credential": faux.signer(defi)}
+        )
     ).status_code == 403
     assert await nb_audit(pool, "demande.cle_refusee") >= 3
 
@@ -347,10 +372,15 @@ async def test_arret_d_urgence_coupe_tout_en_moins_d_une_seconde(systeme: dict[s
     assert (await pool.fetchval("SELECT valeur FROM etat_systeme WHERE cle = 'arret_urgence'"))["actif"] is True
     # Lever = action 🔴 : clé d'accès obligatoire
     demande = (await client.post("/v1/urgence/lever")).json()["demande"]
-    assert (await client.post(f"/v1/demandes/{demande['id']}/approuver", json={})).status_code == 409
+    assert (
+        await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"empreinte": demande["empreinte"]})
+    ).status_code == 409
     cle = await enregistrer_cle(client)
     defi = (await client.post(f"/v1/demandes/{demande['id']}/options")).json()
-    leve = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"credential": cle.signer(defi)})
+    leve = await client.post(
+        f"/v1/demandes/{demande['id']}/approuver",
+        json={"empreinte": demande["empreinte"], "credential": cle.signer(defi)},
+    )
     assert leve.status_code == 200 and ctx.urgence.actif is False
     assert (await client.post("/v1/dialogue", json={"message": "reprise"})).status_code == 200
     assert await nb_audit(pool, "urgence.arret") >= 1

@@ -288,7 +288,9 @@ async def test_abonnement_push_et_appel_de_decision(bureau: dict[str, Any], pool
     for _ in range(2):
         assert (await client.post(f"/v1/demandes/{demande['id']}/reporter")).status_code == 200
     assert (await client.post(f"/v1/demandes/{demande['id']}/reporter")).status_code == 409
-    assert (await client.post(f"/v1/demandes/{demande['id']}/approuver", json={})).status_code == 409  # sans clé
+    assert (
+        await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"empreinte": demande["empreinte"]})
+    ).status_code == 409  # sans clé
 
     # Rappel dû : envoyé une seule fois
     await pool.execute(
@@ -304,7 +306,10 @@ async def test_abonnement_push_et_appel_de_decision(bureau: dict[str, Any], pool
     options = (await client.post("/v1/cles/enregistrement/options")).json()
     await client.post("/v1/cles/enregistrement", json={"credential": cle.creer(options), "nom": "Tél"})
     defi = (await client.post(f"/v1/demandes/{demande['id']}/options")).json()
-    ok = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"credential": cle.signer(defi)})
+    ok = await client.post(
+        f"/v1/demandes/{demande['id']}/approuver",
+        json={"empreinte": demande["empreinte"], "credential": cle.signer(defi)},
+    )
     assert ok.status_code == 200 and ok.json()["statut"] == "executee"
     assert (await client.post(f"/v1/demandes/{demande['id']}/reporter")).status_code == 409
 

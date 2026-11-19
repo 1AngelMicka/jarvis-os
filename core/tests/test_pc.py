@@ -96,7 +96,9 @@ async def action(client: httpx.AsyncClient, nom: str, **parametres: Any) -> dict
 
 async def approuver(client: httpx.AsyncClient, corps: dict[str, Any]) -> httpx.Response:
     assert corps["statut"] == "en_attente", corps
-    return await client.post(f"/v1/demandes/{corps['demande']['id']}/approuver", json={})
+    return await client.post(
+        f"/v1/demandes/{corps['demande']['id']}/approuver", json={"empreinte": corps["demande"]["empreinte"]}
+    )
 
 
 async def compter_audit(pool: Base, nom: str, resultat: str = "execute") -> int:
@@ -170,7 +172,10 @@ async def test_extinction_rouge_annulable_et_annulee_par_l_urgence(pc: dict[str,
     assert clic.status_code == 409 and pilote.extinction is None  # 🔴 : clé d'accès exigée
     cle = await enregistrer_cle(client)
     defi = (await client.post(f"/v1/demandes/{demande['demande']['id']}/options")).json()
-    ok = await client.post(f"/v1/demandes/{demande['demande']['id']}/approuver", json={"credential": cle.signer(defi)})
+    ok = await client.post(
+        f"/v1/demandes/{demande['demande']['id']}/approuver",
+        json={"empreinte": demande["demande"]["empreinte"], "credential": cle.signer(defi)},
+    )
     resultat = ok.json()["resultat"]
     assert pilote.extinction == 120 and resultat["annulable"] is True and resultat["verifiee"] is False
     assert 0 < (await client.get("/v1/pc/etat")).json()["extinction_dans_s"] <= 120
@@ -290,6 +295,7 @@ async def test_ollama_demarre_seulement_sur_demande_approuvee(pc: dict[str, Any]
     demande = await action(client, "ollama.demarrer")
     assert demande["demande"]["toujours_possible"] is False and lanceur.lances == []
     r = (await approuver(client, demande)).json()["resultat"]
+    assert r.pop("annulation")["comment"] == "Arrêter l'Ollama démarré par JARVIS"  # pile d'annulation (B 7)
     assert r == {"deja_demarre": False, "lance_par_jarvis": True, "verifiee": True}
     assert lanceur.lances == ["127.0.0.1:11434"] and serveur.actif
     serveur.charges = ["a", "b"]

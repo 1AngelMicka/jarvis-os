@@ -30,7 +30,9 @@ COLONNES = (
     " cree_le, maj_le"
 )
 # Actions d'interface permises : celles qui ne lancent rien (une mission ou un atelier se proposent, voir pilotage)
-ACTIONS_INTERFACE = tuple(a for a in IMMEDIATES if a != "ouvrir")  # « ouvrir » demande un identifiant précis
+ACTIONS_INTERFACE = (*(a for a in IMMEDIATES if a != "ouvrir"), "annuler")  # « ouvrir » demande un identifiant précis
+# « annuler » : la dernière action annulable (pile d'annulation). Jamais proposée au modèle (hors IMMEDIATES) : un
+# geste de l'utilisateur seulement, appliqué par l'interface (POST /v1/annulations/derniere/annuler).
 
 
 class ErreurCommande(ValueError):
@@ -124,6 +126,15 @@ class ServiceCommandes:
                 raise ErreurCommande(
                     "Action d'interface inconnue : " + ", ".join(ACTIONS_INTERFACE) + " (jamais de commande système)"
                 )
+            if action == "annuler":
+                libelle = "Annuler la dernière action"
+                return {
+                    "type": "annuler",
+                    "genre": "immediate",
+                    "niveau": "jaune",
+                    "libelle": libelle,
+                    "parametres": {},
+                }
             try:
                 return await self.pilotage.valider({**parametres, "type": action})
             except ErreurPilotage as exc:
