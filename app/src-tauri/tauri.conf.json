@@ -18,7 +18,7 @@
     },
     "updater": {
       "endpoints": ["https://github.com/1AngelMicka/jarvis-os/releases/latest/download/latest.json"],
-      "pubkey": "",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI1OEU1MjVEQ0Y3OENENDYKUldSR3pYalBYVktPSmJiYmFrcngxWXFRYjNIaDR3bjk2ZFM2ZXBRK0lPYUVFM1JhSWk2enNxUXcK",
       "windows": { "installMode": "passive" }
     }
   },
