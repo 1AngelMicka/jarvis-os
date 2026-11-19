@@ -1,61 +1,76 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { ecrireBloc, lancerTacheMemoire, lireEtatMemoire, listerBlocs, noyauEnBlocs } from "../api";
-import type { BlocMemoire, EtatMemoire } from "../types";
+import { confidentialiteDe, LIBELLES_NIVEAU, lireCompteurs, niveauBloc, phraseCompteurs } from "../niveaux";
+import type { BlocMemoire, EtatMemoire, Niveau } from "../types";
+import { SelecteurNiveau } from "./Niveau";
 import { Telechargements } from "./Telechargements";
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
-function CarteBloc({ b, surEnregistre }: { b: BlocMemoire; surEnregistre: (m: string) => void }) {
+function CarteBloc({ b, surEnregistre, surNotifier }: { b: BlocMemoire; surEnregistre: (m: string) => void; surNotifier: (m: string) => void }) {
+  // Le bloc tel qu'enregistré : un changement de niveau le remplace sans toucher au brouillon du texte.
+  const [bloc, setBloc] = useState(b);
   const [texte, setTexte] = useState(b.content);
-  const [prive, setPrive] = useState(b.confidentialite === "local_uniquement");
+  const [niveau, setNiveau] = useState<Niveau>(niveauBloc(b));
+  const [occupe, setOccupe] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const modifie = texte !== b.content || prive !== (b.confidentialite === "local_uniquement");
+  const modifie = texte !== bloc.content;
+  /** Mise à jour optimiste : le niveau change tout de suite, et revient en arrière si le Core refuse. */
+  const changerNiveau = (n: Niveau) => {
+    const ancien = niveau;
+    setNiveau(n);
+    setOccupe(true);
+    setMessage(null);
+    ecrireBloc(bloc.label, bloc.content, confidentialiteDe(n), n)
+      .then((r) => {
+        setBloc(r);
+        setNiveau(niveauBloc({ niveau: r.niveau ?? n, confidentialite: r.confidentialite }));
+        surNotifier(`Bloc « ${r.label} » passé en ${LIBELLES_NIVEAU[n].nom}.`);
+      })
+      .catch((e: unknown) => {
+        setNiveau(ancien);
+        setMessage(e instanceof Error ? e.message : "Niveau inchangé.");
+      })
+      .finally(() => {
+        setOccupe(false);
+      });
+  };
   return (
-    <li className="carte-co">
+    <li className="carte-co" data-niveau={niveau}>
       <div className="carte-co-tete">
-        <h4 className="carte-co-nom">{b.label}</h4>
-        <span className="badge-co">v{b.version}</span>
-        {prive && (
-          <span className="badge-co" data-ton="attention" title="Jamais envoyé à une IA externe">
-            Privé
-          </span>
-        )}
+        <h4 className="carte-co-nom">{bloc.label}</h4>
+        <span className="badge-co">v{bloc.version}</span>
+        <SelecteurNiveau niveau={niveau} etiquette={`Niveau de confidentialité du bloc ${bloc.label}`} occupe={occupe} surChoisir={changerNiveau} />
       </div>
-      <label className="visuellement-cache" htmlFor={`bloc-${b.label}`}>
-        Contenu du bloc {b.label}
+      <label className="visuellement-cache" htmlFor={`bloc-${bloc.label}`}>
+        Contenu du bloc {bloc.label}
       </label>
       <textarea
-        id={`bloc-${b.label}`}
+        id={`bloc-${bloc.label}`}
         className="bloc-texte"
         rows={4}
-        maxLength={b.char_limit}
+        maxLength={bloc.char_limit}
         value={texte}
         onChange={(e) => {
           setTexte(e.target.value);
         }}
       />
       <p className="carte-co-detail">
-        {texte.length} / {b.char_limit} caractères · modifié {DATE.format(new Date(b.maj_le))} · chaque version est gardée
+        {texte.length} / {bloc.char_limit} caractères · modifié {DATE.format(new Date(bloc.maj_le))} · chaque version est gardée
       </p>
-      {message && <p className="carte-co-message">{message}</p>}
+      {message && (
+        <p className="carte-co-message" role="alert">
+          {message}
+        </p>
+      )}
       <div className="carte-co-actions">
-        <label className="carte-co-case carte-co-case--ligne">
-          <input
-            type="checkbox"
-            checked={prive}
-            onChange={(e) => {
-              setPrive(e.target.checked);
-            }}
-          />
-          Privé (IA locales seulement)
-        </label>
         <button
           type="button"
           className="btn btn-mini"
-          disabled={!modifie}
+          disabled={!modifie || occupe}
           onClick={() => {
-            ecrireBloc(b.label, texte, prive ? "local_uniquement" : "normal")
+            ecrireBloc(bloc.label, texte, confidentialiteDe(niveau), niveau)
               .then((n) => {
                 surEnregistre(`Bloc « ${n.label} » enregistré (version ${String(n.version)}).`);
               })
@@ -97,6 +112,7 @@ export function SectionMemoire({ surChangement }: { surChangement: (m?: string) 
     };
   }, [etat?.bascule?.cible, charger]);
 
+  const compteurs = lireCompteurs(etat?.niveaux);
   const apres = (m: string) => {
     surChangement(m);
     charger();
@@ -110,7 +126,8 @@ export function SectionMemoire({ surChangement }: { surChangement: (m?: string) 
       {erreur && <p className="securite-erreur">{erreur}</p>}
       {etat && (
         <p className="sec-texte">
-          {etat.souvenirs.total.toLocaleString("fr-FR")} souvenirs actifs ({etat.souvenirs.local_uniquement} privés) · modèle{" "}
+          {etat.souvenirs.total.toLocaleString("fr-FR")} souvenirs actifs (
+          {compteurs ? phraseCompteurs(compteurs) : `${etat.souvenirs.local_uniquement.toLocaleString("fr-FR")} privés`}) · modèle{" "}
           <code>{etat.modele_actif ?? "—"}</code>
           {etat.bascule?.cible &&
             ` · bascule vers ${etat.bascule.cible} : ${String(etat.bascule.faits)} faits, ${String(etat.bascule.restants)} restants (la recherche garde l'ancien modèle jusqu'à la fin)`}
@@ -157,8 +174,8 @@ export function SectionMemoire({ surChangement }: { surChangement: (m?: string) 
         </ul>
       )}
       <p className="sec-texte">
-        Les blocs sont de courts textes toujours donnés à JARVIS (vos préférences, votre situation…). Un bloc privé ne part jamais vers une
-        IA externe.
+        Les blocs sont de courts textes toujours donnés à JARVIS (vos préférences, votre situation…). Un bloc public peut accompagner
+        chaque message vers une IA externe, un bloc semi-privé ou privé ne part jamais vers elle.
       </p>
       {etat && etat.souvenirs.noyau > 0 && (
         <button
@@ -180,7 +197,7 @@ export function SectionMemoire({ surChangement }: { surChangement: (m?: string) 
       {liste && (
         <ul className="cartes-co">
           {liste.map((b) => (
-            <CarteBloc key={`${b.label}-${String(b.version)}`} b={b} surEnregistre={apres} />
+            <CarteBloc key={`${b.label}-${String(b.version)}`} b={b} surEnregistre={apres} surNotifier={surChangement} />
           ))}
         </ul>
       )}

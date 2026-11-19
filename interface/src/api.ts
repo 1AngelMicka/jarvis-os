@@ -43,6 +43,7 @@ import type {
   ProjetAmelioration,
   ReglagesVeille,
   BlocMemoire,
+  Niveau,
   EtatMemoire,
   Mission,
   Recette,
@@ -53,6 +54,7 @@ import type {
   ResumeConversation,
   OrigineMemoire,
   Souvenir,
+  VersionSouvenir,
   CarteMatin,
   LieuTrouve,
   LocalisationMatin,
@@ -325,11 +327,20 @@ export const listerOrigines = () => appeler<{ origines: OrigineMemoire[] }>("/v1
 export const lireNouveautes = (depuis: string) =>
   appeler<{ nombre: number; souvenirs: Souvenir[] }>(`/v1/memoire/nouveautes?${new URLSearchParams({ depuis }).toString()}`);
 export const listerBlocs = () => appeler<{ blocs: BlocMemoire[] }>("/v1/memoire/blocs");
-export const ecrireBloc = (label: string, contenu: string, confidentialite?: BlocMemoire["confidentialite"]) =>
+/** `niveau` (Core ≥ lot 14 · C 14) prime sur `confidentialite`, gardée pour un Core plus ancien. */
+export const ecrireBloc = (label: string, contenu: string, confidentialite?: BlocMemoire["confidentialite"], niveau?: Niveau) =>
   appeler<BlocMemoire>(`/v1/memoire/blocs/${encodeURIComponent(label)}`, {
     methode: "PUT",
-    corps: { contenu, ...(confidentialite ? { confidentialite } : {}) },
+    corps: { contenu, ...(confidentialite ? { confidentialite } : {}), ...(niveau ? { niveau } : {}) },
   });
+// --- Niveaux et changements d'avis (lot 14 · C 14) ---
+export const changerNiveauSouvenir = (id: string, niveau: Niveau) =>
+  appeler<{ souvenir: Souvenir }>(`/v1/memoire/souvenirs/${encodeURIComponent(id)}/niveau`, { methode: "PUT", corps: { niveau } });
+/** « J'ai changé d'avis » : nouveau souvenir, l'ancien est gardé mais n'est plus valide. */
+export const remplacerSouvenir = (id: string, contenu: string) =>
+  envoyer<{ ancien: Souvenir; nouveau: Souvenir }>(`/v1/memoire/souvenirs/${encodeURIComponent(id)}/remplacer`, { contenu });
+export const listerVersionsSouvenir = (id: string) =>
+  appeler<{ versions: VersionSouvenir[] }>(`/v1/memoire/souvenirs/${encodeURIComponent(id)}/versions`);
 export const noyauEnBlocs = () => envoyer<{ convertis: Record<string, number> }>("/v1/memoire/noyau-en-blocs");
 export const lancerTacheMemoire = (id: string) => envoyer<{ lancee: string }>(`/v1/memoire/taches/${encodeURIComponent(id)}/lancer`);
 // --- Ateliers Claude Code ---
