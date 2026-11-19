@@ -195,6 +195,10 @@ export class EcouteMainsLibres {
   private morceaux: Blob[] = [];
   private dernierSon = 0;
   private debut = 0;
+  private anticipe = false;
+  /** Transcription anticipée (lot K3) : appelée au début du silence avec la phrase jusque-là ; vrai = la phrase est
+   *  finie (fin de tour sûre), on coupe sans attendre la fin du silence. */
+  anticiper: ((audio: Blob) => Promise<boolean>) | null = null;
 
   constructor(
     /** `debut` / `fin` : instants `performance.now()` du premier et du dernier son de la phrase. */
@@ -226,9 +230,12 @@ export class EcouteMainsLibres {
       }
       if (niveau > 0.02) {
         this.dernierSon = maintenant;
+        this.anticipe = false;
         if (!this.rec || this.rec.state !== "recording") this.commencer(maintenant);
       } else if (this.rec?.state === "recording" && maintenant - this.dernierSon > 900) {
         this.couper(maintenant - this.debut > 600); // plus de 0,6 s de parole : une phrase à transcrire
+      } else if (this.rec?.state === "recording" && maintenant - this.dernierSon > 300 && maintenant - this.debut > 600) {
+        this.lancerAnticipation();
       }
       if (this.rec?.state === "recording" && maintenant - this.debut > 15_000) this.couper(true);
     }, 60);
@@ -243,6 +250,28 @@ export class EcouteMainsLibres {
       if (e.data.size) this.morceaux.push(e.data);
     };
     this.rec.start();
+  }
+
+  private lancerAnticipation(): void {
+    const rec = this.rec;
+    if (this.anticipe || !this.anticiper || !rec) return;
+    this.anticipe = true;
+    const son = this.dernierSon;
+    rec.addEventListener(
+      "dataavailable",
+      () => {
+        if (this.rec !== rec || !this.anticiper) return;
+        this.anticiper(new Blob(this.morceaux, { type: rec.mimeType }))
+          .then((fini) => {
+            if (fini && this.rec === rec && this.dernierSon === son) this.couper(true); // toujours silencieux
+          })
+          .catch(() => {
+            /* sans anticipation : la fin du silence décide */
+          });
+      },
+      { once: true },
+    );
+    rec.requestData();
   }
 
   private couper(garder: boolean): void {

@@ -34,6 +34,7 @@ import { SectionMemoire } from "./Memoire";
 import { ControlePC, ModeJeuPC, RessourcesDuPC } from "./PC";
 import { AutorisationsPermanentes, CommandesRapides, ReglagePilotage, ReglesProtection } from "./Pilotage";
 import { ReglageSynthese } from "./ReglageSynthese";
+import { EtatTranscriptionVoix, ReglageDictee, ReglageProprietaire } from "./ReglagesVoix";
 import { PanneauSecurite } from "./Securite";
 import { SelecteurTheme } from "./SelecteurTheme";
 import { VeilleClaude } from "./VeilleClaude";
@@ -428,6 +429,12 @@ export function VueReglages(p: Props) {
       }
       case "eveil":
         return <ReglagesEveil surNotifier={p.surNotifier} />;
+      case "transcription":
+        return <EtatTranscriptionVoix />;
+      case "proprietaire":
+        return <ReglageProprietaire />;
+      case "dictee":
+        return <ReglageDictee />;
       case "connecteurs":
         return <VueConnecteurs surChangement={p.surChangement} />;
       case "couts":

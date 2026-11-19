@@ -63,6 +63,7 @@ from .api_profil import routeur as routeur_profil
 from .api_securite import routeur as routeur_securite
 from .api_synthese import routeur as routeur_synthese
 from .api_telechargements import routeur as routeur_telechargements
+from .api_transcription import routeur as routeur_transcription
 from .ateliers.gestionnaire import GestionnaireAteliers, Projet
 from .ateliers.veille import SourceFichiersEtat, VeilleClaudeCode, dossier_par_defaut
 from .commandes_rapides import ServiceCommandes
@@ -75,8 +76,10 @@ from .conseil import ServiceConseil
 from .conversations import DepotConversations
 from .db import Base, ErreurBaseOuReseau, ouvrir_base, version_schema
 from .dialogue import AccordImagesRequis, ServiceDialogue, SourceMemoire
+from .dictee import ServiceDictee
 from .embeddings import EncodeurFastEmbed
 from .eveil import ServiceEveil
+from .fin_tour import JugeFinDeTour
 from .maison import GestionnaireMaison
 from .matin import ServiceMeteo
 from .memoire import Expurgateur, ReglagesRecherche
@@ -89,6 +92,7 @@ from .ocr import choisir as choisir_ocr
 from .pc import ServicePC
 from .pc import construire as construire_pc
 from .pilotage import ServicePilotage
+from .proprietaire import ServiceProprietaire
 from .push import ServicePush
 from .securite import appareils
 from .securite.actions import creer_registre
@@ -99,7 +103,8 @@ from .synthese import ServiceSynthese
 from .tailscale import EtatTailscale
 from .tailscale import lire_etat as lire_tailscale
 from .telechargements import Telechargeur
-from .voix import Transcripteur, TranscripteurWhisper
+from .transcription import TranscripteurRobuste
+from .voix import Transcripteur
 
 journal = logging.getLogger("jarvis2.api")
 
@@ -137,6 +142,8 @@ class Contexte:
     veille: VeilleClaudeCode | None = None  # sessions Claude Code de l'utilisateur (lecture seule, inactive par défaut)
     transcripteur: Transcripteur | None = None
     synthese: ServiceSynthese | None = None  # voix au choix : Piper (local) ou ElevenLabs (clé de l'utilisateur)
+    dossier_modeles: Path | None = None  # modèle de reconnaissance du propriétaire (lot K3)
+    modele_fin_tour: str = ""  # petit modèle local de fin de tour (vide : la règle seule)
     url_ollama: str = "http://127.0.0.1:11434"
     modele_vision: str | None = None
     ocr: LecteurOCR | None = None  # lecture du texte des images avant le modèle de vision (None : directement)
@@ -154,6 +161,9 @@ class Contexte:
     commandes: ServiceCommandes = field(init=False)
     push: ServicePush = field(init=False)  # notifications Web Push (clés VAPID dans le dossier des données)
     eveil: ServiceEveil = field(init=False)  # « Dis Jarvis » et conversation vocale de chaque appareil
+    proprietaire: ServiceProprietaire = field(init=False)  # reconnaissance du propriétaire à la voix (lot K3)
+    dictee: ServiceDictee = field(init=False)
+    juge_fin_tour: JugeFinDeTour = field(init=False)
 
     def __post_init__(self) -> None:
         self.ameliorations = ServiceAmeliorations(self.pool, self.ateliers, self.urgence)
@@ -195,6 +205,11 @@ class Contexte:
         self.service.ce_qui_tourne = self.ce_qui_tourne
         self.push = ServicePush(self.pool, self.dossier_donnees)
         self.approbations.apres_demande = self.notifier_demande
+        self.proprietaire = ServiceProprietaire(self.pool, self.dossier_donnees, self.dossier_modeles)
+        self.dictee = ServiceDictee(self.pool)
+        self.juge_fin_tour = JugeFinDeTour(self.url_ollama, self.modele_fin_tour)
+        if isinstance(self.transcripteur, TranscripteurRobuste):  # chaque phrase : verdict du propriétaire
+            self.transcripteur.observateur = self.proprietaire.observer
 
     async def notifier_demande(self, demande: Any) -> None:
         """Nouvelle demande 🟡🔴 : appel de décision poussé aux téléphones abonnés (en tâche de fond)."""
@@ -309,8 +324,10 @@ async def construire_contexte(p: Parametres) -> Contexte:
             [p.dossier_donnees / "ateliers"],
         ),
         urgence=urgence,
-        transcripteur=TranscripteurWhisper(p.dossier_modeles, p.modele_voix),
         synthese=synthese,
+        transcripteur=TranscripteurRobuste(p.dossier_modeles, p.modele_voix, p.voix_appareil),
+        dossier_modeles=p.dossier_modeles,
+        modele_fin_tour=p.modele_fin_tour,
         url_ollama=p.ollama_url,
         modele_vision=locale.connecteur("ollama").get("modele_vision"),
         ocr=choisir_ocr(),
@@ -657,6 +674,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_matin)
     app.include_router(routeur_telechargements)
     app.include_router(routeur_synthese)
+    app.include_router(routeur_transcription)
     app.include_router(routeur_donnees)
     app.include_router(routeur_pilotage)
     app.include_router(routeur_pc)

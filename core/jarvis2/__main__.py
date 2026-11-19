@@ -121,7 +121,7 @@ async def _copier_stockage(p: Parametres, vers: str, fichier: Path | None) -> in
     return 0 if rapport.complet else 3
 
 
-async def _docteur(p: Parametres, en_json: bool, reparer: bool) -> int:
+async def _docteur(p: Parametres, en_json: bool, reparer: bool, latence: bool = False) -> int:
     """Diagnostic de l'installation ; `--reparer` applique les réparations sûres (schéma SQLite, modèle)."""
     import contextlib
     import json
@@ -187,6 +187,9 @@ async def _docteur(p: Parametres, en_json: bool, reparer: bool) -> int:
             aide=None if en_marche else "jarvis2 (démarre le Core et ouvre l'interface)",
         )
     )
+    from .latence import mesurer as mesurer_latence
+
+    verifications.extend(await mesurer_latence(p, latence))  # voix : étape par étape (lot K3)
     if en_json:
         print(json.dumps([v.en_dict() for v in verifications], ensure_ascii=False, indent=2))
     else:
@@ -309,6 +312,9 @@ def main(argv: list[str] | None = None) -> int:
     doc = sous.add_parser("docteur", aliases=["doctor"], help="diagnostic de l'installation")
     doc.add_argument("--json", action="store_true", help="résultat en JSON")
     doc.add_argument("--reparer", action="store_true", help="appliquer les réparations sûres (schéma, modèle)")
+    doc.add_argument(
+        "--latence", action="store_true", help="voix : préchauffer et mesurer chaque étape (Whisper, Ollama)"
+    )
     imp = sous.add_parser("importer", help="importer les données d'une autre source (lecture seule côté source)")
     imp.add_argument("source", choices=sorted(SOURCES), help="source d'import")
     imp.add_argument("--sauvegarde", type=Path, help="sauvegarde de la source (jarvis_v1 : pg_dump -Fc)")
@@ -396,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.commande in ("docteur", "doctor"):
         for bavard in ("httpx", "huggingface_hub", "jarvis2.config_locale", "jarvis2.embeddings"):
             logging.getLogger(bavard).setLevel(logging.WARNING)  # le diagnostic se lit seul
-        return asyncio.run(_docteur(p, args.json, args.reparer))
+        return asyncio.run(_docteur(p, args.json, args.reparer, args.latence))
 
     if args.commande == "sauvegarde":
         return _sauvegarde(p, args.action, args.dossier, args.fichier, args.garder)

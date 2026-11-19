@@ -88,6 +88,9 @@ class Parametres(BaseSettings):
     modele_voix: str = Field("base", alias="JARVIS2_MODELE_VOIX")
     # Programme Piper (synthèse neuronale locale) ; vide : <modèles>/piper/ puis le PATH
     piper_commande: str = Field("", alias="JARVIS2_PIPER")
+    # Lot K3 : carte de la transcription (auto, cpu, cuda) ; petit modèle Ollama de fin de tour (vide : règle seule)
+    voix_appareil: str = Field("auto", alias="JARVIS2_VOIX_APPAREIL")
+    modele_fin_tour: str = Field("", alias="JARVIS2_MODELE_FIN_TOUR")
 
     def url_base(self, role: str = "app", base: str | None = None) -> str:
         """URL de connexion : `role` = « app » (Core) ou « proprio » (migrations uniquement)."""

@@ -82,6 +82,13 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
             'UPDATE etat_systeme SET valeur = \'{"moteur": "navigateur", "voix_piper": "fr_FR-siwis-medium",'
             ' "voix_elevenlabs": "21m00Tcm4TlvDq8ikWAM", "coupure": true}\' WHERE cle = \'synthese\''
         )
+        await conn.execute(  # lot K3 : reconnaissance du propriétaire et dictée désactivées
+            """UPDATE etat_systeme SET valeur = '{"actif": false, "seuil": 0.5}' WHERE cle = 'proprietaire'"""
+        )
+        await conn.execute(
+            """UPDATE etat_systeme SET valeur = '{"actif": false, "corrections": [], "styles": {}}'"""
+            " WHERE cle = 'dictee'"
+        )
     finally:
         await conn.close()
     return BasePostgres(await creer_pool(parametres.url_base("app", BASE_TEST), max_size=4))

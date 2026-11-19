@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from .commandes_rapides import ACTIONS_INTERFACE, ErreurCommande
 from .pilotage import VUES, ErreurPilotage
+from .proprietaire import voix_annoncee
 from .securite import audit, regles
 from .securite.appareils import Appareil
 from .securite.jokers import ErreurMotif, compiler
@@ -258,7 +259,9 @@ async def executer_commande(request: Request, corps: Phrase) -> dict[str, Any]:
     )
     reponse: dict[str, Any] = {"trouvee": True, "commande": t.commande.en_dict(), "action": action}
     if t.commande.cible == "core":
-        try:
+        try:  # reconnaissance du propriétaire : 🟡🔴 dits par une voix non reconnue refusés (lot K3)
+            niveau = c.approbations.registre.get(t.commande.action).niveau
+            await c.proprietaire.garder(corps.phrase, niveau, voix_annoncee(request.headers), a.acteur)
             reponse["resultat"] = await c.approbations.demander(t.commande.action, t.parametres, a)
         except ErreurAction as exc:
             reponse["erreur"] = str(exc)

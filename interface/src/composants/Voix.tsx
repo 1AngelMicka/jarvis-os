@@ -5,6 +5,7 @@ import { decrireImage, ErreurApi, transcrireAudio } from "../api";
 import { appliquerDecision, ecouterPhrase, EVENEMENT_ECOUTE_FOND, horodatage, lireEcouteFond, signalerEveil, suivreFinDeReponse } from "../eveil";
 import { chargerReglagesSynthese, GardeCoupure, reglagesSynthese } from "../synthese";
 import { capturerEcran, couperVoix, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal } from "../voix";
+import { brancherAnticipation } from "../voixAvancee";
 
 interface Props {
   lecteur: LecteurVocal;
@@ -121,6 +122,7 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
     if (ecoute.current) return;
     const e = new EcouteMainsLibres(traiterPhrase, () => lecteur.parle);
     ecoute.current = e;
+    brancherAnticipation(e); // lot K3 : préchauffage, transcription anticipée et fin de tour
     e.demarrer()
       .then(() => {
         const flux = e.fluxMicro;

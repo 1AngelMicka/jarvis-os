@@ -89,7 +89,7 @@ async def test_diagnostic_et_reparations(systeme: dict[str, Any], pool: Base) ->
 async def test_telechargements_sur_accord_seulement(systeme: dict[str, Any]) -> None:
     client = systeme["client"]
     etats = {e["id"]: e for e in (await client.get("/v1/telechargements")).json()["telechargements"]}
-    assert set(etats) == {"embeddings", "voix"} and all(e["statut"] == "absent" for e in etats.values())
+    assert set(etats) == {"embeddings", "voix", "proprietaire"} and all(e["statut"] == "absent" for e in etats.values())
     assert (await client.post("/v1/telechargements/inconnu")).status_code == 404
     verifs = {v["id"]: v for v in (await client.get("/v1/diagnostic")).json()["verifications"]}
     assert verifs["voix"]["reparation"] == "telecharger_voix"  # proposé, jamais lancé seul
