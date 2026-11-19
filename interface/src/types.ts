@@ -1,6 +1,7 @@
 // Types partagés avec l'API du Core (core/jarvis2/api.py).
 
 import type { EtatPlafond } from "./couts";
+import type { Widget, WidgetEpingle } from "./widgets";
 
 export interface InfoModele {
   id: string;
@@ -158,6 +159,8 @@ export interface Etat {
   cles_acces: number;
   /** Serveur sans écran : capture, clics et contrôle de l'écran refusés par le Core. */
   sans_ecran?: boolean;
+  /** Widgets épinglés dans le HUD (phase 14, D 16). */
+  widgets?: WidgetEpingle[];
 }
 
 export interface MetaMessage {
@@ -191,6 +194,9 @@ export interface MetaMessage {
   actions_ecartees?: string[];
   /** Barrière d'injection (14 · B 6) : ce tour a lu du contenu non fiable ; ses actions qui agissent sont retenues. */
   barriere?: BilanBarriere;
+  /** Widgets générés (14 · D 16), fragments validés et réécrits par le Core ; `widgets_ecartes` : raisons. */
+  widgets?: Widget[];
+  widgets_ecartes?: string[];
 }
 
 export interface LectureNonFiable {
@@ -244,7 +250,9 @@ export type EvenementDialogue =
   | { type: "titre"; donnees: { conversation_id: string; titre: string } }
   | { type: "invente"; donnees: { message_id: number; affirmations: AffirmationInventee[] } }
   /** Image jointe pour un connecteur cloud sans accord : rien n'est parti, l'accord est demandé. */
-  | { type: "accord_images"; donnees: { connecteur: string; nom: string; message: string } };
+  | { type: "accord_images"; donnees: { connecteur: string; nom: string; message: string } }
+  /** Un outil long démarre (conseil, lecture d'images…) : phrase fixe du Core, affichée et dite si la voix est active. */
+  | { type: "attente"; donnees: { outil: string; phrase: string } };
 
 // --- Premier lancement ---
 export interface Verification {
