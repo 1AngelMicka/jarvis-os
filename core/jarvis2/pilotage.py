@@ -153,8 +153,8 @@ class ServicePilotage:
         if mode not in MODES:
             raise ErreurPilotage("Mode : oui, demander ou non")
         await self.pool.execute(
-            "INSERT INTO etat_systeme (cle, valeur) VALUES ('pilotage', $1::text::jsonb)"
-            " ON CONFLICT (cle) DO UPDATE SET valeur = excluded.valeur, maj_le = now()",
+            # La clé est créée par la migration 014 ; le rôle de l'application n'a que SELECT / UPDATE sur cette table
+            "UPDATE etat_systeme SET valeur = $1::text::jsonb, maj_le = now() WHERE cle = 'pilotage'",
             json.dumps({"mode": mode}),
         )
         return mode
