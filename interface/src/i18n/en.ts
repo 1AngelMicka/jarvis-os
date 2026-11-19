@@ -234,6 +234,8 @@ export const en: Record<Cle, string> = {
   "reglages.section.connecteurs.description": "Your AIs: Claude account, API keys, local models",
   "reglages.section.couts.titre": "Costs and caps",
   "reglages.section.couts.description": "Spending for the day and month, cap per connector, subscription gauges",
+  "reglages.section.routes.titre": "Routes by task type",
+  "reglages.section.routes.description": "One AI for code, reasoning, quick questions and private topics; scores and downgrades",
   "reglages.section.accueil-matin.titre": "Morning briefing and home",
   "reglages.section.accueil-matin.description": "Spoken, text only or off; weather location (private)",
   "reglages.section.installation.titre": "Setup",

@@ -232,6 +232,8 @@ export const fr = {
   "reglages.section.connecteurs.description": "Vos IA : compte Claude, clés d'API, modèles locaux",
   "reglages.section.couts.titre": "Coûts et plafonds",
   "reglages.section.couts.description": "Dépenses du jour et du mois, plafond par connecteur, jauges d'abonnement",
+  "reglages.section.routes.titre": "Routes par type de tâche",
+  "reglages.section.routes.description": "Une IA pour le code, le raisonnement, les questions rapides et le privé ; scores et rétrogradations",
   "reglages.section.accueil-matin.titre": "Accueil du matin et maison",
   "reglages.section.accueil-matin.description": "Parlé, texte seul ou désactivé ; lieu de la météo (privé)",
   "reglages.section.installation.titre": "Installation",
