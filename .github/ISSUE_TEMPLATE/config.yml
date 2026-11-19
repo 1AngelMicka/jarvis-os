@@ -2,4 +2,14 @@ blank_issues_enabled: false
 contact_links:
   - name: Signaler une faille de sécurité (privé)
     url: https://github.com/1AngelMicka/jarvis-os/security/advisories/new
-    about: Jamais en issue publique.
+    about: Jamais en issue publique. Voir SECURITY.md.
+  - name: Politique de sécurité
+    url: https://github.com/1AngelMicka/jarvis-os/blob/main/SECURITY.md
+    about: Ce que JARVIS garantit, et comment signaler une vulnérabilité.
+  - name: Contribuer
+    url: https://github.com/1AngelMicka/jarvis-os/blob/main/CONTRIBUTING.md
+    about: Préparer l'environnement, vérifications, conventions.
+  # À décommenter quand les Discussions seront activées sur le dépôt (voir docs/GITHUB_A_FAIRE.md) :
+  # - name: Questions et échanges
+  #   url: https://github.com/1AngelMicka/jarvis-os/discussions
+  #   about: Pour une question d'utilisation ou une idée encore floue.
