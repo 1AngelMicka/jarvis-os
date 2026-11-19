@@ -73,6 +73,28 @@ export function couperVoix(lecteur: LecteurVocal): void {
   window.dispatchEvent(new CustomEvent(EVENEMENT_SILENCE));
 }
 
+/** Événement de fenêtre : la lecture à voix haute a été allumée ou coupée ailleurs (Réglages) ; détail : booléen. */
+export const EVENEMENT_VOIX = "jarvis2:voix";
+
+/** Allume ou coupe la lecture à voix haute des réponses ; les boutons à l'écran suivent. */
+export function reglerVoix(lecteur: LecteurVocal, actif: boolean): void {
+  if (!actif) {
+    couperVoix(lecteur);
+    return;
+  }
+  lecteur.actif = true;
+  window.dispatchEvent(new CustomEvent(EVENEMENT_VOIX, { detail: true }));
+}
+
+/** Voix françaises installées sur l'appareil (locales seulement : jamais une voix en ligne). */
+export function voixLocales(): { nom: string; langue: string; defaut: boolean }[] {
+  if (!("speechSynthesis" in window)) return [];
+  return window.speechSynthesis
+    .getVoices()
+    .filter((v) => v.localService && v.lang.toLowerCase().startsWith("fr"))
+    .map((v) => ({ nom: v.name, langue: v.lang, defaut: v.default }));
+}
+
 function typeAudio(): string {
   for (const t of ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm", "audio/mp4"]) {
     if (MediaRecorder.isTypeSupported(t)) return t;

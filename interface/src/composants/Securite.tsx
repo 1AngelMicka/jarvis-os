@@ -10,27 +10,35 @@ const NIVEAU = { vert: "🟢", jaune: "🟡", rouge: "🔴" } as const;
 
 type AppareilListe = Appareil & { courant: boolean; cles: number };
 
+export type BlocSecurite = "apparence" | "cles" | "appareils" | "audit";
+
 interface Props {
   nbCles: number;
   surChangement: (message?: string) => void;
+  /** Blocs à montrer (tous par défaut) : la vue Réglages les range dans ses propres sections. */
+  blocs?: readonly BlocSecurite[];
 }
 
-export function PanneauSecurite({ nbCles, surChangement }: Props) {
+const TOUS: readonly BlocSecurite[] = ["apparence", "cles", "appareils", "audit"];
+
+export function PanneauSecurite({ nbCles, surChangement, blocs = TOUS }: Props) {
   const [liste, setListe] = useState<AppareilListe[] | null>(null);
   const [audit, setAudit] = useState<{ entrees: EntreeAudit[]; rompue_a: number | null } | null>(null);
   const [qr, setQr] = useState<Jumelage | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
+  const voirAppareils = blocs.includes("appareils");
+  const voirAudit = blocs.includes("audit");
   const charger = useCallback(() => {
-    Promise.all([listerAppareils(), lireAudit()])
+    Promise.all([voirAppareils ? listerAppareils() : null, voirAudit ? lireAudit() : null])
       .then(([a, j]) => {
-        setListe(a.appareils);
-        setAudit(j);
+        if (a) setListe(a.appareils);
+        if (j) setAudit(j);
       })
       .catch((e: unknown) => {
         setErreur(e instanceof Error ? e.message : "Lecture impossible.");
       });
-  }, []);
+  }, [voirAppareils, voirAudit]);
 
   useEffect(charger, [charger]);
 
@@ -63,6 +71,7 @@ export function PanneauSecurite({ nbCles, surChangement }: Props) {
         </p>
       )}
 
+      {blocs.includes("apparence") && (
       <section className="sec-bloc" aria-labelledby="sec-apparence">
         <h3 className="sec-titre" id="sec-apparence">
           Apparence
@@ -70,7 +79,9 @@ export function PanneauSecurite({ nbCles, surChangement }: Props) {
         <p className="sec-texte">Thème de cet appareil : JARVIS, Studio nocturne, Atelier clair ou Console épurée.</p>
         <SelecteurTheme />
       </section>
+      )}
 
+      {blocs.includes("cles") && (
       <section className="sec-bloc" aria-labelledby="sec-cles">
         <h3 className="sec-titre" id="sec-cles">
           Clés d'accès
@@ -84,7 +95,9 @@ export function PanneauSecurite({ nbCles, surChangement }: Props) {
           Enregistrer une clé sur cet appareil
         </button>
       </section>
+      )}
 
+      {blocs.includes("appareils") && (
       <section className="sec-bloc" aria-labelledby="sec-appareils">
         <h3 className="sec-titre" id="sec-appareils">
           Appareils autorisés
@@ -150,7 +163,9 @@ export function PanneauSecurite({ nbCles, surChangement }: Props) {
           </div>
         )}
       </section>
+      )}
 
+      {blocs.includes("audit") && (
       <section className="sec-bloc" aria-labelledby="sec-audit">
         <h3 className="sec-titre" id="sec-audit">
           Journal d'audit
@@ -172,6 +187,7 @@ export function PanneauSecurite({ nbCles, surChangement }: Props) {
           ))}
         </ul>
       </section>
+      )}
     </div>
   );
 }

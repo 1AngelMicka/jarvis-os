@@ -63,7 +63,7 @@ function Aide({ aide }: { aide: string }) {
   return <span className="verif-aide">{aide}</span>;
 }
 
-function Verifications({ surChangement }: { surChangement: (message?: string) => void }) {
+export function Verifications({ surChangement }: { surChangement: (message?: string) => void }) {
   const [liste, setListe] = useState<Verification[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [occupe, setOccupe] = useState<string | null>(null);
@@ -149,7 +149,7 @@ function Verifications({ surChangement }: { surChangement: (message?: string) =>
   );
 }
 
-function Telephone() {
+export function Telephone() {
   const [ts, setTs] = useState<EtatTailscale | null>(null);
   const [qr, setQr] = useState<Jumelage | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
