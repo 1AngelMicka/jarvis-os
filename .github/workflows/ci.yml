@@ -1,6 +1,7 @@
 # Intégration continue : Core (tests sur SQLite et PostgreSQL + pgvector, ruff, mypy), interface (ESLint, tsc,
-# vitest, compilation) et paquet (roue installée par pipx, `jarvis2 --help`). Aucun secret : les mots de passe de
-# la base de test sont générés à chaque exécution.
+# vitest, compilation), paquet (roue installée par pipx, `jarvis2 --help`) et installeurs (install.ps1 / install.sh
+# en mode non interactif sur Windows, Ubuntu et macOS). Aucun secret : les mots de passe de la base de test sont
+# générés à chaque exécution.
 name: CI
 
 on:
@@ -98,6 +99,11 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv build --wheel --out-dir ../dist
         working-directory: core
+      - uses: actions/upload-artifact@v4
+        with:
+          name: roue
+          path: dist/*.whl
+          retention-days: 3
       - name: Installation pipx et commande jarvis2 (hors du dépôt)
         working-directory: /tmp
         run: |
@@ -106,3 +112,85 @@ jobs:
           jarvis2 --help
           jarvis2 docteur --json > docteur.json || true  # modèle absent : « erreur » attendue, l'interface non
           python3 -c "import json; v = {x['id']: x['statut'] for x in json.load(open('docteur.json'))}; print(v); assert v['interface'] == 'ok'"
+
+  installeurs:
+    # Les installeurs pour de vrai, sans personne pour répondre : --oui (uv installé s'il manque), cases
+    # facultatives décochées (Ollama jamais installé ici), puis une relance qui doit tout reprendre du fichier d'état.
+    name: Installeurs (${{ matrix.os }})
+    needs: paquet
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      JARVIS2_DOSSIER_DONNEES: ${{ runner.temp }}/jarvis2-ci/donnees
+      JARVIS2_CONFIG: ${{ runner.temp }}/jarvis2-ci/config/config.toml
+      JARVIS2_ETAT_INSTALLATION: ${{ runner.temp }}/jarvis2-ci/installation.etat
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: roue
+          path: dist
+
+      - name: Analyse statique (shellcheck)
+        if: runner.os == 'Linux'
+        run: shellcheck --shell=sh install.sh
+      - name: Analyse statique (PSScriptAnalyzer)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) { Install-Module PSScriptAnalyzer -Force -Scope CurrentUser }
+          # Write-Host : messages de console voulus ; verbes : fonctions en français ; LASTEXITCODE global pour « irm | iex »
+          $r = Invoke-ScriptAnalyzer -Path install.ps1 -Severity Warning, Error -ExcludeRule PSAvoidUsingWriteHost, PSUseApprovedVerbs, PSAvoidGlobalVars
+          $r | Format-Table -AutoSize | Out-String -Width 200 | Write-Output
+          if ($r) { exit 1 }
+
+      - name: Essai à blanc (Windows PowerShell 5.1 et PowerShell 7)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 --essai --oui
+          if ($LASTEXITCODE) { exit 1 }
+          pwsh -NoProfile -File install.ps1 -Essai -AvecOllama
+          if ($LASTEXITCODE) { exit 1 }
+          if (Test-Path $env:JARVIS2_ETAT_INSTALLATION) { throw "l'essai a écrit le fichier d'état" }
+          pwsh -NoProfile -File install.ps1 --option-inconnue
+          if ($LASTEXITCODE -ne 2) { throw "code attendu 2, reçu $LASTEXITCODE" }
+          exit 0
+      - name: Essai à blanc (sh)
+        if: runner.os != 'Windows'
+        run: |
+          sh install.sh --essai --oui </dev/null
+          sh install.sh --essai --avec-ollama </dev/null
+          test ! -e "$JARVIS2_ETAT_INSTALLATION"
+          code=0; sh install.sh --option-inconnue || code=$?; test "$code" -eq 2
+
+      - name: Installation non interactive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+          $roue = (Get-ChildItem dist\*.whl | Select-Object -First 1).FullName
+          powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 --oui --sans-demarrer --source $roue
+          if ($LASTEXITCODE) { exit 1 }
+          Get-Content $env:JARVIS2_ETAT_INSTALLATION
+          $sortie = powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 --oui --sans-demarrer --source $roue | Out-String
+          if ($LASTEXITCODE) { exit 1 }
+          if ($sortie -notmatch 'JARVIS 2 : d.{1,2}j.{1,2} fait') { throw "la relance n'a pas repris le fichier d'état" }
+          $env:Path = "$env:USERPROFILE\.local\bin;" + [Environment]::GetEnvironmentVariable('Path', 'User') + ";$env:Path"
+          $bin = (uv tool dir --bin).Trim()
+          & (Join-Path $bin 'jarvis2.exe') --help
+          & (Join-Path $bin 'jarvis2.exe') materiel
+      - name: Installation non interactive (sh)
+        if: runner.os != 'Windows'
+        run: |
+          roue=$(ls "$PWD"/dist/*.whl | head -n 1)
+          sh install.sh --oui --sans-demarrer --source "$roue" </dev/null
+          cat "$JARVIS2_ETAT_INSTALLATION"
+          sh install.sh --oui --sans-demarrer --source "$roue" </dev/null | tee relance.txt
+          grep -q 'JARVIS 2 : déjà fait' relance.txt
+          export PATH="$HOME/.local/bin:$PATH"
+          "$(uv tool dir --bin)/jarvis2" --help
+          "$(uv tool dir --bin)/jarvis2" materiel
