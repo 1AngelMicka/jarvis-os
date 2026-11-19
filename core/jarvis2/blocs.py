@@ -1,7 +1,8 @@
 """Blocs de mémoire éditables (à la Letta) : textes courts toujours injectés, tenus par l'utilisateur et JARVIS.
 
 Chaque modification crée une version (table `memory_block_versions`) : l'historique est complet, rien n'est perdu.
-Un bloc « local_uniquement » n'est jamais envoyé à une IA externe.
+Niveaux : vers une IA externe, seuls les blocs « public » partent (`memoire.VERS_EXTERNE["blocs"]`) ; un bloc
+« prive » (≡ « local_uniquement ») n'est jamais envoyé. Niveau et confidentialité restent synchronisés.
 """
 
 from __future__ import annotations
@@ -12,7 +13,16 @@ from datetime import datetime
 from typing import Any, cast
 
 from .db import Base, Connexion, Executant
-from .memoire import TAG_NOYAU, lire_noyau
+from .memoire import (
+    NIVEAU_DEFAUT_BLOC,
+    NIVEAUX,
+    TAG_NOYAU,
+    VERS_EXTERNE,
+    condition_niveaux,
+    confidentialite_de,
+    lire_noyau,
+    niveau_de,
+)
 
 LABEL = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,63}$")
 LIMITE_DEFAUT = 2000
@@ -31,6 +41,7 @@ class Bloc:
     char_limit: int
     confidentialite: str
     maj_le: datetime
+    niveau: str = NIVEAU_DEFAUT_BLOC
 
     def en_dict(self) -> dict[str, Any]:
         return {
@@ -39,20 +50,26 @@ class Bloc:
             "version": self.version,
             "char_limit": self.char_limit,
             "confidentialite": self.confidentialite,
+            "niveau": self.niveau,
             "maj_le": self.maj_le.isoformat(),
         }
 
 
 def _bloc(r: Any) -> Bloc:
-    return Bloc(r["label"], r["content"], r["version"], r["char_limit"], r["confidentialite"], r["maj_le"])
+    return Bloc(r["label"], r["content"], r["version"], r["char_limit"], r["confidentialite"], r["maj_le"], r["niveau"])
+
+
+COLONNES_BLOC = "label, content, version, char_limit, confidentialite, maj_le, niveau"
 
 
 async def lister(conn: Executant, exclure_local: bool = False, vides: bool = False) -> list[Bloc]:
+    """`exclure_local` (moteur externe) : seulement les blocs « public »."""
     lignes = await conn.fetch(
-        "SELECT label, content, version, char_limit, confidentialite, maj_le FROM memory_blocks"
-        " WHERE ($2 OR content <> '') AND (NOT $1 OR confidentialite <> 'local_uniquement') ORDER BY label",
+        f"SELECT {COLONNES_BLOC} FROM memory_blocks WHERE ($2 OR content <> '')"  # noqa: S608 — constantes
+        f" AND (NOT $1 OR (confidentialite <> 'local_uniquement' AND {condition_niveaux(conn, '$3')})) ORDER BY label",
         exclure_local,
         vides,
+        list(VERS_EXTERNE["blocs"]),
     )
     return [_bloc(r) for r in lignes]
 
@@ -64,15 +81,25 @@ async def ecrire(
     auteur: str,
     confidentialite: str | None = None,
     char_limit: int | None = None,
+    niveau: str | None = None,
 ) -> Bloc:
-    """Crée ou modifie un bloc ; chaque écriture est une nouvelle version gardée."""
+    """Crée ou modifie un bloc ; chaque écriture est une nouvelle version gardée.
+
+    `niveau` l'emporte sur `confidentialite` ; sans l'un ni l'autre, un bloc existant garde les siens et un nouveau
+    bloc est « public ». Les deux restent synchronisés (« prive » ⇔ « local_uniquement »)."""
     if not LABEL.match(label):
         raise ErreurBloc("Nom de bloc : minuscules, chiffres et . _ : - (64 caractères au plus)")
     if confidentialite not in (None, "normal", "local_uniquement"):
         raise ErreurBloc("Confidentialité : normal ou local_uniquement")
+    if niveau is not None and niveau not in NIVEAUX:
+        raise ErreurBloc(f"Niveau : {', '.join(NIVEAUX)}")
+    if niveau is None and confidentialite is not None:
+        niveau = niveau_de(confidentialite, None, NIVEAU_DEFAUT_BLOC)
+    if niveau is not None:
+        confidentialite = confidentialite_de(niveau)
     if hasattr(base, "acquire"):
         async with cast(Base, base).acquire() as c:
-            return await ecrire(c, label, contenu, auteur, confidentialite, char_limit)
+            return await ecrire(c, label, contenu, auteur, confidentialite, char_limit, niveau)
     conn = cast(Connexion, base)
     async with conn.transaction():
         actuel = await conn.fetchrow("SELECT id, version, char_limit FROM memory_blocks WHERE label = $1", label)
@@ -81,21 +108,24 @@ async def ecrire(
             raise ErreurBloc(f"Bloc trop long : {len(contenu)} caractères pour {limite} au plus")
         if actuel is None:
             ligne = await conn.fetchrow(
-                "INSERT INTO memory_blocks (label, content, char_limit, confidentialite) VALUES ($1, $2, $3, $4)"
-                " RETURNING id, version",
+                "INSERT INTO memory_blocks (label, content, char_limit, confidentialite, niveau)"
+                " VALUES ($1, $2, $3, $4, $5) RETURNING id, version",
                 label,
                 contenu,
                 limite,
                 confidentialite or "normal",
+                niveau or NIVEAU_DEFAUT_BLOC,
             )
         else:
             ligne = await conn.fetchrow(
                 "UPDATE memory_blocks SET content = $2, char_limit = $3, version = version + 1, maj_le = now(),"
-                " confidentialite = coalesce($4, confidentialite) WHERE label = $1 RETURNING id, version",
+                " confidentialite = coalesce($4, confidentialite), niveau = coalesce($5, niveau)"
+                " WHERE label = $1 RETURNING id, version",
                 label,
                 contenu,
                 limite,
                 confidentialite,
+                niveau,
             )
         assert ligne is not None
         await conn.execute(
@@ -106,7 +136,7 @@ async def ecrire(
             auteur,
         )
         r = await conn.fetchrow(
-            "SELECT label, content, version, char_limit, confidentialite, maj_le FROM memory_blocks WHERE label = $1",
+            f"SELECT {COLONNES_BLOC} FROM memory_blocks WHERE label = $1",  # noqa: S608 — constante
             label,
         )
     return _bloc(r)

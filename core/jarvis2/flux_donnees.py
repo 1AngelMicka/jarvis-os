@@ -365,4 +365,17 @@ async def decrire(c: Contexte, p: Parametres) -> dict[str, Any]:
             "connecteurs_inactifs": inactifs,
         },
         "flux": [f.en_dict() for f in flux],
+        "memoire": await _memoire(c),
     }
+
+
+async def _memoire(c: Contexte) -> dict[str, Any]:
+    """Niveaux des souvenirs et règles d'envoi vers le cloud, générées depuis le code réel (`memoire.VERS_EXTERNE`,
+    `rappel`)."""
+    from . import memoire, rappel
+
+    try:
+        niveaux = memoire.niveaux_de(await memoire.compter(c.pool))
+    except Exception:  # la carte des flux ne doit jamais tomber pour un comptage
+        niveaux = dict.fromkeys(memoire.NIVEAUX, 0)
+    return {"niveaux": niveaux, "regles": memoire.regles_niveaux(), "porte_rappel": rappel.DESCRIPTION}

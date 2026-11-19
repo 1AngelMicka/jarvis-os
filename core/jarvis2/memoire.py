@@ -8,7 +8,11 @@ Recherche d'un texte :
 4. sélection : au plus N souvenirs, un budget de caractères, un par section de document, 3 par source.
 
 Le **noyau** (souvenirs tagués `noyau`) est toujours injecté, plus récents d'abord, dans son propre budget.
-Les souvenirs `local_uniquement` ne partent jamais vers un moteur externe.
+
+Niveaux (`NIVEAUX`) : vers un moteur externe, un souvenir « public » part partout (noyau, blocs, souvenirs trouvés,
+nouveautés), un « semi_prive » seulement s'il est trouvé pertinent pour le message, un « prive » jamais
+(`VERS_EXTERNE`). Invariant : niveau « prive » ⇔ confidentialité « local_uniquement » (les deux colonnes restent
+synchronisées, le code qui écrit `local_uniquement` continue de marcher).
 Un sujet exclu par l'utilisateur est retiré de tout texte de mémoire injecté au modèle (`expurger`).
 """
 
@@ -20,9 +24,9 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal, cast, get_args
 
-from .db import Executant, Ligne
+from .db import Base, Connexion, Executant, Ligne
 from .db_sqlite import vecteur_octets
 from .embeddings import Encodeur, vecteur_sql
 
@@ -39,8 +43,82 @@ MAX_SOUS_REQUETES = 6
 MAX_SOURCES_ORIENTEES = 4
 
 COLONNES = (
-    "id, contenu, type, tags, source, confidentialite, origine, canal_detail, cree_le, maj_le, importance, access_count"
+    "id, contenu, type, tags, source, confidentialite, origine, canal_detail, cree_le, maj_le, importance,"
+    " access_count, niveau"
 )
+
+Niveau = Literal["public", "semi_prive", "prive"]
+NIVEAUX: tuple[Niveau, ...] = get_args(Niveau)
+NIVEAU_DEFAUT_SOUVENIR: Niveau = "semi_prive"
+NIVEAU_DEFAUT_BLOC: Niveau = "public"
+# Ce qui peut partir vers un moteur externe, par usage (source unique : requêtes et « Où partent mes données »)
+VERS_EXTERNE: dict[str, tuple[Niveau, ...]] = {
+    "noyau": ("public",),
+    "blocs": ("public",),
+    "nouveautes": ("public",),
+    "recherche": ("public", "semi_prive"),
+}
+LIBELLES_USAGE = {
+    "noyau": "le noyau",
+    "blocs": "les blocs",
+    "nouveautes": "les nouveautés",
+    "recherche": "les souvenirs trouvés pertinents pour le message",
+}
+LIBELLES_NIVEAU: dict[Niveau, str] = {"public": "Public", "semi_prive": "Semi-privé", "prive": "Privé"}
+
+
+def niveau_valide(niveau: str) -> Niveau:
+    if niveau not in NIVEAUX:
+        raise ValueError(f"Niveau inconnu : « {niveau} » ({', '.join(NIVEAUX)})")
+    return niveau
+
+
+def confidentialite_de(niveau: str) -> str:
+    """Confidentialité synchronisée avec un niveau (« prive » ⇔ « local_uniquement »)."""
+    return "local_uniquement" if niveau == "prive" else "normal"
+
+
+def niveau_de(confidentialite: str, niveau: str | None, defaut: Niveau = NIVEAU_DEFAUT_SOUVENIR) -> Niveau:
+    """Niveau d'une écriture : le niveau donné l'emporte ; sinon « prive » si local uniquement, sinon `defaut`."""
+    if niveau is not None:
+        return niveau_valide(niveau)
+    return "prive" if confidentialite == "local_uniquement" else defaut
+
+
+def usages_externes(niveau: str) -> list[str]:
+    """Usages pour lesquels ce niveau peut partir vers un moteur externe (vide : jamais)."""
+    return [u for u, niveaux in VERS_EXTERNE.items() if niveau in niveaux]
+
+
+def regles_niveaux() -> list[dict[str, str]]:
+    """Règles lisibles, générées depuis `VERS_EXTERNE` (« Où partent mes données »)."""
+    regles = []
+    for n in NIVEAUX:
+        usages = usages_externes(n)
+        if not usages:
+            vers = "Ne part jamais vers une IA externe : reste sur ce PC."
+        elif set(usages) == set(VERS_EXTERNE):
+            vers = "Peut partir vers une IA externe partout : " + ", ".join(LIBELLES_USAGE[u] for u in usages) + "."
+        else:
+            vers = (
+                "Part vers une IA externe seulement dans "
+                + ", ".join(LIBELLES_USAGE[u] for u in usages)
+                + " ; jamais dans "
+                + ", ".join(LIBELLES_USAGE[u] for u in VERS_EXTERNE if u not in usages)
+                + "."
+            )
+        if usages:
+            vers += " Toujours après retrait des sujets exclus et masquage des secrets."
+        regles.append({"niveau": n, "libelle": LIBELLES_NIVEAU[n], "vers_cloud": vers})
+    return regles
+
+
+def condition_niveaux(conn: Executant, parametre: str) -> str:
+    """Condition « le niveau fait partie de la liste `parametre` » (tableau PostgreSQL ou liste JSON SQLite)."""
+    if conn.dialecte == "sqlite":
+        return f"niveau IN (SELECT value FROM json_each({parametre}))"  # noqa: S608 — « $n » constant
+    return f"niveau = ANY({parametre}::text[])"
+
 
 _INTERROGATIFS = (
     r"(?:quel(?:le)?s?|pourquoi|comment|combien|quand|où|qui|que|qu['’]|est-ce|"
@@ -67,6 +145,8 @@ class Souvenir:
     maj_le: datetime
     importance: float = 0.5
     acces: int = 0
+    niveau: str = NIVEAU_DEFAUT_SOUVENIR
+    remplace: bool = False  # a une version antérieure (changement d'avis) : voir `versions`
 
     def en_dict(self) -> dict[str, Any]:
         return {
@@ -82,6 +162,8 @@ class Souvenir:
             "maj_le": self.maj_le.isoformat(),
             "importance": self.importance,
             "acces": self.acces,
+            "niveau": self.niveau,
+            "remplace": self.remplace,
         }
 
 
@@ -107,6 +189,7 @@ def _souvenir(ligne: Ligne) -> Souvenir:
         maj_le=ligne["maj_le"],
         importance=float(ligne.get("importance", 0.5) if ligne.get("importance") is not None else 0.5),
         acces=int(ligne.get("access_count") or 0),
+        niveau=str(ligne.get("niveau") or niveau_de(ligne["confidentialite"], None)),
     )
 
 
@@ -185,7 +268,7 @@ async def rechercher(
                    END AS texte
             FROM memoires m CROSS JOIN req
             WHERE m.valid_to IS NULL AND NOT m.archived
-              AND (NOT $3 OR m.confidentialite <> 'local_uniquement')
+              AND (NOT $3 OR (m.confidentialite <> 'local_uniquement' AND m.niveau <> 'prive'))
               AND ($4::text[] IS NULL OR m.origine = ANY($4::text[]))
         )
         SELECT {COLONNES}, similarite, texte, $5 * similarite + $6 * texte AS score
@@ -309,7 +392,8 @@ async def _rechercher_sqlite(
     0,45 × proportion des mots présents. Seuls les souvenirs actifs du modèle de l'encodeur sont comparés.
     """
     filtre = (
-        " FROM memoires WHERE valid_to IS NULL AND NOT archived AND (NOT $1 OR confidentialite <> 'local_uniquement')"
+        " FROM memoires WHERE valid_to IS NULL AND NOT archived"
+        " AND (NOT $1 OR (confidentialite <> 'local_uniquement' AND niveau <> 'prive'))"
         " AND ($2 IS NULL OR origine IN (SELECT value FROM json_each($2)))"
     )
     filtres = (exclure_local, list(origines) if origines else None)
@@ -386,12 +470,19 @@ async def ajouter(
     vecteur: list[float] | None = None,
     modele: str | None = None,
     importance: float = 0.5,
+    niveau: str | None = None,
 ) -> str:
     """Nouveau souvenir (plein texte indexé par le moteur : tsvector français ou FTS5).
+
+    Niveau et confidentialité restent synchronisés : un `niveau` donné l'emporte (et fixe la confidentialité) ;
+    sinon « prive » si `local_uniquement`, « public » pour un souvenir du noyau (il part déjà partout), sinon
+    « semi_prive ».
 
     La colonne `embedding` garde le modèle d'origine de la base (384 dimensions sous PostgreSQL) ; le vecteur d'un
     autre modèle (ex. BAAI/bge-m3 après une bascule) va dans `memoire_vecteurs`, où la recherche le trouve.
     """
+    niveau = niveau_de(confidentialite, niveau, "public" if TAG_NOYAU in tags else NIVEAU_DEFAUT_SOUVENIR)
+    confidentialite = confidentialite_de(niveau)
     a_part = vecteur is not None and not await _va_dans_colonne(conn, modele, len(vecteur))
     if a_part:
         ident = await ajouter(
@@ -403,6 +494,7 @@ async def ajouter(
             confidentialite=confidentialite,
             origine=origine,
             importance=importance,
+            niveau=niveau,
         )
         assert vecteur is not None
         if conn.dialecte == "sqlite":
@@ -423,15 +515,15 @@ async def ajouter(
     if conn.dialecte == "sqlite":
         requete = (
             "INSERT INTO memoires (contenu, type, tags, source, confidentialite, origine, embedding, embedding_model,"
-            " valid_from, observed_at, importance)"
-            " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now(), $9) RETURNING id"
+            " valid_from, observed_at, importance, niveau)"
+            " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now(), $9, $10) RETURNING id"
         )
         valeur: Any = vecteur_octets(vecteur) if vecteur is not None else None
     else:
         requete = (
             "INSERT INTO memoires (contenu, type, tags, source, confidentialite, origine, embedding, embedding_model,"
-            " valid_from, observed_at, tsv, importance) VALUES ($1, $2, $3, $4, $5, $6, $7::text::vector, $8, now(),"
-            " now(), to_tsvector('french', $1), $9) RETURNING id"
+            " valid_from, observed_at, tsv, importance, niveau) VALUES ($1, $2, $3, $4, $5, $6, $7::text::vector, $8,"
+            " now(), now(), to_tsvector('french', $1), $9, $10) RETURNING id"
         )
         valeur = vecteur_sql(vecteur) if vecteur is not None else None
     ident = await conn.fetchval(
@@ -445,6 +537,7 @@ async def ajouter(
         valeur,
         modele if vecteur else None,
         min(max(importance, 0.0), 1.0),
+        niveau,
     )
     return str(ident)
 
@@ -695,14 +788,17 @@ async def lire_noyau(
     limite: int = 100,
     expurgateur: Expurgateur | None = None,
 ) -> list[Souvenir]:
+    """Noyau ; `exclure_local` (moteur externe) : seulement les souvenirs « public » (`VERS_EXTERNE`)."""
     expurgateur = expurgateur or Expurgateur()
     lignes = await conn.fetch(
         f"SELECT {COLONNES} FROM memoires WHERE {_avec_tag(conn, '$1')}"  # noqa: S608 — constantes
         " AND valid_to IS NULL AND NOT archived"
-        " AND (NOT $2 OR confidentialite <> 'local_uniquement') ORDER BY cree_le DESC, id LIMIT $3",
+        f" AND (NOT $2 OR (confidentialite <> 'local_uniquement' AND {condition_niveaux(conn, '$4')}))"
+        " ORDER BY cree_le DESC, id LIMIT $3",
         TAG_NOYAU,
         exclure_local,
         limite,
+        list(VERS_EXTERNE["noyau"]),
     )
     noyau = [s for s in (expurgateur.souvenir(_souvenir(r)) for r in lignes) if s is not None]
     return limiter_noyau(noyau, budget)
@@ -711,12 +807,25 @@ async def lire_noyau(
 async def compter(conn: Executant) -> dict[str, int]:
     ligne = await conn.fetchrow(
         f"SELECT count(*) AS total, count(*) FILTER (WHERE {_avec_tag(conn, '$1')}) AS noyau,"  # noqa: S608 — constante
-        " count(*) FILTER (WHERE confidentialite = 'local_uniquement') AS local FROM memoires"
+        " count(*) FILTER (WHERE confidentialite = 'local_uniquement') AS local,"
+        " count(*) FILTER (WHERE niveau = 'public') AS public,"
+        " count(*) FILTER (WHERE niveau = 'semi_prive') AS semi_prive,"
+        " count(*) FILTER (WHERE niveau = 'prive') AS prive FROM memoires"
         " WHERE valid_to IS NULL AND NOT archived",
         TAG_NOYAU,
     )
     assert ligne is not None
-    return {"total": ligne["total"], "noyau": ligne["noyau"], "local_uniquement": ligne["local"]}
+    return {
+        "total": ligne["total"],
+        "noyau": ligne["noyau"],
+        "local_uniquement": ligne["local"],
+        **{n: int(ligne[n] or 0) for n in NIVEAUX},
+    }
+
+
+def niveaux_de(compte: dict[str, int]) -> dict[str, int]:
+    """{"public": n, "semi_prive": n, "prive": n} extrait de `compter`."""
+    return {n: int(compte.get(n, 0)) for n in NIVEAUX}
 
 
 # --- Texte injecté au modèle -----------------------------------------------------------------------------
@@ -750,6 +859,7 @@ class ContexteMemoire:
     consultee: bool = True
     expurgateur: Expurgateur = field(default_factory=Expurgateur)
     domaines: list[dict[str, Any]] = field(default_factory=list)  # domaines de connaissance évoqués
+    porte: str | None = None  # recherche sautée par la porte de rappel (`rappel.decider`) : sa raison
 
     def bloc(self) -> str:
         """Section mémoire des consignes système (noyau puis souvenirs), toujours expurgée."""
@@ -770,9 +880,12 @@ class ContexteMemoire:
             texte += (
                 f"\nDomaines de connaissance évoqués (carte conceptuelle, niveau) :\n{bloc_domaines(self.domaines)}\n"
             )
-        texte += (
-            f"\nSouvenirs pertinents (du plus pertinent au moins pertinent) :\n{formater_souvenirs(self.souvenirs)}"
-        )
+        if self.porte is not None and not self.souvenirs:
+            texte += f"\nSouvenirs pertinents :\n(pas de recherche pour ce message : {self.porte})"
+        else:
+            texte += (
+                f"\nSouvenirs pertinents (du plus pertinent au moins pertinent) :\n{formater_souvenirs(self.souvenirs)}"
+            )
         return self.expurgateur.texte(texte)
 
 
@@ -802,8 +915,11 @@ async def parcourir(
     depuis: datetime | None = None,
     limite: int = 50,
     exclure_local: bool = False,
+    niveaux: Sequence[str] | None = None,
 ) -> list[Souvenir]:
-    """Souvenirs vivants, du plus récent au plus ancien (pages : `avant` = date du dernier reçu)."""
+    """Souvenirs vivants, du plus récent au plus ancien (pages : `avant` = date du dernier reçu).
+
+    `niveaux` : seulement ces niveaux (ex. `VERS_EXTERNE["nouveautes"]` pour un moteur externe)."""
     conditions = ["valid_to IS NULL", "NOT archived"]
     valeurs: list[Any] = []
     if origine:
@@ -816,7 +932,10 @@ async def parcourir(
         valeurs.append(depuis)
         conditions.append(f"cree_le >= ${len(valeurs)}")
     if exclure_local:
-        conditions.append("confidentialite <> 'local_uniquement'")
+        conditions.append("confidentialite <> 'local_uniquement' AND niveau <> 'prive'")
+    if niveaux is not None:
+        valeurs.append(list(niveaux))
+        conditions.append(condition_niveaux(conn, f"${len(valeurs)}"))
     valeurs.append(max(1, min(limite, 200)))
     lignes = await conn.fetch(
         f"SELECT {COLONNES} FROM memoires WHERE {' AND '.join(conditions)}"  # noqa: S608 — constantes
@@ -849,3 +968,160 @@ def bloc_nouveautes(souvenirs: list[Souvenir], depuis: datetime, expurgateur: Ex
     for origine, apercus in groupes.items():
         lignes.append(f"- {LIBELLES_ORIGINE.get(origine, origine)} ({len(apercus)}) : " + " | ".join(apercus[:3]))
     return "\n".join(lignes)
+
+
+# --- Niveau, remplacement (changement d'avis) et historique ----------------------------------------------------
+
+
+class SouvenirAbsent(LookupError):
+    """Aucun souvenir de cet identifiant."""
+
+
+class DejaRemplace(ValueError):
+    """Le souvenir a déjà été remplacé (ou n'est plus valide) : on agit sur sa version actuelle."""
+
+
+_COLONNES_VERSION = f"{COLONNES}, valid_to, superseded_by"
+
+
+async def lire(conn: Executant, ident: str) -> Souvenir | None:
+    """Un souvenir (vivant ou non), avec son indicateur `remplace`."""
+    ligne = await conn.fetchrow(f"SELECT {COLONNES} FROM memoires WHERE id = $1", ident)  # noqa: S608 — constante
+    if ligne is None:
+        return None
+    return (await marquer_remplaces(conn, [_souvenir(ligne)]))[0]
+
+
+async def marquer_remplaces(conn: Executant, souvenirs: Sequence[Souvenir]) -> list[Souvenir]:
+    """`remplace` = le souvenir a une version antérieure (un autre souvenir pointe vers lui par `superseded_by`)."""
+    if not souvenirs:
+        return []
+    ids = [s.id for s in souvenirs]
+    if conn.dialecte == "sqlite":
+        lignes = await conn.fetch(
+            "SELECT DISTINCT superseded_by AS id FROM memoires"
+            " WHERE superseded_by IN (SELECT value FROM json_each($1))",
+            ids,
+        )
+    else:
+        lignes = await conn.fetch(
+            "SELECT DISTINCT superseded_by AS id FROM memoires WHERE superseded_by = ANY($1::uuid[])", ids
+        )
+    precedes = {str(r["id"]) for r in lignes}
+    return [replace(s, remplace=s.id in precedes) for s in souvenirs]
+
+
+async def changer_niveau(conn: Executant, ident: str, niveau: str) -> Souvenir | None:
+    """Change le niveau d'un souvenir vivant (confidentialité synchronisée) ; None s'il est absent ou remplacé."""
+    n = niveau_valide(niveau)
+    ligne = await conn.fetchrow(
+        "UPDATE memoires SET niveau = $2, confidentialite = $3, maj_le = now()"
+        " WHERE id = $1 AND valid_to IS NULL AND superseded_by IS NULL RETURNING id",
+        ident,
+        n,
+        confidentialite_de(n),
+    )
+    return None if ligne is None else await lire(conn, ident)
+
+
+async def remplacer(
+    base: Executant,
+    ancien_id: str,
+    contenu: str,
+    *,
+    vecteur: list[float] | None = None,
+    modele: str | None = None,
+    raison: str = "remplacement",
+    niveau: str | None = None,
+) -> str:
+    """Remplace un fait (changement d'avis) : nouveau souvenir (même type, tags, source, origine, niveau sauf
+    `niveau` donné), l'ancien reçoit `valid_to = now` et `superseded_by = nouveau`. Rien n'est effacé.
+
+    La raison est gardée dans `canal_detail` du nouveau souvenir. Lève `SouvenirAbsent` ou `DejaRemplace`.
+    """
+    if hasattr(base, "acquire"):
+        async with cast(Base, base).acquire() as c:
+            return await remplacer(c, ancien_id, contenu, vecteur=vecteur, modele=modele, raison=raison, niveau=niveau)
+    conn = cast(Connexion, base)
+    async with conn.transaction():
+        ancien = await conn.fetchrow(
+            f"SELECT {_COLONNES_VERSION} FROM memoires WHERE id = $1",  # noqa: S608 — constante
+            ancien_id,
+        )
+        if ancien is None:
+            raise SouvenirAbsent(f"Souvenir introuvable : {ancien_id}")
+        if ancien["superseded_by"] is not None or ancien["valid_to"] is not None:
+            raise DejaRemplace("Ce souvenir a déjà été remplacé : modifiez sa version actuelle")
+        a = _souvenir(ancien)
+        nouveau = await ajouter(
+            conn,
+            contenu,
+            type_=a.type,
+            tags=a.tags,
+            source=a.source,
+            origine=a.origine,
+            vecteur=vecteur,
+            modele=modele,
+            importance=a.importance,
+            niveau=niveau if niveau is not None else a.niveau,
+        )
+        await conn.execute(
+            "UPDATE memoires SET canal_detail = $2 WHERE id = $1", nouveau, (raison or "remplacement")[:200]
+        )
+        await conn.execute(
+            "UPDATE memoires SET valid_to = now(), superseded_by = $2, maj_le = now() WHERE id = $1",
+            ancien_id,
+            nouveau,
+        )
+    return nouveau
+
+
+@dataclass(frozen=True, slots=True)
+class Version:
+    souvenir: Souvenir
+    valid_to: datetime | None
+    superseded_by: str | None
+
+    def en_dict(self) -> dict[str, Any]:
+        return {
+            **self.souvenir.en_dict(),
+            "valid_to": self.valid_to.isoformat() if self.valid_to else None,
+            "superseded_by": self.superseded_by,
+        }
+
+
+MAX_VERSIONS = 200
+
+
+async def versions(conn: Executant, ident: str) -> list[Version]:
+    """Historique d'un fait, de la plus ancienne version à l'actuelle (`superseded_by` suivi dans les deux sens)."""
+
+    async def une(requete: str, valeur: str) -> Ligne | None:
+        ligne: Ligne | None = await conn.fetchrow(
+            f"SELECT {_COLONNES_VERSION} FROM memoires WHERE {requete} ORDER BY cree_le LIMIT 1",  # noqa: S608
+            valeur,
+        )
+        return ligne
+
+    depart = await une("id = $1", ident)
+    if depart is None:
+        return []
+    chaine = [depart]
+    vus = {str(depart["id"])}
+    while len(chaine) < MAX_VERSIONS:  # vers le passé : qui pointait vers la plus ancienne connue
+        avant = await une("superseded_by = $1", str(chaine[0]["id"]))
+        if avant is None or str(avant["id"]) in vus:
+            break
+        vus.add(str(avant["id"]))
+        chaine.insert(0, avant)
+    while len(chaine) < MAX_VERSIONS and chaine[-1]["superseded_by"] is not None:  # vers l'actuelle
+        apres = await une("id = $1", str(chaine[-1]["superseded_by"]))
+        if apres is None or str(apres["id"]) in vus:
+            break
+        vus.add(str(apres["id"]))
+        chaine.append(apres)
+    souvenirs = await marquer_remplaces(conn, [_souvenir(r) for r in chaine])
+    return [
+        Version(s, r["valid_to"], str(r["superseded_by"]) if r["superseded_by"] is not None else None)
+        for s, r in zip(souvenirs, chaine, strict=True)
+    ]

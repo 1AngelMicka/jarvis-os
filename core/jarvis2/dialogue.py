@@ -99,8 +99,17 @@ class SourceMemoire:
     encodeur: Encodeur
     reglages: ReglagesRecherche = field(default_factory=ReglagesRecherche)
 
-    async def contexte(self, texte: str, externe: bool) -> ContexteMemoire:
-        """Noyau + souvenirs ; les « local_uniquement » sont exclus si le moteur est externe."""
+    async def contexte(self, texte: str, externe: bool, *, forcer_recherche: bool = False) -> ContexteMemoire:
+        """Noyau + blocs + souvenirs. Moteur externe : noyau et blocs « public », souvenirs trouvés « public » ou
+        « semi_prive », jamais « prive » (`memoire.VERS_EXTERNE`).
+
+        La porte de rappel (`rappel.decider`) saute la recherche des souvenirs et des domaines pour une politesse,
+        un acquittement, une commande… (`ContexteMemoire.porte` = sa raison) ; noyau et blocs restent injectés.
+        `forcer_recherche` : toujours chercher (détection d'un sujet privé)."""
+        from .rappel import decider
+
+        porte = None if forcer_recherche else decider(texte)
+        chercher = porte is None or porte.rappeler
         try:
             noyau = await lire_noyau(
                 self.pool,
@@ -108,8 +117,10 @@ class SourceMemoire:
                 budget=self.reglages.budget_noyau,
                 expurgateur=self.reglages.expurgateur,
             )
-            souvenirs = await rechercher_multi(
-                self.pool, self.encodeur, texte, exclure_local=externe, reglages=self.reglages
+            souvenirs = (
+                await rechercher_multi(self.pool, self.encodeur, texte, exclure_local=externe, reglages=self.reglages)
+                if chercher
+                else []
             )
             from .blocs import lister as lister_blocs
 
@@ -118,6 +129,13 @@ class SourceMemoire:
             journal.exception("Mémoire indisponible : réponse sans souvenirs")
             return ContexteMemoire(consultee=False, expurgateur=self.reglages.expurgateur)
         domaines: list[dict[str, Any]] = []
+        if not chercher:
+            return ContexteMemoire(
+                noyau=noyau,
+                blocs=blocs,
+                expurgateur=self.reglages.expurgateur,
+                porte=porte.raison if porte is not None else None,
+            )
         try:  # domaine évoqué : sa carte et son niveau avant les souvenirs, ses fiches en tête
             from .connaissances import contexte_domaines
 
@@ -182,7 +200,7 @@ class ServiceDialogue:
             return True
         if self.memoire is None:
             return False
-        contexte = await self.memoire.contexte(texte, externe=False)
+        contexte = await self.memoire.contexte(texte, externe=False, forcer_recherche=True)
         return any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs) or any(
             d["prive"]
             for d in contexte.domaines  # domaine de connaissance privé évoqué
@@ -246,7 +264,15 @@ class ServiceDialogue:
                 return ""
             if isinstance(depuis, str):  # SQLite : un agrégat perd le type déclaré de la colonne
                 depuis = datetime.fromisoformat(depuis)
-            recents = await parcourir(self.memoire.pool, depuis=depuis, limite=24, exclure_local=externe)
+            from .memoire import VERS_EXTERNE
+
+            recents = await parcourir(  # moteur externe : seulement les souvenirs « public »
+                self.memoire.pool,
+                depuis=depuis,
+                limite=24,
+                exclure_local=externe,
+                niveaux=VERS_EXTERNE["nouveautes"] if externe else None,
+            )
             return bloc_nouveautes(recents, depuis, self.memoire.reglages.expurgateur)
         except Exception:  # jamais bloquant pour la réponse
             journal.exception("Nouveautés de la mémoire indisponibles")
@@ -567,6 +593,7 @@ class ServiceDialogue:
                         **{k: v for k, v in rep.meta.items() if k in META_TRANSPARENCE},
                         "souvenirs": [r.souvenir.id for r in contexte.souvenirs],
                         "memoire_consultee": contexte.consultee,
+                        **({"porte": contexte.porte} if contexte.porte else {}),
                         "masques": dict(masques),
                         "prive": prive,
                         # Domaines de connaissance évoqués : l'interface propose de les réviser

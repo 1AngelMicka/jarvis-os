@@ -1,11 +1,12 @@
-"""Routes de la mémoire v2 : souvenirs (parcourir, chercher, nouveautés), blocs éditables, état de la bascule de
-modèle, tâches de nuit."""
+"""Routes de la mémoire v2 : souvenirs (parcourir, chercher, nouveautés, niveau, remplacement, versions), blocs
+éditables, état de la bascule de modèle, tâches de nuit."""
 
 from __future__ import annotations
 
 import asyncio
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -34,6 +35,15 @@ def _appareil(request: Request) -> Appareil:
 class Ecriture(BaseModel):
     contenu: str = Field(max_length=blocs.LIMITE_MAX)
     confidentialite: Literal["normal", "local_uniquement"] | None = None
+    niveau: memoire.Niveau | None = None  # prioritaire sur `confidentialite`
+
+
+class ChangementNiveau(BaseModel):
+    niveau: memoire.Niveau
+
+
+class Remplacement(BaseModel):
+    contenu: str = Field(min_length=1, max_length=memoire.TAILLE_MAX_SOUVENIR * 10)
 
 
 @routeur.get("/souvenirs")
@@ -59,9 +69,65 @@ async def souvenirs(
             c.pool, c.memoire.encodeur, texte, exclure_local=False, reglages=reglages
         )
         liste = [r.souvenir for r in resultats if not origine or r.souvenir.origine == origine]
+        liste = await memoire.marquer_remplaces(c.pool, liste)
         return {"souvenirs": [s.en_dict() for s in liste], "suite": False}
     liste = await memoire.parcourir(c.pool, origine=origine or None, avant=avant, limite=limite)
-    return {"souvenirs": [s.en_dict() for s in liste], "suite": len(liste) == limite}
+    marques = await memoire.marquer_remplaces(c.pool, liste)
+    return {"souvenirs": [s.en_dict() for s in marques], "suite": len(liste) == limite}
+
+
+@routeur.put("/souvenirs/{ident}/niveau")
+async def niveau_souvenir(request: Request, ident: UUID, corps: ChangementNiveau) -> dict[str, Any]:
+    """Change le niveau d'un souvenir vivant (confidentialité synchronisée : « prive » ⇔ local uniquement)."""
+    c, a = _ctx(request), _appareil(request)
+    avant = await memoire.lire(c.pool, str(ident))
+    souvenir = await memoire.changer_niveau(c.pool, str(ident), corps.niveau)
+    if souvenir is None or avant is None:
+        raise HTTPException(404, "Souvenir introuvable ou déjà remplacé")
+    await audit.journaliser(
+        c.pool,
+        acteur=a.acteur,
+        action="memoire.niveau",
+        cible=str(ident),
+        details={"avant": avant.niveau, "apres": souvenir.niveau},
+    )
+    return {"souvenir": souvenir.en_dict()}
+
+
+@routeur.post("/souvenirs/{ident}/remplacer")
+async def remplacer_souvenir(request: Request, ident: UUID, corps: Remplacement) -> dict[str, Any]:
+    """Changement d'avis : un nouveau souvenir remplace l'ancien, gardé dans l'historique (rien n'est effacé)."""
+    c, a = _ctx(request), _appareil(request)
+    contenu = corps.contenu.strip()
+    if not contenu:
+        raise HTTPException(422, "Contenu vide")
+    vecteur = modele = None
+    if c.memoire is not None:
+        vecteur = await c.memoire.encodeur.encoder(contenu)
+        modele = c.memoire.encodeur.nom_modele
+    try:
+        nouveau_id = await memoire.remplacer(
+            c.pool, str(ident), contenu, vecteur=vecteur, modele=modele, raison=f"remplacé par {a.acteur}"
+        )
+    except memoire.SouvenirAbsent as exc:
+        raise HTTPException(404, "Souvenir introuvable") from exc
+    except memoire.DejaRemplace as exc:
+        raise HTTPException(409, str(exc)) from exc
+    ancien, nouveau = await memoire.lire(c.pool, str(ident)), await memoire.lire(c.pool, nouveau_id)
+    assert ancien is not None and nouveau is not None
+    await audit.journaliser(
+        c.pool, acteur=a.acteur, action="memoire.remplacer", cible=str(ident), details={"nouveau": nouveau_id}
+    )
+    return {"ancien": ancien.en_dict(), "nouveau": nouveau.en_dict()}
+
+
+@routeur.get("/souvenirs/{ident}/versions")
+async def versions_souvenir(request: Request, ident: UUID) -> dict[str, Any]:
+    """Historique d'un fait, de la plus ancienne version à l'actuelle."""
+    liste = await memoire.versions(_ctx(request).pool, str(ident))
+    if not liste:
+        raise HTTPException(404, "Souvenir introuvable")
+    return {"versions": [v.en_dict() for v in liste]}
 
 
 @routeur.get("/origines")
@@ -78,8 +144,10 @@ async def origines(request: Request) -> dict[str, Any]:
 @routeur.get("/nouveautes")
 async def nouveautes(request: Request, depuis: datetime) -> dict[str, Any]:
     """Ce que JARVIS a appris depuis `depuis` (notification « JARVIS a appris »)."""
-    recents = await memoire.parcourir(_ctx(request).pool, depuis=depuis, limite=20)
-    return {"nombre": len(recents), "souvenirs": [s.en_dict() for s in recents[:5]]}
+    c = _ctx(request)
+    recents = await memoire.parcourir(c.pool, depuis=depuis, limite=20)
+    premiers = await memoire.marquer_remplaces(c.pool, recents[:5])
+    return {"nombre": len(recents), "souvenirs": [s.en_dict() for s in premiers]}
 
 
 @routeur.get("/etat")
@@ -109,6 +177,7 @@ async def etat(request: Request) -> dict[str, Any]:
     modele = c.memoire.encodeur.nom_modele if c.memoire else None
     return {
         "souvenirs": compte,
+        "niveaux": memoire.niveaux_de(compte),
         "modele_actif": bascule.actif if bascule else modele,
         "bascule": {
             "cible": bascule.cible,
@@ -132,11 +201,15 @@ async def lister_blocs(request: Request) -> dict[str, Any]:
 async def ecrire_bloc(request: Request, label: str, corps: Ecriture) -> dict[str, Any]:
     c, a = _ctx(request), _appareil(request)
     try:
-        bloc = await blocs.ecrire(c.pool, label, corps.contenu, a.acteur, corps.confidentialite)
+        bloc = await blocs.ecrire(c.pool, label, corps.contenu, a.acteur, corps.confidentialite, niveau=corps.niveau)
     except blocs.ErreurBloc as exc:
         raise HTTPException(422, str(exc)) from exc
     await audit.journaliser(
-        c.pool, acteur=a.acteur, action="memoire.bloc_modifie", cible=label, details={"version": bloc.version}
+        c.pool,
+        acteur=a.acteur,
+        action="memoire.bloc_modifie",
+        cible=label,
+        details={"version": bloc.version, "niveau": bloc.niveau},
     )
     return bloc.en_dict()
 
