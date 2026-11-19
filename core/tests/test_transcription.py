@@ -502,8 +502,9 @@ async def test_api_proprietaire_refuse_a_la_voix(pool: Base, tmp_path: Path) -> 
     ident = ajout["empreinte"]["id"]
     assert (await c.delete(f"/v1/voix/proprietaire/empreintes/{ident}")).json()["empreintes"] == []
     assert (await c.delete(f"/v1/voix/proprietaire/empreintes/{ident}")).status_code == 404
-    lignes = await pool.fetch("SELECT action FROM audit WHERE action LIKE 'voix.%' ORDER BY id")
-    assert [r["action"] for r in lignes] == [
+    # Le journal d'audit n'est jamais vidé entre les tests (PostgreSQL) : les 4 dernières entrées de la voix
+    lignes = await pool.fetch("SELECT action FROM audit WHERE action LIKE 'voix.%' ORDER BY id DESC LIMIT 4")
+    assert [r["action"] for r in reversed(lignes)] == [
         "voix.proprietaire.regle",
         "voix.action_refusee",
         "voix.empreinte.ajoutee",

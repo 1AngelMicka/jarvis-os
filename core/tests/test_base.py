@@ -55,6 +55,7 @@ async def test_schema_memoires_compatible(pool: BasePostgres) -> None:
         "access_count": "int4",
         "archived": "bool",
         "derived_from": "_uuid",
+        "niveau": "text",  # public / semi-privé / privé (point 14 · C14)
     }
     dimension = await pool.fetchval(
         "SELECT atttypmod FROM pg_attribute WHERE attrelid = 'memoires'::regclass AND attname = 'embedding'"

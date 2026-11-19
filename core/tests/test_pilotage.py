@@ -137,6 +137,8 @@ async def creer_conversation(pool: Base, titre: str = "À ranger") -> str:
 @pytest.mark.base
 async def test_bloc_valide_retire_et_classe(systeme: dict[str, Any], pool: Base) -> None:
     client, script = systeme["client"], systeme["script"]
+    # Le journal d'audit n'est jamais vidé entre les tests (PostgreSQL) : on compte à partir d'ici
+    avant = await pool.fetchval("SELECT count(*) FROM audit WHERE action = 'pilotage.actions'")
     conv = await creer_conversation(pool, "Voyage au Japon")
     script.texte = (
         "Je vous montre vos missions et je vous propose une recherche.\n<actions>["
@@ -170,7 +172,7 @@ async def test_bloc_valide_retire_et_classe(systeme: dict[str, Any], pool: Base)
     assert stocke is not None and "<actions>" not in stocke["contenu"]
     meta = stocke["meta"] if isinstance(stocke["meta"], dict) else json.loads(stocke["meta"])
     assert len(meta["actions"]) == 4
-    assert await pool.fetchval("SELECT count(*) FROM audit WHERE action = 'pilotage.actions'") == 1
+    assert await pool.fetchval("SELECT count(*) FROM audit WHERE action = 'pilotage.actions'") == avant + 1
     # Les consignes expliquent le bloc au modèle
     assert "<actions>" in script.recus[0].contenu
 
