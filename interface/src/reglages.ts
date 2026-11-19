@@ -32,7 +32,7 @@ export const CATEGORIES: readonly Categorie[] = [
   { id: "pc", nom: "PC & mode jeu", description: "Ressources, IA locales, mode jeu, contrôle de Windows" },
   { id: "memoire", nom: "Mémoire & profil", description: "Blocs toujours donnés à JARVIS, tâches de nuit, profil" },
   { id: "securite", nom: "Sécurité", description: "Arrêt d'urgence, clés d'accès, données, audit" },
-  { id: "appareils", nom: "Appareils", description: "Appareils autorisés, téléphone, version" },
+  { id: "appareils", nom: "Appareils", description: "Appareils autorisés, téléphone, version et mises à jour" },
 ];
 
 export const SECTIONS: readonly Section[] = [
@@ -313,9 +313,10 @@ export const SECTIONS: readonly Section[] = [
   {
     id: "version",
     categorie: "appareils",
-    titre: "Version",
-    description: "Version du Core et de l'interface",
-    motsCles: ["mise a jour", "numero", "a propos"],
+    titre: "Version et mises à jour",
+    description: "Version du Core, nouvelle version disponible, vérification quotidienne",
+    motsCles: ["mise a jour", "mises a jour", "mettre a jour", "nouvelle version", "version", "numero", "a propos", "github", "notes de version"],
+    alias: ["mises-a-jour", "mise-a-jour"],
   },
 ];
 

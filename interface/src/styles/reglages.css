@@ -98,3 +98,16 @@ html[data-animations="reduites"] .noyau-c3, html[data-animations="reduites"] .no
 html[data-animations="reduites"] .noyau-coeur, html[data-animations="reduites"] .noyau-halo,
 html[data-animations="reduites"] .panneau, html[data-animations="reduites"] .msg,
 html[data-animations="reduites"] .reflexion::after, html[data-animations="reduites"] .point-etat[data-direct] { animation: none; }
+
+/* Version et mises à jour : indicateur « nouvelle version », notes repliables en texte brut */
+.maj { display: flex; flex-direction: column; align-items: flex-start; gap: var(--e-3); min-width: 0; align-self: stretch; }
+.maj-etat { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2); font-size: var(--t-petit); color: var(--texte); }
+.maj-notes { align-self: stretch; min-width: 0; }
+.maj-notes summary { cursor: pointer; font-size: var(--t-mini); color: var(--texte-2); }
+.maj-notes[open] summary { margin-bottom: var(--e-2); }
+.maj-notes-texte {
+  max-height: 320px; margin: 0; padding: var(--e-3); overflow: auto;
+  border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-1); background: rgb(var(--c-vide) / .6);
+  color: var(--texte-2); font: var(--t-mini)/1.45 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.maj-lien { font-size: var(--t-mini); color: var(--cyan); }

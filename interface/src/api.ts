@@ -38,6 +38,7 @@ import type {
   Atelier,
   AttenteOutil,
   EvenementAtelier,
+  EtatMisesAJour,
   EtatVeille,
   ModeleAtelier,
   ProjetAmelioration,
@@ -361,6 +362,8 @@ export const modeleAtelier = (id: string, modele: string | null) =>
 export const lireVeille = (apres = 0) => appeler<EtatVeille>(`/v1/veille-claude?apres=${String(apres)}`);
 export const reglerVeille = (r: Partial<ReglagesVeille>) =>
   appeler<{ reglages: ReglagesVeille }>("/v1/veille-claude", { methode: "PUT", corps: r });
+export const lireMisesAJour = () => appeler<EtatMisesAJour>("/v1/mises-a-jour");
+export const reglerMisesAJour = (verifier: boolean) => appeler<EtatMisesAJour>("/v1/mises-a-jour", { methode: "PUT", corps: { verifier } });
 export const evenementsAtelier = (id: string, apres = 0) =>
   appeler<{ evenements: EvenementAtelier[]; attentes: AttenteOutil[] }>(`/v1/ateliers/${id}/evenements?apres=${String(apres)}`);
 export const consigneAtelier = (id: string, consigne: string, reprendre = false) =>
