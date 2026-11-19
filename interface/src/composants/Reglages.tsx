@@ -30,6 +30,7 @@ import { FluxDonnees } from "./FluxDonnees";
 import { ReglagesMatin } from "./Matin";
 import { SectionMemoire } from "./Memoire";
 import { AutorisationsPermanentes, CommandesRapides, ReglagePilotage, ReglesProtection } from "./Pilotage";
+import { ReglageSynthese } from "./ReglageSynthese";
 import { PanneauSecurite } from "./Securite";
 import { SelecteurTheme } from "./SelecteurTheme";
 import { VeilleClaude } from "./VeilleClaude";
@@ -397,6 +398,7 @@ export function VueReglages(p: Props) {
         return (
           <>
             <ChoixVoix lecteur={p.lecteur} />
+            <ReglageSynthese lecteur={p.lecteur} surNotifier={p.surNotifier} />
             <VoixInstallees />
             <p className="sec-texte">Ctrl+M ou « /silence » coupe la voix tout de suite.</p>
           </>

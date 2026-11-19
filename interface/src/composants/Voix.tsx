@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import { decrireImage, transcrireAudio } from "../api";
-import { capturerEcran, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal } from "../voix";
+import { chargerReglagesSynthese, commandeArret, GardeCoupure, reglagesSynthese } from "../synthese";
+import { capturerEcran, couperVoix, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal } from "../voix";
 
 interface Props {
   lecteur: LecteurVocal;
@@ -23,6 +24,7 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
   const [ecran, setEcran] = useState(false);
   const enregistreur = useRef<Enregistreur | null>(null);
   const ecoute = useRef<EcouteMainsLibres | null>(null);
+  const garde = useRef<GardeCoupure | null>(null); // coupure quand on parle par-dessus (mains libres)
   const arme = useRef(0); // « Jarvis » seul : la phrase suivante (8 s) est la commande
   const etat = useRef({ enCours, bloquee });
   etat.current = { enCours, bloquee };
@@ -31,11 +33,13 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
 
   useEffect(
     () => () => {
+      garde.current?.arreter();
       ecoute.current?.arreter();
       lecteur.arreter();
     },
     [lecteur],
   );
+  useEffect(chargerReglagesSynthese, []); // voix choisie (navigateur, Piper, ElevenLabs)
 
   const basculerParole = (actif: boolean) => {
     lecteur.actif = actif;
@@ -63,6 +67,14 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
     transcrireAudio(audio)
       .then((t) => {
         if (etat.current.bloquee) return;
+        // « stop » pendant (ou juste après) la lecture : arrête la phrase ; « silence » coupe la voix. Jamais envoyé.
+        const arret = commandeArret(t.eveil ? t.commande || t.texte : t.texte);
+        if (arret && (lecteur.parle || lecteur.interrompu || performance.now() < arme.current)) {
+          arme.current = 0;
+          if (arret === "silence") couperVoix(lecteur);
+          else lecteur.interrompre();
+          return;
+        }
         if (t.eveil) {
           if (t.commande) {
             surEnvoyer(t.commande);
@@ -82,15 +94,30 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
 
   const basculerMainsLibres = () => {
     if (mainsLibres) {
+      garde.current?.arreter();
+      garde.current = null;
       ecoute.current?.arreter();
       ecoute.current = null;
       setMainsLibres(false);
       return;
     }
-    const e = new EcouteMainsLibres(traiterPhrase, () => lecteur.parle || etat.current.enCours);
+    // Pendant la lecture, l'écoute est en pause ; après une coupure, elle reprend tout de suite (même si la réponse
+    // continue de s'afficher) pour entendre ce que l'utilisateur dit par-dessus.
+    const e = new EcouteMainsLibres(traiterPhrase, () => lecteur.parle || (etat.current.enCours && !lecteur.interrompu));
     e.demarrer()
       .then(() => {
         ecoute.current = e;
+        const flux = e.fluxMicro;
+        if (flux && reglagesSynthese().coupure) {
+          const g = new GardeCoupure(flux, lecteur, () => {
+            lecteur.interrompre();
+            arme.current = performance.now() + 8000; // la phrase dite par-dessus est la commande, sans « Jarvis »
+          });
+          garde.current = g;
+          g.demarrer().catch(() => {
+            garde.current = null; // pas d'analyse possible : la coupure reste au clavier (Ctrl+M)
+          });
+        }
         setMainsLibres(true);
         basculerParole(true);
         surNotifier("Mains libres : dites « Jarvis, … ».");
