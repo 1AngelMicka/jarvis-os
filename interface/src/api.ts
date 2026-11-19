@@ -46,6 +46,7 @@ import type {
   Niveau,
   EtatMemoire,
   Mission,
+  ReglagesMissions,
   Recette,
   ServeurMcp,
   Etat,
@@ -258,6 +259,14 @@ export const listerMissions = () =>
 /** `scientifique` : bases scientifiques en plus du web ; `domaine_id` : domaine de connaissance (revue = révision). */
 export const lancerMission = (type: Mission["type"], objectif: string, options: { scientifique?: boolean; domaine_id?: string } = {}) =>
   envoyer<{ id: string }>("/v1/missions", { type, objectif, ...options });
+/** Mission projet en phase « à valider » : enregistre la spec et le plan (Markdown) ; renvoie la mission complète. */
+export const modifierPlanMission = (id: string, spec: string, plan: string) =>
+  appeler<Mission>(`/v1/missions/${encodeURIComponent(id)}/plan`, { methode: "PUT", corps: { spec, plan } });
+/** Lance l'exécution du graphe d'une mission projet validée (chaque étape passe par la file d'approbations). */
+export const executerMission = (id: string) => envoyer<{ id: string }>(`/v1/missions/${encodeURIComponent(id)}/executer`);
+export const lireReglagesMissions = () => unSeul("missions-reglages", () => appeler<ReglagesMissions>("/v1/missions/reglages"));
+/** Étapes d'une mission projet exécutées en parallèle (1 à 8). */
+export const reglerMissions = (parallele: number) => appeler<ReglagesMissions>("/v1/missions/reglages", { methode: "PUT", corps: { parallele } });
 export const listerOutilsMcp = () => unSeul("mcp", () => appeler<{ serveurs: ServeurMcp[] }>("/v1/mcp/outils"));
 export const activerOutilMcp = (serveur: string, outil: string, actif: boolean) =>
   envoyer<{ actif: boolean }>(`/v1/mcp/outils/${encodeURIComponent(serveur)}/${encodeURIComponent(outil)}/actif`, { actif });

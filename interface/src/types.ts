@@ -320,9 +320,64 @@ export interface Recette {
   derniere: ExecutionRecette | null;
 }
 
+/** Missions « projet » : brainstorm → spec → plan à valider → exécution en graphe de dépendances. */
+export type PhasePlan = "preparation" | "a_valider" | "execution" | "terminee" | "echec";
+export type StatutEtape = "a_faire" | "attente_approbation" | "en_cours" | "faite" | "refusee" | "echec" | "sautee";
+
+export interface EtapeGraphe {
+  /** « E1 » */
+  id: string;
+  titre: string;
+  /** "" si aucun */
+  detail: string;
+  /** Dépendances */
+  apres: string[];
+  /** Profondeur dans le graphe (0 = sans dépendance) : une colonne par niveau */
+  niveau: number;
+  statut: StatutEtape;
+  /** Nom lisible du moteur choisi */
+  moteur: string | null;
+  /** Raison du choix de modèle (aussi dans l'audit) */
+  raison: string | null;
+  /** Demande d'approbation en cours ou passée */
+  demande_id: string | null;
+  /** Extrait (≤ 600 caractères) du résultat de l'étape */
+  resultat: string | null;
+  erreur: string | null;
+  /** ISO 8601 */
+  debut: string | null;
+  fin: string | null;
+}
+
+export interface PlanMission {
+  phase: PhasePlan;
+  brainstorm: string;
+  /** Markdown */
+  spec: string;
+  /** Markdown à cases */
+  plan: string;
+  /** Graphe lu depuis `plan` (+ état d'exécution) */
+  etapes: EtapeGraphe[];
+  /** Erreurs de lecture du plan (vide = exécutable) */
+  erreurs: string[];
+  /** Cases cochées */
+  faites: number;
+  /** Cases */
+  total: number;
+  /** Borne utilisée / réglée */
+  parallele: number;
+  /** Exécution repliée sur la conversation simple */
+  repli: boolean;
+}
+
+export interface ReglagesMissions {
+  /** Étapes d'une mission projet exécutées en même temps (1 à 8) */
+  parallele: number;
+}
+
 export interface Mission {
   id: string;
-  type: "recherche" | "brainstorm" | "revue";
+  type: "recherche" | "brainstorm" | "revue" | "projet";
   objectif: string;
   parametres?: { scientifique?: boolean; domaine_id?: string };
   statut: "en_file" | "en_cours" | "terminee" | "echec" | "annulee";
@@ -342,6 +397,8 @@ export interface Mission {
   erreur: string | null;
   cree_le: string;
   termine_le: string | null;
+  /** Mission « projet » : spec, plan et graphe ; null pour les autres types */
+  plan: PlanMission | null;
 }
 
 export interface OutilMcp {

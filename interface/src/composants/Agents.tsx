@@ -1,18 +1,76 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { activerOutilMcp, demanderAction, lancerMission, lancerRecette, listerMissions, listerOutilsMcp, listerRecettes } from "../api";
+import { activerOutilMcp, demanderAction, lancerMission, lancerRecette, lireReglagesMissions, listerMissions, listerOutilsMcp, listerRecettes, reglerMissions } from "../api";
 import { listerDomaines, reviserDomaine } from "../connaissances";
 import type { ResumeDomaine } from "../connaissances";
 import { TexteRiche } from "../texte";
 import type { Mission, OutilMcp, Recette, ReponseAction, ServeurMcp } from "../types";
 import { SectionCreations } from "./Creations";
+import { MissionGraphe, PHASES } from "./MissionGraphe";
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const TYPES: { id: Mission["type"]; nom: string; aide: string }[] = [
   { id: "recherche", nom: "Recherche", aide: "Cherche sur le web (SearXNG) et dans les bases scientifiques, puis un rapport qui cite ses sources." },
   { id: "brainstorm", nom: "Brainstorm", aide: "Dix idées, les trois meilleures et une première étape." },
   { id: "revue", nom: "Revue", aide: "Points forts, risques, questions ouvertes, recommandations ; sur un domaine : sa révision." },
+  {
+    id: "projet",
+    nom: "Projet",
+    aide: "Brainstorm → spec → plan à cases que vous relisez et validez → exécution en graphe (étapes indépendantes en parallèle, chacune sous votre accord).",
+  },
 ];
+const PARALLELE = [1, 2, 3, 4, 5, 6, 7, 8];
+
+/** Réglage « Étapes en parallèle » des missions projet (absent si le Core ne le connaît pas). */
+function ReglageParallele() {
+  const [parallele, setParallele] = useState<number | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  useEffect(() => {
+    lireReglagesMissions()
+      .then((r) => {
+        setParallele(r.parallele);
+      })
+      .catch(() => {
+        /* Core sans missions projet : le réglage n'est pas proposé */
+      });
+  }, []);
+  if (parallele === null) return null;
+  return (
+    <div className="mission-reglage">
+      <label htmlFor="missions-parallele">Étapes en parallèle (missions projet)</label>
+      <select
+        id="missions-parallele"
+        className="select"
+        value={parallele}
+        onChange={(e) => {
+          const avant = parallele;
+          const n = Number(e.target.value);
+          setParallele(n);
+          setErreur(null);
+          reglerMissions(n)
+            .then((r) => {
+              setParallele(r.parallele);
+            })
+            .catch((err: unknown) => {
+              setParallele(avant);
+              setErreur(err instanceof Error ? err.message : "Réglage impossible.");
+            });
+        }}
+      >
+        {PARALLELE.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+      {erreur && (
+        <p className="securite-erreur" role="alert">
+          {erreur}
+        </p>
+      )}
+    </div>
+  );
+}
 const STATUTS: Record<Mission["statut"], { texte: string; ton?: string }> = {
   en_file: { texte: "En file" },
   en_cours: { texte: "En cours", ton: "attention" },
@@ -27,7 +85,15 @@ const EXECUTION: Record<string, { texte: string; ton?: string }> = {
   en_cours: { texte: "En cours", ton: "attention" },
 };
 
-function Missions({ surChangement, initiale }: { surChangement: (m?: string) => void; initiale?: string | undefined }) {
+function Missions({
+  surChangement,
+  initiale,
+  surOuvrirDemandes,
+}: {
+  surChangement: (m?: string) => void;
+  initiale?: string | undefined;
+  surOuvrirDemandes?: (() => void) | undefined;
+}) {
   const [liste, setListe] = useState<Mission[] | null>(null);
   const [web, setWeb] = useState(false);
   const [bases, setBases] = useState<string[]>([]);
@@ -69,7 +135,10 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
   }, []);
   const revision = type === "revue" && domaine !== "";
   const nomDomaine = (id?: string) => domaines.find((d) => d.id === id)?.nom;
-  const actives = liste?.some((m) => m.statut === "en_cours" || m.statut === "en_file") ?? false;
+  // Rafraîchissement tant qu'une mission tourne ; une mission projet « à valider » attend l'utilisateur (pas de relecture)
+  const actives =
+    liste?.some((m) => (m.plan ? m.plan.phase === "preparation" || m.plan.phase === "execution" : m.statut === "en_cours" || m.statut === "en_file")) ?? false;
+  const avecDomaine = type !== "brainstorm" && type !== "projet";
   useEffect(() => {
     if (!actives) return;
     const minuterie = window.setInterval(charger, 2500);
@@ -92,7 +161,7 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
         onSubmit={(e) => {
           e.preventDefault();
           setErreur(null);
-          (revision ? reviserDomaine(domaine) : lancerMission(type, objectif.trim(), { scientifique, ...(domaine && type !== "brainstorm" ? { domaine_id: domaine } : {}) }))
+          (revision ? reviserDomaine(domaine) : lancerMission(type, objectif.trim(), { scientifique, ...(domaine && avecDomaine ? { domaine_id: domaine } : {}) }))
             .then(() => {
               setObjectif("");
               surChangement("Mission lancée.");
@@ -120,7 +189,8 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
             </button>
           ))}
         </div>
-        {type !== "brainstorm" && domaines.length > 0 && (
+        <p className="sec-texte">{TYPES.find((t) => t.id === type)?.aide}</p>
+        {avecDomaine && domaines.length > 0 && (
           <label className="mission-option">
             <span>Domaine</span>
             <select
@@ -159,7 +229,13 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
           rows={2}
           hidden={revision}
           value={objectif}
-          placeholder={type === "recherche" ? "Que faut-il chercher ? (ex. réussir des tomates anciennes)" : "Sur quoi porter la mission ?"}
+          placeholder={
+            type === "recherche"
+              ? "Que faut-il chercher ? (ex. réussir des tomates anciennes)"
+              : type === "projet"
+                ? "Quel projet mener ? (ex. préparer le dossier de demande de subvention)"
+                : "Sur quoi porter la mission ?"
+          }
           onChange={(e) => {
             setObjectif(e.target.value);
           }}
@@ -168,6 +244,7 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
           {revision ? "Réviser le domaine" : "Lancer"}
         </button>
       </form>
+      <ReglageParallele />
       {erreur && (
         <p className="securite-erreur" role="alert">
           {erreur}
@@ -181,8 +258,10 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
         <ul className="cartes-co">
           {liste.map((m) => {
             const s = STATUTS[m.statut];
+            const plan = m.type === "projet" ? m.plan : null;
+            const phase = plan && m.statut !== "annulee" ? PHASES[plan.phase] : null;
             return (
-              <li key={m.id} id={`mission-${m.id}`} className="carte-co" data-cible={initiale === m.id || undefined}>
+              <li key={m.id} id={`mission-${m.id}`} className={plan ? "carte-co carte-co--projet" : "carte-co"} data-cible={initiale === m.id || undefined}>
                 <div className="carte-co-tete">
                   <h4 className="carte-co-nom">{m.objectif}</h4>
                   <span className="badge-co">{TYPES.find((t) => t.id === m.type)?.nom}</span>
@@ -192,11 +271,17 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
                       {m.resultat.score}/10
                     </span>
                   )}
-                  <span className="badge-co" data-ton={s.ton}>
-                    {s.texte}
-                  </span>
+                  {phase ? (
+                    <span className="badge-co" data-ton={phase.ton}>
+                      {phase.texte}
+                    </span>
+                  ) : (
+                    <span className="badge-co" data-ton={s.ton}>
+                      {s.texte}
+                    </span>
+                  )}
                 </div>
-                {(m.statut === "en_cours" || m.statut === "en_file") && (
+                {(m.statut === "en_cours" || m.statut === "en_file") && (!plan || plan.phase === "preparation") && (
                   <div className="progression" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={m.progression} aria-label="Progression">
                     <span style={{ width: `${String(m.progression)}%` }} />
                   </div>
@@ -207,6 +292,9 @@ function Missions({ surChangement, initiale }: { surChangement: (m?: string) => 
                   {m.resultat && ` · ${String(m.resultat.sources.length)} source${m.resultat.sources.length > 1 ? "s" : ""}`}
                 </p>
                 {m.erreur && <p className="carte-co-message">{m.erreur}</p>}
+                {plan && m.statut !== "annulee" && (
+                  <MissionGraphe mission={m} plan={plan} surChangement={surChangement} surRecharger={charger} surOuvrirDemandes={surOuvrirDemandes} />
+                )}
                 {m.resultat && (
                   <div className="carte-co-actions">
                     <button
@@ -438,15 +526,17 @@ interface Props {
   surChangement: (message?: string) => void;
   surOuvrirConversation: (id: string) => void;
   surAction: (r: ReponseAction) => void;
+  /** Ouvre la file d'approbations (étape de mission projet en attente de votre accord) */
+  surOuvrirDemandes?: (() => void) | undefined;
   /** Élément à ouvrir à l'arrivée (clic dans le panneau Activité) */
   cible?: { type: "mission" | "creation"; id: string } | null | undefined;
 }
 
 /** Agents : missions de fond, recettes planifiées, outils MCP sous approbation. */
-export function VueAgents({ surChangement, surOuvrirConversation, surAction, cible }: Props) {
+export function VueAgents({ surChangement, surOuvrirConversation, surAction, surOuvrirDemandes, cible }: Props) {
   return (
     <div className="connecteurs">
-      <Missions surChangement={surChangement} initiale={cible?.type === "mission" ? cible.id : undefined} />
+      <Missions surChangement={surChangement} initiale={cible?.type === "mission" ? cible.id : undefined} surOuvrirDemandes={surOuvrirDemandes} />
       <Recettes surChangement={surChangement} surOuvrir={surOuvrirConversation} />
       <SectionCreations surChangement={surChangement} initiale={cible?.type === "creation" ? cible.id : undefined} />
       <OutilsMcp surAction={surAction} />
