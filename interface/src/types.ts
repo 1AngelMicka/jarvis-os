@@ -382,6 +382,69 @@ export interface Atelier {
   conflits: { fichier: string; ateliers: { id: string; nom: string }[] }[];
 }
 
+// --- Amélioration continue (lot O) ---
+export type StatutAmelioration = "proposee" | "en_atelier" | "en_service" | "retiree" | "rejetee";
+
+/** Un essai des tests du projet (dans l'atelier, ou sur le projet après un retour arrière). */
+export interface EssaiTests {
+  reussi: boolean;
+  code: number | null;
+  sortie: string;
+  duree?: number;
+  /** Arbre git testé (vide : le contenu a changé pendant les tests) */
+  empreinte?: string;
+  /** Les tests ont modifié le dossier de l'atelier : l'essai ne vaut pas pour le contenu vu */
+  contenu_change?: boolean;
+  le: string;
+}
+
+export interface Amelioration {
+  id: string;
+  titre: string;
+  raison: string;
+  description: string;
+  origine: "jarvis" | "utilisateur";
+  projet: string;
+  statut: StatutAmelioration;
+  atelier_id: string | null;
+  tests: { atelier?: EssaiTests; retour?: EssaiTests };
+  tests_en_cours: boolean;
+  commit_avant: string | null;
+  commit_service: string | null;
+  commit_retour: string | null;
+  cree_le: string;
+  en_service_le: string | null;
+  retiree_le: string | null;
+}
+
+export interface ProjetAmelioration {
+  id: string;
+  nom: string;
+  /** Commande des tests (configuration locale) ; vide : aucun test configuré */
+  tests: string;
+}
+
+export interface FichierApercu {
+  chemin: string;
+  etat: "ajoute" | "modifie" | "supprime";
+  ajouts: number | null;
+  retraits: number | null;
+}
+
+export interface ApercuAmelioration {
+  empreinte: string;
+  fichiers: FichierApercu[];
+  diff: string;
+  diff_tronque: boolean;
+  base: string;
+  branche: string;
+  atelier_statut: Atelier["statut"];
+  atelier_actif: boolean;
+  commande_tests: string;
+  tests: Partial<EssaiTests>;
+  tests_a_jour: boolean;
+}
+
 export interface ModeleAtelier {
   id: string;
   nom: string;
@@ -574,7 +637,7 @@ export interface CarteFlux {
 
 export type NiveauAction = "vert" | "jaune" | "rouge";
 export type TypeImmediat = "naviguer" | "ouvrir" | "rechercher_memoire" | "regler";
-export type TypeProposition = "proposer_mission" | "proposer_atelier" | "demander_action" | "ajouter_regle";
+export type TypeProposition = "proposer_mission" | "proposer_atelier" | "proposer_amelioration" | "demander_action" | "ajouter_regle";
 
 /** Action validée par le Core : `immediate` (appliquée seule en mode « oui »), `proposition` (toujours un clic). */
 export interface ActionPilotage {

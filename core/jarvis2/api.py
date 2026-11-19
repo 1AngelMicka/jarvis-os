@@ -40,8 +40,10 @@ from .agents.missions import ServiceMissions
 from .agents.recettes import Planificateur
 from .agents.recherche_web import RechercheWeb
 from .agents.sources_scientifiques import SourcesScientifiques
+from .ameliorations import ServiceAmeliorations
 from .api_accueil import routeur as routeur_accueil
 from .api_agents import routeur as routeur_agents
+from .api_ameliorations import routeur as routeur_ameliorations
 from .api_ateliers import routeur as routeur_ateliers
 from .api_bureau import routeur as routeur_bureau
 from .api_bureau import routeur_public as routeur_fichiers_uniques
@@ -129,6 +131,7 @@ class Contexte:
     sans_ecran: bool = False  # serveur sans écran : capture, clics et contrôle de l'écran refusés (voir ecran.py)
     meteo: ServiceMeteo = field(default_factory=ServiceMeteo)
     matin_locale: dict[str, Any] = field(default_factory=dict)  # [matin] de la configuration locale (privé)
+    ameliorations: ServiceAmeliorations = field(init=False)
     approbations: Approbations = field(init=False)
     _taches_push: set[asyncio.Task[int]] = field(default_factory=set, init=False, repr=False)
     conseil: ServiceConseil = field(init=False)
@@ -140,7 +143,10 @@ class Contexte:
     push: ServicePush = field(init=False)  # notifications Web Push (clés VAPID dans le dossier des données)
 
     def __post_init__(self) -> None:
-        self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp, self.ateliers, self.maison))
+        self.ameliorations = ServiceAmeliorations(self.pool, self.ateliers, self.urgence)
+        self.approbations = Approbations(
+            self.pool, creer_registre(self.urgence, self.mcp, self.ateliers, self.maison, self.ameliorations)
+        )
         self.conseil = ServiceConseil(self.service)
         expurgateur = self.memoire.reglages.expurgateur if self.memoire is not None else None
         ateliers = self.ateliers
@@ -405,6 +411,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
                     await m.fermer()
                 if ctx.mcp is not None:
                     await ctx.mcp.fermer()
+                await ctx.ameliorations.fermer()
                 if ctx.ateliers is not None:
                     await ctx.ateliers.fermer()
                 await ctx.pool.close()
@@ -608,6 +615,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_accueil)
     app.include_router(routeur_agents)
     app.include_router(routeur_ateliers)
+    app.include_router(routeur_ameliorations)
     app.include_router(routeur_medias)
     app.include_router(routeur_creations)
     app.include_router(routeur_memoire)

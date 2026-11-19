@@ -20,6 +20,7 @@ import logging
 import os
 import re
 import secrets
+import shlex
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -85,13 +86,22 @@ class Projet:
     id: str
     nom: str
     chemin: Path
+    # Commande des tests du projet (configuration locale seulement, jamais proposée par le modèle) et sous-dossier
+    # où la lancer : utilisée par l'amélioration continue (aperçu d'un atelier, vérification après un retour arrière)
+    tests: tuple[str, ...] = ()
+    dossier_tests: str = ""
 
     @classmethod
     def depuis_config(cls, bloc: dict[str, Any]) -> Projet:
         ident = str(bloc.get("id", ""))
         if not IDENT.match(ident) or not bloc.get("chemin"):
             raise ValueError(f"ateliers.projets : id (minuscules) et chemin attendus ({ident!r})")
-        return cls(ident, str(bloc.get("nom") or ident), Path(str(bloc["chemin"])))
+        brut = bloc.get("tests") or ()
+        tests = tuple(shlex.split(brut)) if isinstance(brut, str) else tuple(str(x) for x in brut)
+        dossier = str(bloc.get("dossier_tests") or "").strip().strip("/\\")
+        if dossier and (Path(dossier).is_absolute() or ".." in Path(dossier).parts):
+            raise ValueError(f"ateliers.projets : dossier_tests doit rester dans le projet ({ident!r})")
+        return cls(ident, str(bloc.get("nom") or ident), Path(str(bloc["chemin"])), tests, dossier)
 
 
 @dataclass

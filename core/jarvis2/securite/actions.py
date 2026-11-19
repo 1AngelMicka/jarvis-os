@@ -12,6 +12,7 @@ from .urgence import ArretUrgence
 
 if TYPE_CHECKING:
     from ..agents.mcp import GestionnaireMCP
+    from ..ameliorations import ServiceAmeliorations
     from ..ateliers.gestionnaire import GestionnaireAteliers
     from ..maison import GestionnaireMaison
 
@@ -35,6 +36,7 @@ def creer_registre(
     mcp: GestionnaireMCP | None = None,
     ateliers: GestionnaireAteliers | None = None,
     maison: GestionnaireMaison | None = None,
+    ameliorations: ServiceAmeliorations | None = None,
 ) -> Registre:
     registre = Registre()
 
@@ -108,6 +110,8 @@ def creer_registre(
         _ajouter_ateliers(registre, ateliers)
     if maison is not None:
         _ajouter_maison(registre, maison, urgence)
+    if ameliorations is not None and ateliers is not None:
+        _ajouter_ameliorations(registre, ameliorations)
     return registre
 
 
@@ -186,6 +190,47 @@ def _ajouter_ateliers(registre: Registre, ateliers: GestionnaireAteliers) -> Non
                 f"Fusionner l'atelier « {p.get('nom') or p.get('atelier_id')} » dans le projet {p.get('projet', '')}"
             ),
             fusionner,
+        )
+    )
+
+
+def _ajouter_ameliorations(registre: Registre, ameliorations: ServiceAmeliorations) -> None:
+    from ..ameliorations import ErreurAmelioration
+
+    async def mettre_en_service(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return await ameliorations.mettre_en_service(_uuid(p, "amelioration_id"), str(p.get("empreinte", "")))
+        except ErreurAmelioration as exc:
+            raise ErreurAction(str(exc)) from exc
+
+    async def revenir(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return await ameliorations.revenir(_uuid(p, "amelioration_id"))
+        except ErreurAmelioration as exc:
+            raise ErreurAction(str(exc)) from exc
+
+    # Changer le code en service se décide à chaque fois : jamais « toujours autorisé »
+    registre.ajouter(
+        Action(
+            "amelioration.mettre_en_service",
+            "jaune",
+            "Mettre en service une amélioration testée dans son atelier (fusion locale, jamais de push)",
+            lambda p: (
+                f"Mettre en service l'amélioration « {p.get('titre') or p.get('amelioration_id')} »"
+                f" dans le projet {p.get('projet', '')} ({p.get('fichiers', '?')} fichier(s))"
+            ),
+            mettre_en_service,
+            autorisable=False,
+        )
+    )
+    registre.ajouter(
+        Action(
+            "amelioration.revenir",
+            "jaune",
+            "Retirer une amélioration en service : revenir au commit d'avant (git revert, historique gardé)",
+            lambda p: f"Retirer l'amélioration « {p.get('titre') or p.get('amelioration_id')} » (retour arrière)",
+            revenir,
+            autorisable=False,
         )
     )
 
