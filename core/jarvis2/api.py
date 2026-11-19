@@ -401,9 +401,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         return {"resultats": [{"score": r.score, **r.souvenir.en_dict()} for r in resultats]}
 
     @app.get("/v1/conversations")
-    async def conversations(
-        request: Request, limite: int = 50, archivees: bool = False, q: str = ""
-    ) -> dict[str, Any]:
+    async def conversations(request: Request, limite: int = 50, archivees: bool = False, q: str = "") -> dict[str, Any]:
         depot = ctx(request).depot
         limite = max(1, min(limite, 200))
         texte = q.strip()[:200]

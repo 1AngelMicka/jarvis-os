@@ -59,9 +59,7 @@ def _pour(instance: MoteurInstrumente, texte: str) -> str:
     return masquer(texte).texte if instance.interne.externe else texte
 
 
-async def titrer(
-    instance: MoteurInstrumente, question: str, reponse: str, modele: str | None = None
-) -> str | None:
+async def titrer(instance: MoteurInstrumente, question: str, reponse: str, modele: str | None = None) -> str | None:
     """`modele` : celui qui vient de répondre (déjà chargé ; un autre modèle local pourrait mettre une minute)."""
     demande = _pour(instance, DEMANDE_TITRE.format(question=question[:1500], reponse=reponse[:1500]))
     try:
