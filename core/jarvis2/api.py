@@ -109,6 +109,7 @@ class Contexte:
     transcripteur: Transcripteur | None = None
     url_ollama: str = "http://127.0.0.1:11434"
     modele_vision: str | None = None
+    sans_ecran: bool = False  # serveur sans écran : capture, clics et contrôle de l'écran refusés (voir ecran.py)
     meteo: ServiceMeteo = field(default_factory=ServiceMeteo)
     matin_locale: dict[str, Any] = field(default_factory=dict)  # [matin] de la configuration locale (privé)
     approbations: Approbations = field(init=False)
@@ -208,6 +209,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
         transcripteur=TranscripteurWhisper(p.dossier_modeles, p.modele_voix),
         url_ollama=p.ollama_url,
         modele_vision=locale.connecteur("ollama").get("modele_vision"),
+        sans_ecran=p.sans_ecran,
         matin_locale=locale.matin,
     )
 
@@ -299,7 +301,10 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             if bascule is not None:
                 taches.append(bascule)
         journal.info("JARVIS 2 prêt — moteurs : %s", ", ".join(ctx.moteurs))
-        if parametres.ouvrir_navigateur:
+        if parametres.sans_ecran:
+            ctx.sans_ecran = True
+            journal.info("Mode sans écran : capture, clics et contrôle de l'écran désactivés")
+        if parametres.ouvrir_navigateur and not ctx.sans_ecran:
             adresse = f"http://localhost:{parametres.port}/"
             journal.info("Ouverture de %s dans le navigateur", adresse)
             asyncio.get_running_loop().run_in_executor(None, webbrowser.open, adresse)
@@ -375,7 +380,14 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             base = True
         except ErreurBaseOuReseau:
             schema, base = None, False
-        return {"ok": base, "version": __version__, "base": base, "schema": schema}
+        # `sans_ecran` : lu par `jarvis2 docteur` (le mode peut venir de l'option de lancement, pas de .env)
+        return {
+            "ok": base,
+            "version": __version__,
+            "base": base,
+            "schema": schema,
+            "sans_ecran": ctx(request).sans_ecran,
+        }
 
     @app.get("/v1/etat")
     async def etat(request: Request) -> dict[str, Any]:
@@ -399,6 +411,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             "demandes": [d.en_dict() for d in demandes],
             "cles_acces": nb_cles,
             "version": __version__,
+            "sans_ecran": c.sans_ecran,
             "moteur_defaut": c.moteur_defaut,
             "moteurs": moteurs,
             "conversations": [conv.en_dict() for conv in conversations],

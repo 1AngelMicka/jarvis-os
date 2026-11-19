@@ -41,7 +41,13 @@ def _appareil(request: Request) -> Appareil:
 async def _verifications(request: Request) -> list[dict[str, Any]]:
     c, p = _ctx(request), _parametres(request)
     resultats = await diagnostic.diagnostiquer(
-        p, c.pool, c.connecteurs, c.tailscale, c.chargement_modele, urgence_active=c.urgence.actif
+        p,
+        c.pool,
+        c.connecteurs,
+        c.tailscale,
+        c.chargement_modele,
+        urgence_active=c.urgence.actif,
+        sans_ecran=c.sans_ecran,
     )
     return [v.en_dict() for v in resultats]
 

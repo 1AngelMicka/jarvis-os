@@ -1,7 +1,8 @@
 """Point d'entrée : `jarvis2 <commande>` (ou `python -m jarvis2 <commande>`).
 
 - `migrer`  : applique les migrations du stockage choisi (SQLite par défaut, PostgreSQL en option)
-- `serveur` : lance le Core sur JARVIS2_HOTE:JARVIS2_PORT (127.0.0.1:8765 par défaut)
+- `serveur` : lance le Core sur JARVIS2_HOTE:JARVIS2_PORT (127.0.0.1:8765 par défaut) ; `--sans-ecran` pour un
+  serveur domestique (capture, clics et contrôle de l'écran refusés, voix par le micro du navigateur)
 """
 
 from __future__ import annotations
@@ -154,15 +155,22 @@ async def _docteur(p: Parametres, en_json: bool, reparer: bool) -> int:
             connecteurs = Connecteurs(base, catalogue, coffre, prefere=p.moteur_defaut)
             with contextlib.suppress(*ErreurBaseOuReseau):  # base pas encore créée : réglages par défaut
                 await connecteurs.charger()
-        verifications = await diagnostic.diagnostiquer(p, base, connecteurs, await lire_tailscale(p.port))
+        # Core en marche : son mode sans écran fait foi (il peut venir de `serveur --sans-ecran`, pas de .env)
+        en_marche, sans_ecran = False, p.sans_ecran
+        try:
+            async with httpx.AsyncClient(timeout=2) as client:
+                rep = await client.get(f"http://127.0.0.1:{p.port}/v1/sante")
+            en_marche = rep.status_code == 200
+            if en_marche:
+                sans_ecran = sans_ecran or bool(rep.json().get("sans_ecran"))
+        except (httpx.HTTPError, ValueError):
+            pass
+        verifications = await diagnostic.diagnostiquer(
+            p, base, connecteurs, await lire_tailscale(p.port), sans_ecran=sans_ecran
+        )
     finally:
         if base is not None:
             await base.close()
-    try:
-        async with httpx.AsyncClient(timeout=2) as client:
-            en_marche = (await client.get(f"http://127.0.0.1:{p.port}/v1/sante")).status_code == 200
-    except httpx.HTTPError:
-        en_marche = False
     verifications.append(
         diagnostic.Verification(
             "core",
@@ -276,6 +284,11 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--base", help="PostgreSQL : base cible (défaut : POSTGRES_DB)")
     srv = sous.add_parser("serveur", help="lancer le Core")
     srv.add_argument("--ouvrir", action="store_true", help="ouvrir l'interface dans le navigateur")
+    srv.add_argument(
+        "--sans-ecran",
+        action="store_true",
+        help="serveur sans écran : capture, clics et contrôle de l'écran refusés ; voix par le micro du navigateur",
+    )
     doc = sous.add_parser("docteur", aliases=["doctor"], help="diagnostic de l'installation")
     doc.add_argument("--json", action="store_true", help="résultat en JSON")
     doc.add_argument("--reparer", action="store_true", help="appliquer les réparations sûres (schéma, modèle)")
@@ -398,7 +411,9 @@ def main(argv: list[str] | None = None) -> int:
             appliquees = asyncio.run(migrer(p))
             if appliquees:
                 journal.info("Stockage SQLite %s : migrations %s", p.chemin_sqlite, ", ".join(appliquees))
-        if args.ouvrir:
+        if args.sans_ecran:
+            p = p.model_copy(update={"sans_ecran": True})
+        if args.ouvrir and not p.sans_ecran:  # sans écran : aucun navigateur à ouvrir sur ce PC
             p = p.model_copy(update={"ouvrir_navigateur": True})
         uvicorn.run(creer_app(p), host=p.hote, port=p.port, log_config=None, access_log=False)
         return 0

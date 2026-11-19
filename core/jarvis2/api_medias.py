@@ -7,11 +7,12 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from . import creations, vision, voix
+from .ecran import garde_ecran
 from .moteurs.base import ErreurMoteur
 from .securite import audit
 from .securite.appareils import Appareil
@@ -118,7 +119,7 @@ class DemandeVision(BaseModel):
     question: str | None = Field(default=None, max_length=2000)
 
 
-@routeur.post("/vision/decrire")
+@routeur.post("/vision/decrire", dependencies=[Depends(garde_ecran)])  # capture d'écran : refusée sans écran
 async def decrire(request: Request, corps: DemandeVision) -> dict[str, Any]:
     """Uniquement sur demande explicite : l'image vient d'une capture déclenchée par l'utilisateur."""
     c, a = _ctx(request), _appareil(request)

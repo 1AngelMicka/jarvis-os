@@ -242,6 +242,30 @@ async def verifier_audit(base: Executant | None) -> Verification | None:
     return Verification("audit", "Journal d'audit", "erreur", f"altération détectée à l'entrée {rompue}")
 
 
+def verifier_ecran(sans_ecran: bool, graphique: bool | None = None) -> Verification:
+    """Mode sans écran (serveur domestique) : dit si le contrôle de l'écran est coupé, ou s'il devrait l'être."""
+    from .ecran import session_graphique
+
+    if sans_ecran:
+        return Verification(
+            "ecran",
+            "Écran",
+            "info",
+            "Mode sans écran : capture, clics et contrôle de l'écran désactivés ; voix par le micro du navigateur",
+        )
+    if graphique is None:
+        graphique = session_graphique()
+    if graphique:
+        return Verification("ecran", "Écran", "ok", "Session graphique disponible : fonctions d'écran actives")
+    return Verification(
+        "ecran",
+        "Écran",
+        "attention",
+        "Aucune session graphique détectée (ni DISPLAY ni WAYLAND_DISPLAY) : les fonctions d'écran échoueraient",
+        aide="jarvis2 serveur --sans-ecran (ou JARVIS2_SANS_ECRAN=true)",
+    )
+
+
 async def diagnostiquer(
     p: Parametres,
     base: Executant | None,
@@ -249,6 +273,7 @@ async def diagnostiquer(
     tailscale: EtatTailscale | None = None,
     chargement_modele: str | None = None,
     urgence_active: bool = False,
+    sans_ecran: bool | None = None,
 ) -> list[Verification]:
     stockage, cerveaux, journal_audit, materiel = await asyncio.gather(
         verifier_stockage(p, base),
@@ -266,6 +291,7 @@ async def diagnostiquer(
         materiel,
         verifier_reseau(p),
         verifier_telephone(tailscale, p.port),
+        verifier_ecran(p.sans_ecran if sans_ecran is None else sans_ecran),
     ]
     if journal_audit is not None:
         resultats.append(journal_audit)
