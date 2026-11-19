@@ -585,8 +585,9 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
 /* Téléphone : les vues forment une rangée d'onglets pleine largeur sous la marque, au lieu d'un retour à la ligne au hasard */
 @media (max-width: 560px) {
   .barre { padding-bottom: var(--e-2); row-gap: var(--e-2); }
-  .barre-nav { order: 10; flex-basis: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--e-2); }
-  .barre-nav .btn { padding-inline: var(--e-1); font-size: var(--t-mini); }
+  /* Plus de vues que de place : la rangée défile de côté (chaque nom reste entier), elle ne déborde jamais de l'écran */
+  .barre-nav { order: 10; flex-basis: 100%; min-width: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(max-content, 1fr); gap: var(--e-2); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .barre-nav .btn { padding-inline: var(--e-2); font-size: var(--t-mini); }
   .barre-nav .btn { justify-content: center; }
 }
 @media (max-width: 420px) {

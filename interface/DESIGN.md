@@ -17,7 +17,7 @@ Ce qui distingue JARVIS 2 de JARVIS v1 : plus de coins en équerre ni de tracé 
 | **Atelier clair** | Papier chaud, encre, titres en sérif, accent terre cuite (`color-scheme: light`) |
 | **Console épurée** | Noir et blanc, traits fins, tout en mono et en minuscules, accent lime, angles vifs |
 
-Un thème ne redéfinit **que des jetons** sous `html[data-theme="…"]` : couleurs (canaux RVB), polices, rayons et interrupteurs de décor (`--lueur-k`, `--grille-k`, `--aurore-k`, `--arete-k`, `--flou`, `--casse`). Le choix est gardé par appareil (`jarvis2.theme`, stockage local), appliqué avant le premier rendu, et met à jour `theme-color` et `color-scheme`. Sélecteur : barre du haut (≥ 700 px) et onglet Sécurité, section Apparence. L'arrêt d'urgence passe l'accent au rouge dans tous les thèmes (rouge foncé dans le thème clair).
+Un thème ne redéfinit **que des jetons** sous `html[data-theme="…"]` : couleurs (canaux RVB), polices, rayons et interrupteurs de décor (`--lueur-k`, `--grille-k`, `--aurore-k`, `--arete-k`, `--flou`, `--casse`). Le choix est gardé par appareil (`jarvis2.theme`, stockage local), appliqué avant le premier rendu, et met à jour `theme-color` et `color-scheme`. Sélecteur : barre du haut (≥ 700 px), onglet Sécurité et vue Réglages (`#reglages/themes`). L'arrêt d'urgence passe l'accent au rouge dans tous les thèmes (rouge foncé dans le thème clair).
 
 Contrastes mesurés dans les quatre thèmes : texte ≥ 15:1, texte secondaire ≥ 5,5:1 sur le fond et les panneaux, accent ≥ 5:1 sur le fond.
 
@@ -60,6 +60,7 @@ Toutes les colonnes centrales sont en `minmax(0, 1fr)` et les panneaux en `min-w
 2. Texte affiché via React (`TexteRiche`), **jamais** `innerHTML` ni `dangerouslySetInnerHTML` : la règle est imposée par ESLint.
 3. Focus clavier toujours visible ; `Entrée` envoie, `Maj+Entrée` nouvelle ligne, `Échap` arrête ou ferme, `/` donne le focus à la saisie.
 4. Un état vide dit quoi faire ; une erreur dit ce qui s'est passé et comment corriger.
-5. Animations en `transform` / `opacity` ; `html[data-animations="reduites"]` coupe les rotations et la dérive de la grille.
+5. Animations en `transform` / `opacity` ; `html[data-animations="reduites"]` (Réglages › Animations : selon le système, normales ou réduites ; `src/animations.ts`) coupe les rotations, la dérive de la grille et les entrées de panneaux.
 6. Ne jamais livrer une interface sans l'avoir chargée en vrai : console vide, aucun débordement à 375, 1280 et 1920 px.
 7. Le noyau au repos affiche « Prêt ».
+8. Un nouveau réglage se déclare dans `src/reglages.ts` (catégorie, titre, mots-clés) et réutilise le composant qui le gère ailleurs : la vue Réglages, sa recherche et ses adresses directes le trouvent alors toutes seules.

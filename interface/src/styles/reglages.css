@@ -1,0 +1,100 @@
+/* Vue Réglages (phase 13, lot G) : recherche, catégories, sections. Tokens seulement.
+   Téléphone (et panneau étroit) : liste des catégories, puis la page choisie (« Réglages » pour revenir).
+   Panneau large (≥ 720 px) : catégories à gauche, page à droite, chacune avec son défilement. */
+.panneau-corps.panneau-corps--reglages { display: flex; padding: 0; overflow: hidden; container-type: inline-size; }
+
+.reglages {
+  flex: 1; min-width: 0; min-height: 0;
+  display: grid; grid-template: "recherche" auto "contenu" minmax(0, 1fr) / minmax(0, 1fr);
+}
+.reglages-recherche { grid-area: recherche; padding: var(--e-3); border-bottom: var(--l-fin) solid var(--ligne-faible); }
+.reglages-champ {
+  width: 100%; min-height: var(--cible); padding: var(--e-2) var(--e-4);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-saisie); background: rgb(var(--c-creux) / .6);
+  font: var(--t-base)/1.3 var(--f-ui);
+}
+.reglages-champ::placeholder { color: var(--texte-3); }
+.reglages-champ:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgb(var(--c-cyan) / .14); }
+
+/* position relative : les éléments « visuellement cachés » (position absolue) des composants repris restent dans la zone qui
+   défile, au lieu d'agrandir le panneau (qui, lui, ne doit jamais défiler). */
+.reglages-nav, .reglages-corps { position: relative; grid-area: contenu; min-width: 0; min-height: 0; overflow-y: auto; }
+.reglages-nav { padding: var(--e-3); }
+.reglages-corps { padding: var(--e-4) var(--e-3) var(--e-8); }
+.reglages:not([data-page]) .reglages-corps { display: none; }
+.reglages[data-page] .reglages-nav { display: none; }
+
+.reglages-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-1); }
+.reglages-categorie {
+  width: 100%; min-height: var(--cible); display: flex; flex-direction: column; align-items: flex-start; gap: var(--e-1);
+  padding: var(--e-3); border: var(--l-fin) solid transparent; border-radius: var(--r-2);
+  background: transparent; color: var(--texte); text-align: left; transition: var(--transition);
+}
+.reglages-categorie:hover { background: rgb(var(--c-cyan) / .06); }
+.reglages-categorie[aria-current="page"] { border-color: rgb(var(--c-cyan) / .4); background: rgb(var(--c-cyan) / .12); }
+.reglages-categorie-nom { font: 600 var(--t-corps)/1.25 var(--f-ui); color: var(--cyan-vif); }
+.reglages-categorie-desc { font: var(--t-mini)/1.35 var(--f-ui); color: var(--texte-2); }
+
+.reglages-page { display: flex; flex-direction: column; gap: var(--e-6); max-width: var(--colonne-lecture); }
+.reglages-page-tete { display: flex; flex-direction: column; align-items: flex-start; gap: var(--e-2); }
+.reglages-retour { margin-bottom: var(--e-2); }
+.reglages-page-titre { margin: 0; font: var(--g-affiche) var(--t-moyen)/1.2 var(--f-affiche); letter-spacing: calc(.06em * var(--chasse-k)); text-transform: var(--casse); color: var(--cyan-vif); }
+.reglages-page-desc { margin: 0; font-size: var(--t-petit); color: var(--texte-2); }
+.reglages-page-titre:focus, .reglage-titre:focus { outline: none; }
+.reglages-page-titre:focus-visible, .reglage-titre:focus-visible { outline: var(--l-moyen) solid var(--cyan); outline-offset: 4px; }
+
+.reglage { display: flex; flex-direction: column; gap: var(--e-4); padding-top: var(--e-5); border-top: var(--l-fin) solid var(--ligne-faible); scroll-margin-top: var(--e-3); }
+.reglage-tete { display: flex; flex-direction: column; gap: var(--e-1); }
+.reglage-titre { margin: 0; font: 600 var(--t-base)/1.3 var(--f-ui); color: var(--texte-fort); }
+.reglage-desc { margin: 0; font-size: var(--t-mini); color: var(--texte-2); }
+.reglage-corps { display: flex; flex-direction: column; align-items: flex-start; gap: var(--e-3); min-width: 0; }
+.reglage-corps > * { max-width: 100%; }
+/* Les composants repris portent leur propre titre (utile ailleurs) ; ici la section le porte déjà : il reste pour les
+   lecteurs d'écran seulement. */
+.reglage-corps > .famille-co > .sec-titre:first-child,
+.reglage-corps > .securite .sec-titre { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.reglage-corps > .famille-co, .reglage-corps > .matin-reglages, .reglage-corps > .securite { align-self: stretch; }
+.reglage-corps > .connecteurs, .reglage-corps > .couts { align-self: stretch; max-width: none; margin: 0; padding: 0; }
+
+.reglage-lignes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-2); align-self: stretch; }
+.reglage-ligne { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: var(--e-3); row-gap: var(--e-1); font-size: var(--t-petit); }
+.reglage-ligne-nom { color: var(--texte); }
+.reglage-ligne-valeur { grid-column: 2; color: var(--texte-2); font-variant-numeric: tabular-nums; }
+
+.reglage-controles { display: flex; flex-direction: column; gap: var(--e-4); align-self: stretch; }
+.reglage-controle { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-3); }
+.reglage-controle-nom, .reglage-theme .selecteur-theme-libelle { min-width: 6.5em; font-size: var(--t-mini); color: var(--texte-2); }
+
+.reglage-raccourcis { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: var(--e-2) var(--e-5); align-self: stretch; }
+.reglage-raccourci { display: flex; align-items: baseline; gap: var(--e-3); font-size: var(--t-petit); }
+.reglage-raccourci dt { flex: none; min-width: 7em; }
+.reglage-raccourci dd { margin: 0; color: var(--texte-2); }
+
+.reglages-resultats { display: flex; flex-direction: column; gap: var(--e-3); max-width: var(--colonne-lecture); }
+.reglages-liste-resultats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-2); }
+.reglages-resultat {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--e-1) var(--e-3); padding: var(--e-3) var(--e-4);
+  border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-2); background: rgb(var(--c-creux) / .45);
+  color: var(--texte); text-align: left; transition: var(--transition);
+}
+.reglages-resultat:hover { border-color: var(--cyan); background: rgb(var(--c-cyan) / .06); }
+.reglages-resultat-titre { font: 600 var(--t-corps)/1.3 var(--f-ui); color: var(--cyan-vif); }
+.reglages-resultat-chemin { font: var(--t-micro)/1.3 var(--f-ui); color: var(--texte-3); text-align: right; }
+.reglages-resultat-desc { grid-column: 1 / -1; font-size: var(--t-mini); color: var(--texte-2); }
+
+@container (min-width: 720px) {
+  .reglages { grid-template: "recherche recherche" auto "nav corps" minmax(0, 1fr) / var(--colonne-reglages) minmax(0, 1fr); }
+  .reglages .reglages-nav, .reglages[data-page] .reglages-nav { grid-area: nav; display: block; border-right: var(--l-fin) solid var(--ligne-faible); }
+  .reglages .reglages-corps, .reglages:not([data-page]) .reglages-corps { grid-area: corps; display: block; padding-inline: var(--e-6); }
+  .reglages .reglages-retour { display: none; }
+  .reglage-ligne { grid-template-columns: auto minmax(8em, 14em) minmax(0, 1fr); }
+  .reglage-ligne-valeur { grid-column: 3; }
+}
+
+/* Animations réduites (choix de l'appareil ou du système) : plus aucun mouvement décoratif. */
+html[data-animations="reduites"] .fond-grille,
+html[data-animations="reduites"] .noyau-c1, html[data-animations="reduites"] .noyau-c2,
+html[data-animations="reduites"] .noyau-c3, html[data-animations="reduites"] .noyau-c4,
+html[data-animations="reduites"] .noyau-coeur, html[data-animations="reduites"] .noyau-halo,
+html[data-animations="reduites"] .panneau, html[data-animations="reduites"] .msg,
+html[data-animations="reduites"] .reflexion::after, html[data-animations="reduites"] .point-etat[data-direct] { animation: none; }
