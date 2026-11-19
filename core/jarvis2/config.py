@@ -72,6 +72,8 @@ class Parametres(BaseSettings):
     ouverture_reseau: bool = Field(False, alias="JARVIS2_OUVERTURE_RESEAU")
     # Origines web supplémentaires autorisées (ex. l'adresse Tailscale du PC), en liste JSON
     origines_supplementaires: list[str] = Field(default_factory=list, alias="JARVIS2_ORIGINES")
+    # Serveur sans écran (`jarvis2 serveur --sans-ecran`) : capture, clics et contrôle de l'écran refusés par le Core
+    sans_ecran: bool = Field(False, alias="JARVIS2_SANS_ECRAN")
 
     # Moteurs
     moteur_defaut: str = Field("claude_code", alias="JARVIS2_MOTEUR_DEFAUT")
