@@ -55,6 +55,7 @@ from .api_memoire import routeur as routeur_memoire
 from .api_pilotage import routeur as routeur_pilotage
 from .api_profil import routeur as routeur_profil
 from .api_securite import routeur as routeur_securite
+from .api_synthese import routeur as routeur_synthese
 from .api_telechargements import routeur as routeur_telechargements
 from .ateliers.gestionnaire import GestionnaireAteliers, Projet
 from .ateliers.veille import SourceFichiersEtat, VeilleClaudeCode, dossier_par_defaut
@@ -82,6 +83,7 @@ from .securite.actions import creer_registre
 from .securite.coffre import Coffre
 from .securite.permissions import Approbations
 from .securite.urgence import ArretUrgence
+from .synthese import ServiceSynthese
 from .tailscale import EtatTailscale
 from .tailscale import lire_etat as lire_tailscale
 from .telechargements import Telechargeur
@@ -121,6 +123,7 @@ class Contexte:
     ateliers: GestionnaireAteliers | None = None
     veille: VeilleClaudeCode | None = None  # sessions Claude Code de l'utilisateur (lecture seule, inactive par défaut)
     transcripteur: Transcripteur | None = None
+    synthese: ServiceSynthese | None = None  # voix au choix : Piper (local) ou ElevenLabs (clé de l'utilisateur)
     url_ollama: str = "http://127.0.0.1:11434"
     modele_vision: str | None = None
     sans_ecran: bool = False  # serveur sans écran : capture, clics et contrôle de l'écran refusés (voir ecran.py)
@@ -235,6 +238,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
     memoire = SourceMemoire(pool, EncodeurFastEmbed(p.dossier_modeles, p.modele_embeddings), reglages)
     service = ServiceDialogue(depot, moteurs, p.moteur_defaut, memoire, connecteurs, locale.sujets_prives)
     urgence = ArretUrgence()
+    synthese = ServiceSynthese(pool, coffre, p.dossier_modeles, p.piper_commande, est_prive=service.est_prive)
     return Contexte(
         pool,
         depot,
@@ -265,6 +269,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
         ),
         urgence=urgence,
         transcripteur=TranscripteurWhisper(p.dossier_modeles, p.modele_voix),
+        synthese=synthese,
         url_ollama=p.ollama_url,
         modele_vision=locale.connecteur("ollama").get("modele_vision"),
         sans_ecran=p.sans_ecran,
@@ -596,6 +601,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_connaissances)
     app.include_router(routeur_matin)
     app.include_router(routeur_telechargements)
+    app.include_router(routeur_synthese)
     app.include_router(routeur_donnees)
     app.include_router(routeur_pilotage)
 
