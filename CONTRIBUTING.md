@@ -19,7 +19,7 @@ Le projet est **en français** : documentation, commentaires, messages de commit
 
 Prérequis :
 
-- [uv](https://docs.astral.sh/uv/), qui gère Python : le projet demande **Python ≥ 3.12 et < 3.14** et n'utilise jamais le Python du PATH (environnement dans `core/.venv`, jamais versionné) ;
+- [uv](https://docs.astral.sh/uv/), qui gère Python : le projet demande **Python 3.13** (`requires-python = ">=3.13,<3.14"` dans `core/pyproject.toml`, qui fait foi) et n'utilise jamais le Python du PATH (environnement dans `core/.venv`, jamais versionné) ;
 - Node 22 ou plus récent, avec npm, pour l'interface ;
 - Docker, seulement pour lancer aussi les tests sur PostgreSQL ;
 - Rust, seulement pour l'application de bureau (`app/`, construite par GitHub Actions).

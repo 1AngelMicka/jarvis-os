@@ -39,6 +39,7 @@ Sans Docker ni Node. Détails et options [plus bas](#détails-de-linstallation) 
 **Conversation avec l'IA de votre choix**
 - Réponses en flux, historique conservé, titre et résumé daté de chaque conversation.
 - Connecteurs : vos comptes par les programmes officiels (Claude Code, OpenAI Codex, Google Antigravity avec avertissement), vos clés d'API (Anthropic, OpenAI, Gemini, OpenRouter, tout service compatible OpenAI), vos modèles locaux (Ollama, LM Studio, llama.cpp, vLLM).
+- Routeur par type de tâche (code, raisonnement, rapide, privé) par un classifieur local, chaque route notée sur des mesures réelles et rétrogradée si elle échoue ; une route privée ne part jamais vers une IA externe.
 - Routeur automatique et conseil multi-IA : plusieurs connecteurs répondent en parallèle, puis l'un d'eux fait la synthèse.
 - Coûts par connecteur (jour, mois), plafonds, jauges d'abonnement Claude Code ; chaque réponse indique le moteur qui l'a donnée.
 
@@ -50,7 +51,8 @@ Sans Docker ni Node. Détails et options [plus bas](#détails-de-linstallation) 
 - Import depuis JARVIS v1 (lecture seule).
 
 **Agents et ateliers**
-- Recettes planifiées, missions de fond (recherche avec sources web et scientifiques citées, brainstorm, revue) dont le rapport va en mémoire, outils MCP.
+- Recettes planifiées, missions de fond (recherche avec sources web et scientifiques citées, brainstorm, revue) dont le rapport va en mémoire.
+- Outils MCP (sessions persistantes) et skills `SKILL.md` importés : inutilisables tant que vous ne les avez pas revus, capacités dangereuses (shell, réseau, écriture) bloquées tant qu'elles ne sont pas cochées, empreinte du dossier vérifiée à chaque usage. À chaque tour, moins de 12 outils sont proposés au modèle, choisis par le sens.
 - Ateliers Claude Code : chacun travaille dans son propre worktree git et sa branche, et JARVIS décide de chaque outil demandé ; pause, reprise, clôture.
 - Veille en lecture seule de vos propres sessions Claude Code.
 - Amélioration continue : une suggestion devient un atelier, puis un aperçu testé, puis une demande de mise en service que vous validez, avec retour possible.
@@ -63,18 +65,20 @@ Sans Docker ni Node. Détails et options [plus bas](#détails-de-linstallation) 
 
 **Votre PC et la maison**
 - Contrôle du PC sous Windows : volume, luminosité, fenêtres, média, verrouillage, extinction, plan d'alimentation, bannières de notification et thème sombre, mode jeu ; CPU, RAM, GPU et VRAM en direct.
-- Connecteurs maison facultatifs : Philips Hue (API locale du pont) et OBS Studio.
+- Connecteurs maison facultatifs, désactivés par défaut : Philips Hue (API locale du pont), OBS Studio, et Home Assistant sur votre réseau local (🟡 lumières, prises, média ; 🔴 serrures, alarme, portail, qui demandent votre clé d'accès et votre voix reconnue). Voir [docs/HOME_ASSISTANT.md](docs/HOME_ASSISTANT.md).
+- Serveur Wyoming : la transcription et la voix de JARVIS offertes à Home Assistant et à des satellites vocaux dans les pièces (une clé par appareil, seul l'audio après le mot d'éveil, présence par pièce, plafonds de volume, profils par personne).
 - Commandes rapides sans IA : une phrase reconnue déclenche une action déclarée, modifiable par vous.
 
 **Sécurité**
 - Niveaux de permission : 🟢 lecture (libre), 🟡 modification (vous validez ; « toujours autoriser » possible), 🔴 destruction, argent, publication, envoi (confirmation explicite, par clé d'accès).
+- Approbation liée au plan exact affiché (empreinte SHA-256, revérifiée juste avant d'exécuter) et pile d'annulation : une action réversible reste annulable 24 heures.
 - Journal d'audit en ajout seul, chaîné par empreintes SHA-256, arrêt d'urgence, coffre local des clés d'API, filtre des secrets et données personnelles sur tout ce qui part vers un fournisseur externe.
 - Barrière d'injection par tour (après une lecture de contenu non fiable, plus aucune action dans ce tour) et détecteur de réponses qui affirment une action jamais faite.
 - Une page « Où partent mes données » générée depuis votre configuration réelle (voir plus bas).
 
 **Partout**
 - Téléphone : application web installable, notifications Web Push, « Partager vers JARVIS », accès par Tailscale.
-- Application de bureau (fenêtre propre, zone de notification, liens `jarvis://`), mode serveur sans écran, accueil du matin avec la météo, pages générées ouvertes dans un bac à sable, cinq thèmes.
+- Application de bureau (fenêtre propre, zone de notification, liens `jarvis://`), mode serveur sans écran, accueil du matin avec la météo, pages générées ouvertes dans un bac à sable, cinq thèmes, widgets du HUD générés à la demande (météo, minuteur, liste…) validés par listes fermées, jamais affichés bruts, et épinglables.
 - Sauvegarde chiffrée vérifiée par une vraie restauration ; SQLite par défaut, PostgreSQL + pgvector au choix.
 
 ## Ce qui tourne en local / ce qui sort
@@ -98,6 +102,8 @@ La page « Où partent mes données » de l'interface construit cette carte depu
 | Téléphone par Tailscale | 🟡 Votre réseau privé | Tout l'échange téléphone–PC, chiffré de bout en bout ; Tailscale ne voit que la liste de vos appareils | Seulement si vous avez lancé `tailscale serve` |
 | Core ouvert au réseau local | 🟡 Votre réseau | Les échanges des appareils jumelés (un jeton par appareil) | Seulement avec `JARVIS2_OUVERTURE_RESEAU` |
 | Outils MCP | Selon le programme (il peut lui-même contacter Internet) | Les paramètres de chaque appel d'outil, après votre accord 🟡 | Seulement les serveurs déclarés et activés |
+| Home Assistant | 🟡 Votre réseau (une adresse Internet est refusée) | Les commandes que vous approuvez (entité visée et service) et les lectures d'état ; jamais vos conversations, votre mémoire ni vos fichiers, ni le code de l'alarme sauf pour la désarmer | Seulement si vous l'avez activé et configuré |
+| Serveur Wyoming (Home Assistant, satellites vocaux) | 🟢 Votre PC, ou 🟡 votre réseau si vous choisissez une autre adresse | Le texte transcrit et la voix de JARVIS, renvoyés seulement à l'appareil qui a parlé ; l'audio d'avant le mot d'éveil est jeté sans être lu, audio et texte jamais gardés | Seulement si vous l'avez activé |
 
 Niveaux des souvenirs, vers une IA externe :
 
@@ -132,27 +138,27 @@ Les noms de modèles sont des exemples à vérifier dans le catalogue d'Ollama. 
 
 ## Comparaison
 
-JARVIS 2 s'inspire de plusieurs projets d'assistants personnels. **Aucun n'est installé ni requis** : chaque idée retenue est réimplémentée, et du code n'est repris que de projets sous licence permissive, signalé dans [NOTICE](NOTICE). Le tableau dit ce que JARVIS 2 reprend de chacun ; certaines idées sont déjà en place, d'autres sont au [plan](docs/PLAN.md). Liste complète et licences : [docs/INSPIRATIONS.md](docs/INSPIRATIONS.md).
+JARVIS 2 s'inspire de plusieurs projets d'assistants personnels. **Aucun n'est installé ni requis** : chaque idée retenue est réimplémentée, et du code n'est repris que de projets sous licence permissive, signalé dans [NOTICE](NOTICE). Le tableau dit ce que JARVIS 2 reprend de chacun et si c'est en place dans le code aujourd'hui ; ce qui ne l'est pas encore est au [plan](docs/PLAN.md). Liste complète et licences : [docs/INSPIRATIONS.md](docs/INSPIRATIONS.md).
 
-| Projet | Licence | Ce que JARVIS 2 en reprend |
-|---|---|---|
-| OpenJarvis | Apache-2.0 | Reprise de l'installation après coupure et une seule table matériel → modèle ; jauges d'abonnement et pied de réponse ; skills avec confiance et confinement ; masquage étendu des secrets, niveaux de confidentialité, porte de rappel (idées, réimplémentées) ; préréglages à l'installation |
-| TopMyster/jarvis | MIT | Point d'entrée pipx |
-| ASDprogrammer521/jarvis | MIT | Barrière d'injection par tour, approbation liée au plan exact, pile d'annulation ; contrôle du PC et modes qui changent vraiment Windows |
-| lancejames221b/jarvis | MIT | Relance sans mot d'éveil, états actif / veille ; reconnaissance du propriétaire, fermée pour 🟡🔴 si indisponible |
-| akshayaggarwal99/jarvis | MIT | Transcription robuste ; dictée globale sous Windows |
-| sosoj92/jarvis | MIT | Filtre des hallucinations françaises ; « toujours autoriser » pour 🟡, jamais de 🔴 à distance sans clé |
-| b1-loop | MIT | Coupure quand on parle par-dessus ; latence mesurée étape par étape |
-| microsoft/JARVIS (HuggingGPT) | MIT | Brainstorm → spec → plan → exécution ; missions en graphe |
-| DonJyde/jarvis | MIT | Widgets générés filtrés |
-| livekit-rtc | Apache-2.0 | Annulation d'écho (dépendance possible) |
-| Dodaios | Apache-2.0 | Fin de tour, transcription anticipée (idée) |
-| isair/jarvis | Non commerciale | Éveil en deux étages (idée seulement) |
-| NeyorDEV/jarvis | GPL | MCP persistant, outils choisis par sens (idée seulement) |
-| amanimran786/jarvis-ai | AGPL | Ateliers en bac à sable réel (repris à l'inverse : refus si indisponible) |
-| Jarvis.sh | Sans licence claire | Commandes rapides sans LLM (idée seulement, sans `eval`) |
-| jarvis799 | Sans licence claire | Actions vérifiées en relisant l'état (idée seulement) |
-| hasibjaan | Sans licence claire | HUD séparé du fil audio (idée seulement) |
+| Projet | Licence | Ce que JARVIS 2 en reprend | État |
+|---|---|---|---|
+| OpenJarvis | Apache-2.0 | Reprise de l'installation après coupure et une seule table matériel → modèle ; jauges d'abonnement et pied de réponse ; skills avec confiance et confinement ; masquage étendu des secrets, niveaux de confidentialité, porte de rappel (idées, réimplémentées) ; préréglages à l'installation | En place |
+| TopMyster/jarvis | MIT | Point d'entrée pipx | En place |
+| ASDprogrammer521/jarvis | MIT | Barrière d'injection par tour, approbation liée au plan exact, pile d'annulation ; contrôle du PC et modes qui changent vraiment Windows | En place |
+| lancejames221b/jarvis | MIT | Relance sans mot d'éveil, états actif / veille ; reconnaissance du propriétaire, fermée pour 🟡🔴 si indisponible | En place |
+| akshayaggarwal99/jarvis | MIT | Transcription robuste ; dictée globale sous Windows | En place |
+| sosoj92/jarvis | MIT | Filtre des hallucinations françaises ; « toujours autoriser » pour 🟡, jamais de 🔴 à distance sans clé | En place |
+| b1-loop | MIT | Coupure quand on parle par-dessus ; latence mesurée étape par étape | En place |
+| microsoft/JARVIS (HuggingGPT) | MIT | Brainstorm → spec → plan → exécution ; missions en graphe | En partie : missions brainstorm ; spec → plan → exécution et graphe de missions prévus |
+| DonJyde/jarvis | MIT | Widgets générés filtrés | En place |
+| livekit-rtc | Apache-2.0 | Annulation d'écho (dépendance possible) | En place, si le paquet facultatif `livekit` est installé |
+| Dodaios | Apache-2.0 | Fin de tour, transcription anticipée (idée) | En place |
+| isair/jarvis | Non commerciale | Éveil en deux étages (idée seulement) | En place |
+| NeyorDEV/jarvis | GPL | MCP persistant, outils choisis par sens (idée seulement) | En place |
+| amanimran786/jarvis-ai | AGPL | Ateliers en bac à sable réel (repris à l'inverse : refus si indisponible) | Prévu |
+| Jarvis.sh | Sans licence claire | Commandes rapides sans LLM (idée seulement, sans `eval`) | En place |
+| jarvis799 | Sans licence claire | Actions vérifiées en relisant l'état (idée seulement) | En place (réglages du PC relus) |
+| hasibjaan | Sans licence claire | HUD séparé du fil audio (idée seulement) | En place (thème Présence) |
 
 Ce sur quoi JARVIS 2 met l'accent : le local d'abord, vos propres comptes par les programmes officiels des fournisseurs, les permissions et l'audit construits avant de donner des accès, et une carte des flux générée depuis la configuration réelle.
 
@@ -266,7 +272,7 @@ Commentaires de code, documentation et messages de commit sont en français. Con
 ## Documentation
 
 - [Installation](docs/INSTALLATION.md) · [Dépannage](docs/DEPANNAGE.md) · [FAQ](docs/FAQ.md)
-- [Architecture](docs/ARCHITECTURE.md) · [Sécurité et permissions](docs/SECURITE.md) · [Écrire un skill, une commande ou une recette](docs/EXTENSIONS.md) · [Serveur domestique](docs/SERVEUR.md)
+- [Architecture](docs/ARCHITECTURE.md) · [Sécurité et permissions](docs/SECURITE.md) · [Écrire un skill, une commande ou une recette](docs/EXTENSIONS.md) · [Serveur domestique](docs/SERVEUR.md) · [Home Assistant et satellites](docs/HOME_ASSISTANT.md)
 - [Feuille de route](docs/FEUILLE_DE_ROUTE.md) · [Plan](docs/PLAN.md) · [Décisions](docs/DECISIONS.md) · [Inspirations](docs/INSPIRATIONS.md) · [Design de l'interface](interface/DESIGN.md)
 - [Journal des versions](CHANGELOG.md) · [Signaler une vulnérabilité](SECURITY.md)
 

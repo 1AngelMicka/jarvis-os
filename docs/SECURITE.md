@@ -48,10 +48,34 @@ Les clés d'accès exigent un nom d'hôte (`localhost`, nom Tailscale), jamais u
 | `hue.etat`, `obs.etat` | 🟢 |
 | `hue.allumer`, `hue.eteindre`, `hue.luminosite`, `hue.couleur`, `hue.scene`, `obs.scene`, `obs.enregistrement`, `obs.direct.arreter` | 🟡 |
 | `obs.direct.demarrer` | 🔴 |
+| `ha.etat` (Home Assistant : lecture de l'état) | 🟢 |
+| `ha.lumiere`, `ha.prise`, `ha.media` | 🟡 |
+| `ha.serrure`, `ha.alarme`, `ha.portail` (clé d'accès **et** voix du propriétaire, voir plus bas) | 🔴 |
+| `skill.lire` | 🟢 |
+| `skill.approuver`, `skill.executer` (jamais « toujours autorisées ») | 🟡 |
 
-Les actions `pc.*` (sauf `pc.jeu`) ne sont disponibles que là où JARVIS sait piloter le PC (Windows, hors mode sans écran) ; les actions `hue.*` et `obs.*` seulement quand le connecteur maison est activé. La liste réelle de votre installation est donnée par `GET /v1/actions`.
+Les actions `pc.*` (sauf `pc.jeu`) ne sont disponibles que là où JARVIS sait piloter le PC (Windows, hors mode sans écran) ; les actions `hue.*`, `obs.*` et `ha.*` seulement quand le connecteur correspondant est activé. La liste réelle de votre installation est donnée par `GET /v1/actions`.
 
 Le registre **refuse toute action dont le nom contient `deverrouill` ou `unlock`** : rien ne déverrouille le PC ni le téléphone, ni à distance ni sur place.
+
+### Empreinte du plan exact
+
+À la création d'une demande, le Core calcule l'empreinte SHA-256 du texte canonique de ce qui sera exécuté (action, niveau, résumé, paramètres ; `empreinte_plan` dans `securite/permissions.py`). L'interface affiche une empreinte courte (8 caractères) et renvoie l'empreinte qu'elle a montrée avec l'approbation :
+
+- si elle diffère, ou si la demande enregistrée ne correspond plus à son empreinte, l'approbation tombe (demande en échec, à relancer) ;
+- l'empreinte est revérifiée juste avant d'exécuter ;
+- une action dont la cible peut changer entre la demande et l'approbation (contenu d'un atelier) « fige » cet état dans ses paramètres : il entre dans l'empreinte et l'exécution le revérifie ;
+- le modèle ne peut rien approuver : aucune action du registre ni aucun bloc du pilotage n'appelle la décision.
+
+### Pile d'annulation
+
+Chaque action 🟡 déclare si elle est réversible et comment l'annuler (ou pourquoi elle ne s'annule pas, et quoi faire à la main). Une action réversible exécutée entre dans la pile d'annulation (table `annulations`, 24 heures, 30 entrées listées dans « Dernières actions annulables »). « Annuler », depuis l'interface ou par commande rapide, rejoue son annulation, inscrite au journal d'audit.
+
+### Home Assistant : 🔴 gardé
+
+Le connecteur Home Assistant (`maison/home_assistant.py`, désactivé par défaut) décide lui-même du niveau de chaque domaine, jamais Home Assistant ni le modèle : 🟢 lecture de l'état, 🟡 lumières, prises, média, 🔴 serrures, alarme et portail (`lock`, `alarm_control_panel`, `cover` de type portail ou garage). Une entité d'un autre domaine que celui de l'action est refusée : « allumer une prise » ne peut pas ouvrir un portail. Une adresse Internet est refusée : seuls le réseau local, Tailscale ou ce PC sont acceptés.
+
+Une action 🔴 de Home Assistant exige, en plus de la clé d'accès, **la voix du propriétaire** (`maison.garder_rouge`) : la reconnaissance doit être activée et disponible, et à la demande une phrase du propriétaire reconnue dans les 2 dernières minutes est exigée (la demande se dit à voix haute). Sinon l'action est refusée et le refus est inscrit au journal d'audit. Le code d'alarme éventuel reste dans le coffre, jamais dans les paramètres d'une demande. Détails : [HOME_ASSISTANT.md](HOME_ASSISTANT.md).
 
 ### « Toujours autoriser »
 
@@ -162,6 +186,10 @@ La page **Où partent mes données** (Réglages › Sécurité) est générée d
 - **Créations** : pages HTML servies dans un bac à sable (CSP `sandbox`, aucune requête réseau, lien signé de 10 minutes).
 - **Liens `jarvis://`** : liste blanche, jamais plus qu'une action d'interface 🟢 ; rien n'est exécuté ni envoyé seul.
 - **Reconnaissance de votre voix** (désactivée par défaut) : activée, une action 🟡🔴 dite à voix haute n'est acceptée que si la voix est reconnue.
+- **Skills `SKILL.md`** : importés `non_fiable`, capacités dangereuses (shell, réseau, écriture) bloquées sans revue, empreinte du dossier recalculée à chaque usage (un changement bloque le skill), scripts lancés sans clés d'API ni secrets : voir [EXTENSIONS.md](EXTENSIONS.md#skills).
+- **Widgets du HUD** : un fragment généré par le modèle est validé contre des listes fermées (balises, attributs, classes, adresses internes) et réécrit par le Core ; le moindre écart écarte le widget entier. L'interface le filtre encore (DOMPurify) puis le construit avec React, jamais avec `innerHTML`.
+- **Wyoming et satellites vocaux** (désactivés par défaut) : serveur sur 127.0.0.1 tant que vous ne choisissez pas une autre adresse du réseau local ; Home Assistant seulement depuis une adresse autorisée ; une clé par satellite, montrée une fois, dont la base ne garde que l'empreinte SHA-256 ; seul l'audio après le mot d'éveil est lu, le reste est jeté.
+- **Routeur par type de tâche** : une route « privée » ne part jamais vers un moteur externe.
 - **Ollama** n'est jamais démarré automatiquement ; JARVIS n'arrête que l'Ollama qu'il a lui-même lancé.
 - **Mode sans écran** : capture, clics et contrôle de l'écran refusés par le Core lui-même.
 
