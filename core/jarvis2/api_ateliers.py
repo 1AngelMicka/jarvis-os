@@ -1,4 +1,5 @@
-"""Routes des ateliers Claude Code : création, consignes, arrêt et reprise, autorisations en direct, fusion 🟡."""
+"""Routes des ateliers Claude Code : création, consignes, pause, arrêt et reprise, relance, modèle, clôture,
+conflits de fichiers, autorisations en direct, fusion 🟡 ; veille (lecture seule) des sessions Claude Code."""
 
 from __future__ import annotations
 
@@ -9,7 +10,8 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from .ateliers.gestionnaire import ErreurAtelier, GestionnaireAteliers
+from .ateliers.gestionnaire import MODELES, ErreurAtelier, GestionnaireAteliers
+from .ateliers.veille import VeilleClaudeCode
 from .securite import audit
 from .securite.appareils import Appareil
 
@@ -45,6 +47,21 @@ def _propre(ligne: dict[str, Any]) -> dict[str, Any]:
 class Creation(BaseModel):
     projet: str = Field(min_length=1, max_length=40)
     nom: str = Field(min_length=1, max_length=120)
+    modele: str | None = Field(default=None, max_length=80)
+
+
+class ChoixModele(BaseModel):
+    modele: str | None = Field(default=None, max_length=80)
+
+
+class Cloture(BaseModel):
+    notes: str = Field(default="", max_length=10_000)
+
+
+class ReglagesVeille(BaseModel):
+    actif: bool | None = None
+    voix: bool | None = None
+    notification: bool | None = None
 
 
 class Consigne(BaseModel):
@@ -64,9 +81,19 @@ class DemandeOutil(BaseModel):
 @routeur.get("/ateliers")
 async def lister(request: Request) -> dict[str, Any]:
     g = _ateliers(request)
+    conflits = await g.conflits()
     return {
         "projets": [{"id": p.id, "nom": p.nom} for p in g.projets.values()],
-        "ateliers": [{**_propre(a), "actif": a["id"] in g.processus} for a in await g.lister()],
+        "modeles": [{"id": i, "nom": n} for i, n in MODELES],
+        "ateliers": [
+            {
+                **_propre(a),
+                "actif": a["id"] in g.processus or a["id"] in g.taches,
+                "en_pause": g.en_pause(a["id"]),
+                "conflits": conflits.get(str(a["id"]), []),
+            }
+            for a in await g.lister()
+        ],
         "attentes": g.en_attente(),
     }
 
@@ -75,7 +102,7 @@ async def lister(request: Request) -> dict[str, Any]:
 async def creer(request: Request, corps: Creation) -> dict[str, Any]:
     g, a = _ateliers(request), _appareil(request)
     try:
-        atelier = await g.creer(corps.projet, corps.nom, a.acteur)
+        atelier = await g.creer(corps.projet, corps.nom, a.acteur, corps.modele)
     except ErreurAtelier as exc:
         raise HTTPException(409, str(exc)) from exc
     await audit.journaliser(_ctx(request).pool, acteur=a.acteur, action="atelier.cree", cible=str(atelier["id"]))
@@ -112,6 +139,65 @@ async def arreter(request: Request, ident: UUID) -> dict[str, Any]:
     return {"arrete": arrete}
 
 
+async def _piloter(request: Request, ident: UUID, action: str) -> dict[str, Any]:
+    g, a = _ateliers(request), _appareil(request)
+    try:
+        if action == "pause":
+            fait = await g.mettre_en_pause(ident)
+        elif action == "reprise":
+            fait = await g.reprendre(ident)
+        else:
+            connecteurs = _ctx(request).connecteurs
+            if connecteurs is not None and connecteurs.conditions_a_accepter("claude_code"):
+                raise HTTPException(409, "Acceptez d'abord l'avertissement Claude Code")
+            await g.relancer(ident)
+            fait = True
+    except ErreurAtelier as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if fait:
+        await audit.journaliser(_ctx(request).pool, acteur=a.acteur, action=f"atelier.{action}", cible=str(ident))
+    return {"fait": fait}
+
+
+@routeur.post("/ateliers/{ident}/pause")
+async def pause(request: Request, ident: UUID) -> dict[str, Any]:
+    return await _piloter(request, ident, "pause")
+
+
+@routeur.post("/ateliers/{ident}/reprendre")
+async def reprendre(request: Request, ident: UUID) -> dict[str, Any]:
+    return await _piloter(request, ident, "reprise")
+
+
+@routeur.post("/ateliers/{ident}/relancer")
+async def relancer(request: Request, ident: UUID) -> dict[str, Any]:
+    return await _piloter(request, ident, "relance")
+
+
+@routeur.put("/ateliers/{ident}/modele")
+async def modele(request: Request, ident: UUID, corps: ChoixModele) -> dict[str, Any]:
+    g, a = _ateliers(request), _appareil(request)
+    try:
+        atelier = await g.choisir_modele(ident, corps.modele)
+    except ErreurAtelier as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await audit.journaliser(
+        _ctx(request).pool, acteur=a.acteur, action="atelier.modele", cible=str(ident), details={"modele": corps.modele}
+    )
+    return _propre(atelier)
+
+
+@routeur.post("/ateliers/{ident}/cloturer")
+async def cloturer(request: Request, ident: UUID, corps: Cloture) -> dict[str, Any]:
+    g, a = _ateliers(request), _appareil(request)
+    try:
+        atelier = await g.cloturer(ident, corps.notes)
+    except ErreurAtelier as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await audit.journaliser(_ctx(request).pool, acteur=a.acteur, action="atelier.cloture", cible=str(ident))
+    return _propre(atelier)
+
+
 @routeur.post("/ateliers/{ident}/abandonner")
 async def abandonner(request: Request, ident: UUID) -> dict[str, Any]:
     g, a = _ateliers(request), _appareil(request)
@@ -145,3 +231,43 @@ async def autorisation(request: Request, corps: DemandeOutil) -> dict[str, Any]:
         raise HTTPException(403, "Réservé au PC")
     jeton = request.headers.get("x-atelier-jeton", "")
     return await _ateliers(request).autoriser(jeton, corps.tool_name, corps.input)
+
+
+# --- Veille des sessions Claude Code de l'utilisateur (lecture seule) ------------------------------------------
+
+
+def _veille(request: Request) -> VeilleClaudeCode:
+    v = _ctx(request).veille
+    if v is None:
+        raise HTTPException(404, "Veille indisponible")
+    return v
+
+
+@routeur.get("/veille-claude")
+async def veille(request: Request, apres: int = 0) -> dict[str, Any]:
+    v = _veille(request)
+    disponible = getattr(v.source, "disponible", None)
+    return {
+        "reglages": dict(v.reglages),
+        "disponible": bool(disponible()) if callable(disponible) else True,
+        "sessions": [s.en_dict() for s in v.sessions] if v.actif else [],
+        "alertes": v.alertes_apres(apres) if v.actif else [],
+        "dernier": v.dernier_id,  # le Core redémarré recompte à partir de 0
+        "maj_le": v.maj_le.isoformat() if v.maj_le else None,
+    }
+
+
+@routeur.put("/veille-claude")
+async def regler_veille(request: Request, corps: ReglagesVeille) -> dict[str, Any]:
+    v, a = _veille(request), _appareil(request)
+    avant = v.actif
+    reglages = await v.regler(actif=corps.actif, voix=corps.voix, notification=corps.notification)
+    if reglages["actif"] != avant:
+        await audit.journaliser(
+            _ctx(request).pool,
+            acteur=a.acteur,
+            action="veille_claude.activee" if reglages["actif"] else "veille_claude.desactivee",
+        )
+    if reglages["actif"] and not avant:
+        await v.sonder()  # premier état tout de suite
+    return {"reglages": reglages}

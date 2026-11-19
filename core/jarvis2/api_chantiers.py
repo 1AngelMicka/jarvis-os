@@ -171,9 +171,9 @@ async def activite(request: Request) -> dict[str, Any]:
     if c.ateliers is not None:
         g = c.ateliers
         ateliers = [
-            {**a, "actif": a["id"] in g.processus}
+            {**a, "actif": a["id"] in g.processus or a["id"] in g.taches, "en_pause": g.en_pause(a["id"])}
             for a in await g.lister()
-            if a["statut"] in ("pret", "en_cours", "arrete", "erreur")
+            if a["statut"] in ("pret", "en_cours", "arrete", "erreur") and not a.get("clos_le")
         ][:8]
         attentes = len(g.en_attente())
     ouverts = await chantiers.lister(c.pool, "ouverts", 30)
@@ -185,7 +185,8 @@ async def activite(request: Request) -> dict[str, Any]:
             for m in missions
         ],
         "ateliers": [
-            _propre({k: a[k] for k in ("id", "projet", "nom", "statut", "actif", "maj_le")}) for a in ateliers
+            _propre({k: a[k] for k in ("id", "projet", "nom", "statut", "actif", "en_pause", "maj_le")})
+            for a in ateliers
         ],
         "attentes_ateliers": attentes,
         "creations": [_propre({k: x[k] for k in ("id", "titre", "version_courante", "maj_le")}) for x in recentes],

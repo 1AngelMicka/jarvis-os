@@ -85,6 +85,9 @@ class ConfigLocale:
     projets_ateliers: tuple[dict[str, Any], ...] = ()
     # Accueil du matin ([matin] : ville, ou latitude et longitude) : lieu PRIVÉ, jamais lu à voix haute
     matin: dict[str, Any] = field(default_factory=dict)
+    # Veille des sessions Claude Code ([veille_claude_code] dossier = dossier `sessions` de Claude Code, si ce
+    # n'est pas celui par défaut) ; l'activation se règle dans l'interface (désactivée par défaut)
+    dossier_veille_claude: Path | None = None
 
     def connecteur(self, ident: str) -> dict[str, Any]:
         return self.connecteurs.get(ident, {})
@@ -140,7 +143,19 @@ def analyser(donnees: dict[str, Any], chemin: Path | None = None) -> ConfigLocal
         scientifique=scientifique,
         projets_ateliers=tuple(p for p in (donnees.get("ateliers") or {}).get("projets") or [] if isinstance(p, dict)),
         matin=dict(donnees.get("matin") or {}),
+        dossier_veille_claude=_dossier_veille(donnees.get("veille_claude_code")),
     )
+
+
+def _dossier_veille(bloc: Any) -> Path | None:
+    if bloc is None:
+        return None
+    dossier = bloc.get("dossier") if isinstance(bloc, dict) else None
+    if dossier is None:
+        return None
+    if not isinstance(dossier, str) or not dossier.strip():
+        raise ValueError("veille_claude_code.dossier : chemin attendu")
+    return Path(dossier).expanduser()
 
 
 def charger(chemin: Path | None = None) -> ConfigLocale:

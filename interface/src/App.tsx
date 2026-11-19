@@ -35,6 +35,7 @@ import { SelecteurTheme } from "./composants/SelecteurTheme";
 import { ecrirePreferences, lirePreferences } from "./preferences";
 import { couperVoix, LecteurVocal } from "./voix";
 import type { ActionPilotage, Activite, AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ModePilotage, ReponseAction, ResumeConversation } from "./types";
+import { useAlertesVeille } from "./veilleClaude";
 
 let compteur = 0;
 const nouvelleCle = () => `m${String(++compteur)}`;
@@ -137,6 +138,12 @@ function Hud() {
       setNotif(null);
     }, 4200);
   }, []);
+
+  // Veille des sessions Claude Code (désactivée par défaut) : bandeau, voix si choisie, notification si page cachée
+  useAlertesVeille((alerte, reglages) => {
+    notifier(alerte.texte);
+    if (reglages.voix) lecteur.lire(alerte.texte);
+  });
 
   const charger = useCallback((initial = true) => {
     setErreurEtat(null);

@@ -20,6 +20,12 @@ sujets_prives = [
 # id = "monsite"
 # nom = "Mon site"
 # chemin = "C:/Projets/monsite"
+#
+# Veille de VOS sessions Claude Code (lecture seule, à activer dans Ateliers ou Réglages › Appareils) : seul le
+# dossier des fichiers d'état est lu (par défaut ~/.claude/sessions, ou CLAUDE_CONFIG_DIR/sessions), jamais vos
+# conversations, jetons ou identifiants.
+# [veille_claude_code]
+# dossier = "C:/Users/moi/.claude/sessions"
 
 # --- Agents (facultatif) ---
 # Recettes planifiées : fichiers YAML dans le dossier « recettes » à côté de ce fichier (exemple : docs/recettes).

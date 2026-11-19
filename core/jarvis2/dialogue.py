@@ -12,7 +12,7 @@ import logging
 import re
 import time
 from collections import Counter
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -171,6 +171,8 @@ class ServiceDialogue:
         self.titre_auto = True  # titre écrit par l'IA après le premier échange
         self._taches: set[asyncio.Task[Any]] = set()  # titres en cours (gardés jusqu'à leur fin)
         self.pilotage: ServicePilotage | None = None  # bloc d'actions de JARVIS et règles de protection (lot F)
+        # « Ce qui tourne » (ateliers, sessions Claude Code veillées, missions) : ajouté aux consignes à chaque échange
+        self.ce_qui_tourne: Callable[[], Awaitable[str]] | None = None
 
     async def est_prive(self, texte: str | None) -> bool:
         """Sujet privé : il nomme un sujet privé de l'utilisateur, ou des souvenirs privés y répondent."""
@@ -196,6 +198,9 @@ class ServiceDialogue:
             else ContexteMemoire(consultee=False)
         )
         bloc = contexte.bloc()
+        activite = await self.activite()
+        if activite:
+            bloc = "\n\n".join(b for b in (bloc, activite) if b)
         if conversation_id is not None:
             nouveautes = await self.nouveautes(conversation_id, externe)
             if nouveautes:
@@ -210,6 +215,19 @@ class ServiceDialogue:
             if extra:
                 consignes = "\n\n".join((consignes, extra))
         return consignes, contexte
+
+    async def activite(self) -> str:
+        """Résumé de ce qui tourne ; les sujets exclus par l'utilisateur en sont retirés. Jamais bloquant."""
+        if self.ce_qui_tourne is None:
+            return ""
+        try:
+            texte = await asyncio.wait_for(self.ce_qui_tourne(), timeout=2.0)
+        except Exception:
+            journal.exception("Résumé de ce qui tourne indisponible")
+            return ""
+        if texte and self.memoire is not None:
+            texte = self.memoire.reglages.expurgateur.texte(texte)
+        return texte.strip()
 
     async def nouveautes(self, conversation_id: UUID, externe: bool) -> str:
         """Début d'une conversation : ce que la mémoire a appris depuis la conversation précédente (missions,
