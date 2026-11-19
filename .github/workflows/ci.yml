@@ -1,5 +1,6 @@
-# Intégration continue : Core (tests sur SQLite et PostgreSQL + pgvector, ruff, mypy) et interface (ESLint, tsc,
-# vitest, compilation). Aucun secret : les mots de passe de la base de test sont générés à chaque exécution.
+# Intégration continue : Core (tests sur SQLite et PostgreSQL + pgvector, ruff, mypy), interface (ESLint, tsc,
+# vitest, compilation) et paquet (roue installée par pipx, `jarvis2 --help`). Aucun secret : les mots de passe de
+# la base de test sont générés à chaque exécution.
 name: CI
 
 on:
@@ -77,3 +78,31 @@ jobs:
       - name: ESLint, tsc, vitest
         run: npm run verifier
       - run: npm run build
+
+  paquet:
+    name: Paquet (roue + pipx)
+    runs-on: ubuntu-latest
+    env:
+      JARVIS2_EXIGER_INTERFACE: "1"  # la roue doit contenir l'interface compilée
+      JARVIS2_DOSSIER_DONNEES: /tmp/jarvis2-paquet/donnees
+      JARVIS2_CONFIG: /tmp/jarvis2-paquet/config/config.toml
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: interface/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: interface
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build --wheel --out-dir ../dist
+        working-directory: core
+      - name: Installation pipx et commande jarvis2 (hors du dépôt)
+        working-directory: /tmp
+        run: |
+          uv python install 3.13
+          pipx install --python "$(uv python find 3.13)" "$GITHUB_WORKSPACE"/dist/*.whl
+          jarvis2 --help
+          jarvis2 docteur --json > docteur.json || true  # modèle absent : « erreur » attendue, l'interface non
+          python3 -c "import json; v = {x['id']: x['statut'] for x in json.load(open('docteur.json'))}; print(v); assert v['interface'] == 'ok'"

@@ -33,6 +33,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv build --wheel --out-dir ../dist
         working-directory: core
+        env:
+          JARVIS2_EXIGER_INTERFACE: "1"
       - uses: actions/upload-artifact@v4
         with:
           name: roue
