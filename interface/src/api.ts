@@ -4,6 +4,7 @@
 
 import { EVENEMENT_NON_AUTORISE, ecrireJeton, lireJeton } from "./auth";
 import type { ResumeCouts } from "./couts";
+import { type Cle, t } from "./i18n";
 import { LecteurSSE } from "./sse";
 import type {
   Activite,
@@ -92,16 +93,17 @@ export function unSeul<T>(cle: string, appel: () => Promise<T>): Promise<T> {
   return promesse;
 }
 
-const MESSAGES_STATUT: Record<number, string> = {
-  401: "Cet appareil n'est pas (ou plus) autorisé.",
-  403: "Refusé.",
-  404: "Introuvable.",
-  409: "Impossible pour l'instant.",
-  422: "Demande invalide.",
-  423: "Arrêt d'urgence actif : aucune action n'est acceptée.",
-  429: "Trop de demandes : réessayez dans un instant.",
+// Messages des erreurs courantes, dans la langue de l'interface (lus au moment de l'erreur). Le détail envoyé par le
+// Core, quand il y en a un, reste prioritaire (il est en français).
+const MESSAGES_STATUT: Record<number, Cle> = {
+  401: "erreur.401",
+  403: "erreur.403",
+  404: "erreur.404",
+  409: "erreur.409",
+  422: "erreur.422",
+  423: "erreur.423",
+  429: "erreur.429",
 };
-const INJOIGNABLE = "Core injoignable : vérifiez qu'il tourne (commande jarvis2 sur le PC).";
 
 async function lireErreur(rep: Response): Promise<ErreurApi> {
   let detail = "";
@@ -115,7 +117,8 @@ async function lireErreur(rep: Response): Promise<ErreurApi> {
     ecrireJeton(null);
     window.dispatchEvent(new Event(EVENEMENT_NON_AUTORISE));
   }
-  const base = MESSAGES_STATUT[rep.status] ?? (rep.status >= 500 ? "Le Core a rencontré une erreur." : "Erreur.");
+  const cle = MESSAGES_STATUT[rep.status];
+  const base = cle ? t(cle) : t(rep.status >= 500 ? "erreur.serveur" : "erreur.inconnue");
   return new ErreurApi(detail || base, rep.status);
 }
 
@@ -133,7 +136,7 @@ export async function appeler<T>(chemin: string, init: { methode?: string; corps
       ...(init.corps !== undefined ? { body: JSON.stringify(init.corps) } : {}),
     });
   } catch {
-    throw new ErreurApi(INJOIGNABLE, 0);
+    throw new ErreurApi(t("erreur.injoignable"), 0);
   }
   if (!rep.ok) throw await lireErreur(rep);
   return (await rep.json()) as T;
@@ -296,7 +299,7 @@ async function diffuser(
     });
   } catch (e) {
     if (signal.aborted) return;
-    throw e instanceof Error && e.name === "AbortError" ? e : new ErreurApi(INJOIGNABLE, 0);
+    throw e instanceof Error && e.name === "AbortError" ? e : new ErreurApi(t("erreur.injoignable"), 0);
   }
   if (!rep.ok || !rep.body) throw await lireErreur(rep);
   const lecteur = rep.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -396,7 +399,7 @@ export async function transcrireAudio(audio: Blob): Promise<{ texte: string; eve
       body: audio,
     });
   } catch {
-    throw new ErreurApi(INJOIGNABLE, 0);
+    throw new ErreurApi(t("erreur.injoignable"), 0);
   }
   if (!rep.ok) throw await lireErreur(rep);
   return (await rep.json()) as { texte: string; eveil: boolean; commande: string };
@@ -407,7 +410,7 @@ export async function envoyerAudio<T>(chemin: string, audio: Blob, extra: Record
   try {
     rep = await fetch(chemin, { method: "POST", headers: entetes({ "Content-Type": audio.type || "audio/webm", ...extra }), body: audio });
   } catch {
-    throw new ErreurApi(INJOIGNABLE, 0);
+    throw new ErreurApi(t("erreur.injoignable"), 0);
   }
   if (!rep.ok) throw await lireErreur(rep);
   return (await rep.json()) as T;

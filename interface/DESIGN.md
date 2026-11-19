@@ -67,3 +67,4 @@ Toutes les colonnes centrales sont en `minmax(0, 1fr)` et les panneaux en `min-w
 6. Ne jamais livrer une interface sans l'avoir chargée en vrai : console vide, aucun débordement à 375, 1280 et 1920 px.
 7. Le noyau au repos affiche « Prêt ».
 8. Un nouveau réglage se déclare dans `src/reglages.ts` (catégorie, titre, mots-clés) et réutilise le composant qui le gère ailleurs : la vue Réglages, sa recherche et ses adresses directes le trouvent alors toutes seules.
+9. Tout texte affiché passe par `t(cle, params)` / `tn(base, n)` (`src/i18n/`) : la clé s'ajoute dans `fr.ts` (référence) et `en.ts` (exigée par TypeScript, mêmes paramètres `{x}`, vérifié par `i18n.test.ts`). Langue choisie dans Réglages › Interface & apparence, gardée par appareil (`jarvis2.langue`) ; au premier lancement, celle du navigateur (`en…` → anglais, sinon français) ; `<html lang>` suit.

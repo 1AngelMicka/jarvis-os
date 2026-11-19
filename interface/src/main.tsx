@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
 import { initialiserAnimations } from "./animations";
+import { appliquerLangue, lireLangue } from "./i18n";
 import { appliquerTheme, lireTheme } from "./theme";
 import "./styles/tokens.css";
 import "./styles/hud.css";
@@ -13,6 +14,7 @@ import "./styles/presence.css";
 const racine = document.getElementById("racine");
 if (!racine) throw new Error("Élément #racine absent de index.html");
 
+appliquerLangue(lireLangue()); // choix de l'appareil, sinon langue du navigateur ; met à jour <html lang>
 appliquerTheme(lireTheme()); // avant le premier rendu : pas d'éclair d'un autre thème
 initialiserAnimations(); // « réduites » (choix ou préférence du système) coupe les mouvements décoratifs
 

@@ -3,321 +3,295 @@
 // Chaque nouvelle fonctionnalité réglable déclare ici sa section.
 
 import { normaliser } from "./commandes";
+import { type Cle, t, traduire } from "./i18n";
 
 export type IdCategorie = "ensemble" | "apparence" | "voix" | "cerveau" | "matin" | "pc" | "memoire" | "securite" | "appareils";
 
+/** Sections connues : celles dont le dictionnaire donne le titre (`reglages.section.<id>.titre`). */
+type IdSection = { [K in Cle]: K extends `reglages.section.${infer S}.titre` ? S : never }[Cle];
+
 export interface Categorie {
   id: IdCategorie;
-  nom: string;
-  description: string;
+  /** Nom et description dans la langue courante. */
+  readonly nom: string;
+  readonly description: string;
 }
 
 export interface Section {
   id: string;
   categorie: IdCategorie;
-  titre: string;
-  description: string;
+  /** Titre et description dans la langue courante (dictionnaires de `src/i18n`). */
+  readonly titre: string;
+  readonly description: string;
   /** Mots de la recherche en plus du titre et de la description (synonymes, libellés des contrôles). */
   motsCles: readonly string[];
   /** Autres adresses qui mènent à cette section (`#reglages/<alias>`). */
   alias?: readonly string[];
 }
 
-export const CATEGORIES: readonly Categorie[] = [
-  { id: "ensemble", nom: "Vue d'ensemble", description: "État des systèmes et interrupteurs rapides" },
-  { id: "apparence", nom: "Interface & apparence", description: "Thème, animations, clavier" },
-  { id: "voix", nom: "Voix & écoute", description: "Lecture à voix haute, dictée, mains libres" },
-  { id: "cerveau", nom: "Cerveau & coûts", description: "Vos IA, modèles, dépenses et plafonds" },
-  { id: "matin", nom: "Accueil & localisation", description: "Accueil du matin, maison, installation" },
-  { id: "pc", nom: "PC & mode jeu", description: "Ressources, IA locales, mode jeu, contrôle de Windows" },
-  { id: "memoire", nom: "Mémoire & profil", description: "Blocs toujours donnés à JARVIS, tâches de nuit, profil" },
-  { id: "securite", nom: "Sécurité", description: "Arrêt d'urgence, clés d'accès, données, audit" },
-  { id: "appareils", nom: "Appareils", description: "Appareils autorisés, téléphone, version" },
+interface SectionBrute {
+  id: IdSection;
+  categorie: IdCategorie;
+  motsCles: readonly string[];
+  alias?: readonly string[];
+}
+
+// Les textes vivent dans les dictionnaires : les getters les lisent dans la langue courante, à chaque affichage.
+function versCategorie(id: IdCategorie): Categorie {
+  return {
+    id,
+    get nom() {
+      return t(`reglages.cat.${id}.nom`);
+    },
+    get description() {
+      return t(`reglages.cat.${id}.description`);
+    },
+  };
+}
+
+function versSection(b: SectionBrute): Section {
+  return {
+    ...b,
+    get titre() {
+      return t(`reglages.section.${b.id}.titre`);
+    },
+    get description() {
+      return t(`reglages.section.${b.id}.description`);
+    },
+  };
+}
+
+const IDS_CATEGORIES: readonly IdCategorie[] = [
+  "ensemble",
+  "apparence",
+  "voix",
+  "cerveau",
+  "matin",
+  "pc",
+  "memoire",
+  "securite",
+  "appareils",
 ];
 
-export const SECTIONS: readonly Section[] = [
+export const CATEGORIES: readonly Categorie[] = IDS_CATEGORIES.map(versCategorie);
+
+const BRUTES: readonly SectionBrute[] = [
   {
     id: "apercu",
     categorie: "ensemble",
-    titre: "État des systèmes",
-    description: "Core, mémoire, IA disponibles, demandes en attente",
     motsCles: ["etat", "statut", "en ligne", "moteurs", "sante"],
   },
   {
     id: "rapides",
     categorie: "ensemble",
-    titre: "Interrupteurs rapides",
-    description: "Voix, thème et animations en un geste",
     motsCles: ["raccourcis", "basculer", "activer", "couper"],
+  },
+  {
+    id: "langue",
+    categorie: "apparence",
+    motsCles: ["langue", "language", "francais", "anglais", "english", "french", "traduction", "translation"],
+    alias: ["language", "langues"],
   },
   {
     id: "themes",
     categorie: "apparence",
-    titre: "Thème",
-    description: "JARVIS, Studio nocturne, Atelier clair, Console épurée, Présence",
     motsCles: ["apparence", "couleurs", "clair", "sombre", "nuit", "jour", "studio", "atelier", "console", "presence", "orbe"],
     alias: ["theme", "apparence-theme"],
   },
   {
     id: "presence",
     categorie: "apparence",
-    titre: "Présence",
-    description: "Orbe de particules : HUD en fond d'écran, niveau du micro",
     motsCles: ["orbe", "particules", "fond d'ecran", "fond", "hud", "micro", "webgl"],
     alias: ["orbe", "fond-ecran"],
   },
   {
     id: "animations",
     categorie: "apparence",
-    titre: "Animations",
-    description: "Mouvements du fond et des panneaux, selon le système ou réduits",
     motsCles: ["mouvement", "reduire", "accessibilite", "effets", "fond", "aurore"],
   },
   {
     id: "clavier",
     categorie: "apparence",
-    titre: "Clavier et commandes",
-    description: "Palette Ctrl+K, commandes « / », raccourcis",
     motsCles: ["raccourcis", "palette", "ctrl+k", "slash", "aide", "touches"],
     alias: ["raccourcis"],
   },
   {
     id: "pilotage",
     categorie: "apparence",
-    titre: "Pilotage par JARVIS",
-    description: "JARVIS ouvre une vue ou un élément quand vous le lui demandez ; les lancements restent des propositions",
     motsCles: ["actions", "naviguer", "ouvrir", "automatique", "piloter", "interface", "propositions"],
   },
   {
     id: "commandes-rapides",
     categorie: "apparence",
-    titre: "Commandes rapides",
-    description: "Une phrase reconnue sans IA déclenche une action (motif avec jokers, priorité, phrase de test)",
     motsCles: ["phrases", "motifs", "jokers", "raccourcis", "sans ia", "automatisation", "declencheurs"],
     alias: ["commandes"],
   },
   {
     id: "lecture",
     categorie: "voix",
-    titre: "Voix de JARVIS",
-    description: "Lecture à voix haute : voix de l'appareil, Piper (locale) ou ElevenLabs ; coupure quand on parle par-dessus",
     motsCles: ["parole", "synthese", "parler", "lire", "son", "muet", "silence", "ctrl+m", "piper", "elevenlabs", "coupure", "stop"],
     alias: ["voix-jarvis"],
   },
   {
     id: "ecoute",
     categorie: "voix",
-    titre: "Écoute et dictée",
-    description: "Dictée, mains libres « Jarvis, … », écran décrit sur demande",
     motsCles: ["micro", "transcription", "whisper", "mains libres", "eveil", "dictee", "ecran", "vision"],
   },
   {
     id: "eveil",
     categorie: "voix",
-    titre: "Éveil « Dis Jarvis »",
-    description: "Écoute en fond, relance sans « Jarvis », commandes stop et silence, mémoire d'ambiance",
     motsCles: ["dis jarvis", "mot d'eveil", "fond", "relance", "veille", "stop", "ambiance", "openwakeword", "juge"],
     alias: ["dis-jarvis", "ambiance"],
   },
   {
     id: "transcription",
     categorie: "voix",
-    titre: "Transcription",
-    description: "Modèle Whisper, carte graphique ou processeur, préchauffage, fin de tour",
     motsCles: ["whisper", "cuda", "rocm", "gpu", "carte graphique", "latence", "vad", "silero", "prechauffage", "hallucinations"],
   },
   {
     id: "proprietaire",
     categorie: "voix",
-    titre: "Reconnaissance de ma voix",
-    description: "Vérifier que c'est vous avant une action 🟡🔴 demandée à voix haute",
     motsCles: ["locuteur", "empreinte", "ecapa", "voix", "securite", "biometrie", "proprietaire"],
     alias: ["ma-voix"],
   },
   {
     id: "dictee",
     categorie: "voix",
-    titre: "Dictée globale",
-    description: "Maintenir Ctrl+Alt+D pour dicter dans n'importe quelle application",
     motsCles: ["dicter", "coller", "raccourci", "corrections", "dictionnaire", "windows", "presse-papiers"],
   },
   {
     id: "connecteurs",
     categorie: "cerveau",
-    titre: "Connecteurs",
-    description: "Vos IA : compte Claude, clés d'API, modèles locaux",
     motsCles: ["ia", "moteurs", "modeles", "claude", "ollama", "api", "cle", "openai", "anthropic", "cerveau"],
     alias: ["cerveau-modeles", "modeles"],
   },
   {
     id: "couts",
     categorie: "cerveau",
-    titre: "Coûts et plafonds",
-    description: "Dépenses du jour et du mois, plafond par connecteur, jauges d'abonnement",
     motsCles: ["argent", "depenses", "budget", "plafond", "limite", "abonnement", "jauge", "dollars"],
     alias: ["plafonds"],
   },
   {
     id: "accueil-matin",
     categorie: "matin",
-    titre: "Accueil du matin et maison",
-    description: "Parlé, texte seul ou désactivé ; lieu de la météo (privé)",
     motsCles: ["matin", "salutation", "meteo", "ville", "maison", "localisation", "lieu", "position", "rejouer"],
     alias: ["localisation"],
   },
   {
     id: "installation",
     categorie: "matin",
-    titre: "Installation",
-    description: "Diagnostic du premier lancement, réparations, préréglages",
     motsCles: ["diagnostic", "verifications", "assistant", "premier lancement", "reparer", "prereglages"],
     alias: ["diagnostic"],
   },
   {
     id: "blocs-memoire",
     categorie: "memoire",
-    titre: "Mémoire",
-    description: "Blocs toujours donnés à JARVIS, modèle d'embeddings, tâches de nuit",
     motsCles: ["souvenirs", "blocs", "preferences", "noyau", "nuit", "embeddings", "prive"],
   },
   {
     id: "profil",
     categorie: "memoire",
-    titre: "Profil",
-    description: "Questionnaire guidé par sections, réponses gardées en mémoire",
     motsCles: ["questionnaire", "entretien", "moi", "qui je suis", "personnel"],
   },
   {
     id: "urgence",
     categorie: "securite",
-    titre: "Arrêt d'urgence",
-    description: "Tout arrêter tout de suite ; la levée demande une clé d'accès",
     motsCles: ["stop", "arreter", "bloquer", "danger"],
   },
   {
     id: "cles-acces",
     categorie: "securite",
-    titre: "Clés d'accès",
-    description: "Empreinte, visage ou code de l'appareil pour approuver les actions 🔴",
     motsCles: ["webauthn", "empreinte", "visage", "approuver", "rouge", "passkey"],
     alias: ["cles"],
   },
   {
     id: "donnees",
     categorie: "securite",
-    titre: "Où partent mes données",
-    description: "Chaque fonction : service contacté, ce qui part, local ou non, où le couper ; accord images",
     motsCles: ["confidentialite", "vie privee", "flux", "cloud", "internet", "envoi", "images", "accord", "local", "rgpd"],
     alias: ["flux", "confidentialite", "vie-privee"],
   },
   {
     id: "audit",
     categorie: "securite",
-    titre: "Journal d'audit",
-    description: "Toutes les actions, chaînées par empreintes",
     motsCles: ["journal", "historique des actions", "traces", "chaine"],
   },
   {
     id: "regles-protection",
     categorie: "securite",
-    titre: "Règles de protection",
-    description: "« Ne touche jamais à… », « demande-moi avant… » : appliquées par le Core à chaque action",
     motsCles: ["regles", "interdire", "interdit", "demander avant", "garde-fous", "protection", "jamais"],
     alias: ["regles"],
   },
   {
     id: "autorisations",
     categorie: "securite",
-    titre: "Toujours autorisé",
-    description: "Actions 🟡 que vous avez choisi de ne plus approuver à chaque fois",
     motsCles: ["toujours autoriser", "autorisation permanente", "confiance", "approbation", "retirer"],
     alias: ["toujours-autoriser"],
   },
   {
     id: "appareils",
     categorie: "appareils",
-    titre: "Appareils autorisés",
-    description: "Associer, voir et révoquer les appareils",
     motsCles: ["jumelage", "associer", "revoquer", "qr"],
   },
   {
     id: "telephone",
     categorie: "appareils",
-    titre: "Téléphone",
-    description: "JARVIS hors de chez vous par Tailscale, installation sur l'écran d'accueil",
     motsCles: ["mobile", "iphone", "android", "tailscale", "pwa", "distance"],
   },
   {
     id: "notifications",
     categorie: "appareils",
-    titre: "Notifications et appel de décision",
-    description: "Recevoir sur cet appareil les demandes 🟡🔴 : oui, non ou plus tard",
     motsCles: ["push", "notification", "web push", "decision", "approuver", "rappel", "plus tard", "telephone"],
     alias: ["push", "decision"],
   },
   {
     id: "envois",
     categorie: "appareils",
-    titre: "Envoyer un fichier au téléphone",
-    description: "Lien à usage unique, valable quelques minutes",
     motsCles: ["fichier", "lien", "telecharger", "usage unique", "envoyer", "transfert"],
     alias: ["fichiers", "liens"],
   },
   {
     id: "partages",
     categorie: "appareils",
-    titre: "Reçu par « Partager vers JARVIS »",
-    description: "Textes et liens envoyés depuis le téléphone (toujours non fiables)",
     motsCles: ["partager", "partage", "share", "recu", "lien", "texte"],
   },
   {
     id: "bureau",
     categorie: "appareils",
-    titre: "Bureau : raccourcis, gadget, liens jarvis://",
-    description: "Raccourcis globaux de l'application de bureau et protocole jarvis://",
     motsCles: ["raccourci", "clavier", "gadget", "widget", "protocole", "jarvis://", "voix", "ecran", "tauri"],
     alias: ["raccourcis-bureau", "gadget", "protocole"],
   },
   {
     id: "ressources-pc",
     categorie: "pc",
-    titre: "Ressources du PC",
-    description: "Processeur, mémoire vive, carte graphique, mémoire vidéo ; Ollama à la demande",
     motsCles: ["cpu", "ram", "gpu", "vram", "processeur", "memoire video", "carte graphique", "ollama", "ia locales", "decharger", "modele", "courbe", "alerte"],
     alias: ["ressources", "ollama", "ia-locales"],
   },
   {
     id: "mode-jeu",
     categorie: "pc",
-    titre: "Mode jeu",
-    description: "Veille stricte pendant une partie : automatique, forcée ou jamais",
     motsCles: ["jeu", "jeux", "veille", "veille stricte", "partie", "steam", "plein ecran", "silence"],
     alias: ["jeu", "veille-stricte"],
   },
   {
     id: "controle-pc",
     categorie: "pc",
-    titre: "Contrôle du PC",
-    description: "Volume, luminosité, média en cours, fenêtres, modes de Windows, verrouillage, extinction",
     motsCles: ["volume", "son", "sourdine", "luminosite", "ecran", "musique", "media", "pause", "fenetres", "verrouiller", "eteindre", "extinction", "mode nuit", "concentration", "notifications", "plan d'alimentation", "windows"],
     alias: ["controle", "pc-controle", "windows"],
   },
   {
     id: "veille-claude",
     categorie: "appareils",
-    titre: "Veille de vos sessions Claude Code",
-    description: "Être prévenu quand une session vous attend ou attend une permission (lecture seule)",
     motsCles: ["claude code", "sessions", "alerte", "notification", "permission", "vous attend", "terminal", "ateliers"],
     alias: ["veille", "sessions-claude"],
   },
   {
     id: "version",
     categorie: "appareils",
-    titre: "Version",
-    description: "Version du Core et de l'interface",
     motsCles: ["mise a jour", "numero", "a propos"],
   },
 ];
+
+export const SECTIONS: readonly Section[] = BRUTES.map(versSection);
 
 export function categorie(id: IdCategorie): Categorie {
   const trouvee = CATEGORIES.find((c) => c.id === id);
@@ -332,7 +306,21 @@ export function sectionsDe(id: IdCategorie): Section[] {
 /** Score d'une section pour la recherche (0 : écartée). Tous les mots doivent être trouvés. */
 function score(s: Section, mots: string[]): number {
   const titre = normaliser(s.titre);
-  const reste = normaliser([s.description, categorie(s.categorie).nom, s.id, ...(s.alias ?? []), ...s.motsCles].join(" "));
+  // Dans la langue courante, et en français (les mots-clés le sont) : « thème » trouve aussi la section en anglais
+  const enFrancais = (c: Cle) => traduire("fr", c);
+  const id = s.id as IdSection;
+  const reste = normaliser(
+    [
+      s.description,
+      categorie(s.categorie).nom,
+      enFrancais(`reglages.section.${id}.titre`),
+      enFrancais(`reglages.section.${id}.description`),
+      enFrancais(`reglages.cat.${s.categorie}.nom`),
+      s.id,
+      ...(s.alias ?? []),
+      ...s.motsCles,
+    ].join(" "),
+  );
   let total = 0;
   for (const mot of mots) {
     if (titre.startsWith(mot)) total += 4;
