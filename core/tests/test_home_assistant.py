@@ -75,7 +75,9 @@ async def action(client: httpx.AsyncClient, nom_action: str, **parametres: Any) 
 async def approuver(client: httpx.AsyncClient, reponse: httpx.Response) -> httpx.Response:
     corps = reponse.json()
     assert corps["statut"] == "en_attente", corps
-    return await client.post(f"/v1/demandes/{corps['demande']['id']}/approuver", json={})
+    return await client.post(
+        f"/v1/demandes/{corps['demande']['id']}/approuver", json={"empreinte": corps["demande"]["empreinte"]}
+    )
 
 
 async def noms_actions(client: httpx.AsyncClient) -> set[str]:
@@ -278,11 +280,14 @@ async def test_rouge_cle_d_acces_et_voix(maison: dict[str, Any], pool: Base) -> 
     await p.observer(resultat("Jarvis, ouvre la porte d'entrée"))
     demande = (await action(client, "ha.serrure", entite="lock.entree", operation="ouvrir")).json()["demande"]
     assert demande["niveau"] == "rouge" and "OUVRIR" in demande["resume"]
-    clic = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={})
+    clic = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"empreinte": demande["empreinte"]})
     assert clic.status_code == 409 and "clé d'accès" in clic.json()["detail"] and ha.services == []
     cle = await enregistrer_cle(client)
     defi = (await client.post(f"/v1/demandes/{demande['id']}/options")).json()
-    ok = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"credential": cle.signer(defi)})
+    ok = await client.post(
+        f"/v1/demandes/{demande['id']}/approuver",
+        json={"empreinte": demande["empreinte"], "credential": cle.signer(defi)},
+    )
     assert ok.status_code == 200 and ha.services == [("lock.unlock", {"entity_id": "lock.entree"})]
 
     # Alarme : le code vient du coffre au moment d'agir, jamais de la demande ni du journal
@@ -290,7 +295,10 @@ async def test_rouge_cle_d_acces_et_voix(maison: dict[str, Any], pool: Base) -> 
     alarme = (await action(client, "ha.alarme", entite="alarm_control_panel.maison", mode="desarmer")).json()
     assert "1234" not in json.dumps(alarme)
     defi = (await client.post(f"/v1/demandes/{alarme['demande']['id']}/options")).json()
-    ok = await client.post(f"/v1/demandes/{alarme['demande']['id']}/approuver", json={"credential": cle.signer(defi)})
+    ok = await client.post(
+        f"/v1/demandes/{alarme['demande']['id']}/approuver",
+        json={"empreinte": alarme["demande"]["empreinte"], "credential": cle.signer(defi)},
+    )
     assert ok.status_code == 200
     assert ha.services[-1] == (
         "alarm_control_panel.alarm_disarm",
@@ -304,7 +312,10 @@ async def test_rouge_cle_d_acces_et_voix(maison: dict[str, Any], pool: Base) -> 
     portail = (await action(client, "ha.portail", entite="cover.portail", operation="ouvrir")).json()["demande"]
     p.empreinteur = FauxEmpreinteur(present=False)
     defi = (await client.post(f"/v1/demandes/{portail['id']}/options")).json()
-    echec = await client.post(f"/v1/demandes/{portail['id']}/approuver", json={"credential": cle.signer(defi)})
+    echec = await client.post(
+        f"/v1/demandes/{portail['id']}/approuver",
+        json={"empreinte": portail["empreinte"], "credential": cle.signer(defi)},
+    )
     assert echec.status_code == 409 and "indisponible" in echec.json()["detail"]
     assert ha.services[-1][0] == "alarm_control_panel.alarm_disarm"
 
