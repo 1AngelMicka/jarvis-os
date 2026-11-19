@@ -392,7 +392,7 @@ async def test_aucun_secret_n_atteint_un_fournisseur_externe(systeme: dict[str, 
     for valeur in (SECRETS["clé"], SECRETS["e-mail"], SECRETS["téléphone"]):
         assert valeur not in envoye
     fin = next(e for e in evenements if e.type == "fin")
-    assert "[SECRET : clé d'API]" in envoye and fin.donnees["masques"]["E-MAIL"] == 1
+    assert "[SECRET : clé Anthropic]" in envoye and fin.donnees["masques"]["E-MAIL"] == 1
     assert evenements[-1].type == "titre"  # le dernier envoi (`recus`) est la demande de titre : masquée elle aussi
     # La conversation stockée garde le texte d'origine ; un modèle LOCAL le reçoit tel quel
     conv = uuid.UUID(evenements[0].donnees["conversation_id"])

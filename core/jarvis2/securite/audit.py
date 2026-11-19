@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
 from ..db import Base, Connexion, Executant
+from .filtre import masquer_secrets, masquer_valeurs
 
 Niveau = Literal["vert", "jaune", "rouge"]
 ORIGINE = "0" * 64
@@ -65,6 +66,10 @@ async def journaliser(
     details: dict[str, Any] | None = None,
     resultat: str = "ok",
 ) -> dict[str, Any]:
+    # Aucun secret (clé, jeton, mot de passe, carte, code à usage unique) n'est écrit dans un journal inaltérable.
+    details = masquer_valeurs(details or {})
+    cible = masquer_secrets(cible) if cible is not None else None
+    resultat = masquer_secrets(resultat)
     if conn.dialecte == "sqlite":
         return await _journaliser_sqlite(conn, acteur, action, niveau, cible, details or {}, resultat)
     ligne = await conn.fetchrow(
