@@ -568,97 +568,99 @@ export function VueConnaissances({ surChangement }: { surChangement: (m?: string
   useEffect(charger, [charger]);
 
   return (
-    <div className="savoir" data-detail={choisi ? "" : undefined}>
-      <aside className="savoir-liste" aria-labelledby="savoir-domaines">
-        <div className="savoir-liste-tete">
-          <h3 className="sec-titre" id="savoir-domaines">
-            Domaines
-          </h3>
-          {!creation && (
-            <button
-              type="button"
-              className="btn btn-mini"
-              onClick={() => {
-                setCreation(true);
-              }}
-            >
-              Nouveau domaine
-            </button>
-          )}
-        </div>
-        <p className="sec-texte">
-          Chaque mission de recherche qui relève d'un domaine l'enrichit : carte, fiches, questions de contrôle et niveau.
-          {scientifique ? " Sources : web et bases scientifiques (OpenAlex, arXiv, PubMed, Europe PMC)." : ""}
-        </p>
-        {creation && (
-          <FormulaireDomaine
-            libelle="Créer"
-            surAnnuler={() => {
-              setCreation(false);
-            }}
-            surValider={async (v) => {
-              const r = await creerDomaine(v);
-              setCreation(false);
-              setChoisi(r.id);
-              charger();
-              surChangement(`Domaine « ${v.nom} » créé.`);
-            }}
-          />
-        )}
-        {erreur && (
-          <p className="securite-erreur" role="alert">
-            {erreur}
+    <div className="savoir-cadre">
+      <div className="savoir" data-detail={choisi ? "" : undefined}>
+        <aside className="savoir-liste" aria-labelledby="savoir-domaines">
+          <div className="savoir-liste-tete">
+            <h3 className="sec-titre" id="savoir-domaines">
+              Domaines
+            </h3>
+            {!creation && (
+              <button
+                type="button"
+                className="btn btn-mini"
+                onClick={() => {
+                  setCreation(true);
+                }}
+              >
+                Nouveau domaine
+              </button>
+            )}
+          </div>
+          <p className="sec-texte">
+            Chaque mission de recherche qui relève d'un domaine l'enrichit : carte, fiches, questions de contrôle et niveau.
+            {scientifique ? " Sources : web et bases scientifiques (OpenAlex, arXiv, PubMed, Europe PMC)." : ""}
           </p>
-        )}
-        {!domaines ? (
-          <div className="squelette squelette--ligne" />
-        ) : domaines.length === 0 ? (
-          !creation && <p className="sec-texte">Aucun domaine : créez-en un (ex. « Potager », mots-clés « tomate, semis »).</p>
-        ) : (
-          <ul className="savoir-domaines">
-            {domaines.map((d) => (
-              <li key={d.id}>
-                <button
-                  type="button"
-                  className="savoir-domaine"
-                  aria-current={choisi === d.id || undefined}
-                  onClick={() => {
-                    setChoisi(d.id);
-                  }}
-                >
-                  <span className="savoir-domaine-tete">
-                    <span className="savoir-domaine-nom">{d.nom}</span>
-                    {d.prive && <span className="badge-co" data-ton="attention">privé</span>}
-                    {(d.en_cours || d.en_attente > 0) && (
-                      <span className="badge-co" data-ton="attention">
-                        {d.en_cours ? "extraction…" : `${String(d.en_attente)} en attente`}
-                      </span>
-                    )}
-                  </span>
-                  <Jauge niveau={d.niveau} />
-                  <span className="carte-co-detail">
-                    {d.nb_fiches} fiche{d.nb_fiches > 1 ? "s" : ""} · {d.nb_questions} question{d.nb_questions > 1 ? "s" : ""}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </aside>
-      <section className="savoir-detail" aria-label="Domaine choisi">
-        {choisi ? (
-          <Detail
-            id={choisi}
-            surRetour={() => {
-              setChoisi(null);
-            }}
-            surChangement={surChangement}
-            surListe={charger}
-          />
-        ) : (
-          <p className="sec-texte savoir-vide">Choisissez un domaine pour voir sa carte, ses fiches et ses questions de contrôle.</p>
-        )}
-      </section>
+          {creation && (
+            <FormulaireDomaine
+              libelle="Créer"
+              surAnnuler={() => {
+                setCreation(false);
+              }}
+              surValider={async (v) => {
+                const r = await creerDomaine(v);
+                setCreation(false);
+                setChoisi(r.id);
+                charger();
+                surChangement(`Domaine « ${v.nom} » créé.`);
+              }}
+            />
+          )}
+          {erreur && (
+            <p className="securite-erreur" role="alert">
+              {erreur}
+            </p>
+          )}
+          {!domaines ? (
+            <div className="squelette squelette--ligne" />
+          ) : domaines.length === 0 ? (
+            !creation && <p className="sec-texte">Aucun domaine : créez-en un (ex. « Potager », mots-clés « tomate, semis »).</p>
+          ) : (
+            <ul className="savoir-domaines">
+              {domaines.map((d) => (
+                <li key={d.id}>
+                  <button
+                    type="button"
+                    className="savoir-domaine"
+                    aria-current={choisi === d.id || undefined}
+                    onClick={() => {
+                      setChoisi(d.id);
+                    }}
+                  >
+                    <span className="savoir-domaine-tete">
+                      <span className="savoir-domaine-nom">{d.nom}</span>
+                      {d.prive && <span className="badge-co" data-ton="attention">privé</span>}
+                      {(d.en_cours || d.en_attente > 0) && (
+                        <span className="badge-co" data-ton="attention">
+                          {d.en_cours ? "extraction…" : `${String(d.en_attente)} en attente`}
+                        </span>
+                      )}
+                    </span>
+                    <Jauge niveau={d.niveau} />
+                    <span className="carte-co-detail">
+                      {d.nb_fiches} fiche{d.nb_fiches > 1 ? "s" : ""} · {d.nb_questions} question{d.nb_questions > 1 ? "s" : ""}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+        <section className="savoir-detail" aria-label="Domaine choisi">
+          {choisi ? (
+            <Detail
+              id={choisi}
+              surRetour={() => {
+                setChoisi(null);
+              }}
+              surChangement={surChangement}
+              surListe={charger}
+            />
+          ) : (
+            <p className="sec-texte savoir-vide">Choisissez un domaine pour voir sa carte, ses fiches et ses questions de contrôle.</p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -494,7 +494,6 @@ function Hud() {
             type="button"
             className="btn btn-discret btn-mini btn-connecteurs"
             aria-pressed={vue === "connaissances"}
-            title="Connaissances par domaine : cartes, fiches, révisions"
             onClick={() => {
               setVue((v) => (v === "connaissances" ? "dialogue" : "connaissances"));
             }}
