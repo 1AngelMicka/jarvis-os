@@ -454,6 +454,8 @@ async def test_api_connaissances(pool: Base, tmp_path: Path) -> None:
     # Mission lancée depuis la vue Agents, rattachée au domaine
     m = await client.post("/v1/missions", json={"type": "recherche", "objectif": "Arrosage", "domaine_id": ident})
     await terminer(client, m.json()["id"])
+    # La tâche de la mission programme l'extraction juste après « terminée » : on attend sa fin
+    await asyncio.gather(*ctx.missions.taches.values())
     await ctx.connaissances.patienter()
     detail = (await client.get(f"/v1/connaissances/{ident}")).json()
     assert detail["niveau"] == 4 and len(detail["fiches"]) == 2 and detail["extractions"][0]["statut"] == "faite"
