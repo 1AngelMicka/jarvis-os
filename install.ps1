@@ -342,10 +342,20 @@ function Installer {
     $detailModele = ''
     if (Test-Path -LiteralPath $jarvis) {
         # Table matériel → modèle de JARVIS : lecture seule, rien n'est installé ni démarré
+        # (sortie lue en UTF-8 des deux côtés, pour les accents de la taille)
         $avant = $ErrorActionPreference
+        $encodage = [Console]::OutputEncoding
         $ErrorActionPreference = 'Continue'
-        try { $ligne = [string](& $jarvis materiel --modele conversation 2>$null | Select-Object -First 1) } catch { $ligne = '' }
-        finally { $ErrorActionPreference = $avant }
+        $env:PYTHONIOENCODING = 'utf-8'
+        try {
+            [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+            $ligne = [string](& $jarvis materiel --modele conversation 2>$null | Select-Object -First 1)
+        } catch { $ligne = '' }
+        finally {
+            $ErrorActionPreference = $avant
+            Remove-Item Env:PYTHONIOENCODING -ErrorAction SilentlyContinue
+            try { [Console]::OutputEncoding = $encodage } catch { $null = $_ }
+        }
         if ($ligne) {
             $morceaux = $ligne.Split("`t")
             $modele = $morceaux[0]
