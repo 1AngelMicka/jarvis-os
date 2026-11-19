@@ -479,3 +479,22 @@ export interface LieuTrouve {
   longitude: number;
 }
 export type Prereglage = "conversation" | "code" | "recherche" | "point_du_matin";
+
+// --- Connecteurs maison facultatifs (Hue, OBS) ---
+export interface OutilMaison {
+  nom: string;
+  connecteur: "hue" | "obs";
+  niveau: "vert" | "jaune" | "rouge";
+  description: string;
+  parametres: Record<string, string>;
+}
+
+export interface ConnecteurMaison {
+  id: "hue" | "obs";
+  nom: string;
+  description: string;
+  actif: boolean;
+  adresse: string | null;
+  secret_enregistre: boolean;
+  outils: OutilMaison[];
+}
