@@ -156,3 +156,9 @@ L'import est rejouable (rattrapage) : une ligne n'est mise à jour que si elle a
 - **Validité temporelle sans DELETE** : `valid_from`, `valid_to`, `superseded_by`, `observed_at` ; la recherche et le noyau ne voient que `valid_to IS NULL AND NOT archived`.
 - **Oubli et consolidation** : `importance` (0 à 1), `last_accessed_at`, `access_count`, `archived`, `derived_from`.
 - **Blocs éditables** (`memory_blocks`, historique `memory_block_versions`) : créés mais vides ; le noyau reste pour l'instant le tag `noyau` et deviendra des blocs en phase 8.
+
+## Où partent mes données (phase 14 · C15, migration 013)
+
+- `GET /v1/donnees/flux` (`flux_donnees.py`) décrit chaque fonction depuis la configuration **réelle** : connecteurs actifs (et munis de leur clé), SearXNG, sources scientifiques, Open-Meteo, téléchargements Hugging Face, téléphone (Tailscale), ouverture au réseau, serveurs MCP, et ce qui reste sur le PC (mémoire, dictée, voix, interface, écran décrit). Pour chacune : service contacté, ce qui part, ce qui ne part jamais, destination, où le désactiver (section de la vue Réglages ou clé de la configuration).
+- La destination est une **catégorie** (`pc`, `reseau`, `internet`, `variable`), jamais l'adresse : ni URL de SearXNG ou d'un point d'accès, ni nom Tailscale, ni lieu de la maison, ni commande ou chemin d'un serveur MCP, ni clé. Un test vérifie qu'aucune de ces valeurs n'apparaît dans la réponse.
+- **Accord images** : une image jointe ne part vers un connecteur `externe` qui lit les images qu'après un accord donné une fois **par connecteur** (`connecteurs.images_accordees_le`), tracé à l'audit, révocable dans Réglages › Sécurité › Où partent mes données. Sans accord, le dialogue renvoie l'événement SSE `accord_images` **avant** d'ouvrir la conversation : rien n'est envoyé ni enregistré, l'interface demande l'accord puis renvoie le message. Les IA locales n'en demandent pas.

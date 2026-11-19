@@ -26,6 +26,7 @@ import { EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal, reglerVoix, voixL
 import { Telephone, Verifications } from "./Accueil";
 import { VueConnecteurs } from "./Connecteurs";
 import { VueCouts } from "./Couts";
+import { FluxDonnees } from "./FluxDonnees";
 import { ReglagesMatin } from "./Matin";
 import { SectionMemoire } from "./Memoire";
 import { PanneauSecurite } from "./Securite";
@@ -463,6 +464,8 @@ export function VueReglages(p: Props) {
         );
       case "cles-acces":
         return <PanneauSecurite nbCles={p.etat?.cles_acces ?? 0} surChangement={p.surChangement} blocs={["cles"]} />;
+      case "donnees":
+        return <FluxDonnees surNotifier={p.surNotifier} />;
       case "audit":
         return <PanneauSecurite nbCles={p.etat?.cles_acces ?? 0} surChangement={p.surChangement} blocs={["audit"]} />;
       case "appareils":

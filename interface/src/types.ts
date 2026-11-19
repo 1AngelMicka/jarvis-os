@@ -37,6 +37,9 @@ export interface Connecteur extends InfoMoteur {
   cle: { requise: boolean; enregistree: boolean; apercu: string | null; url: string | null } | null;
   conditions: { version: string; texte: string; url: string } | null;
   conditions_acceptees: boolean;
+  /** Connecteur cloud qui lit les images : une image jointe n'y part qu'après un accord (mémorisé, révocable). */
+  images_accord_requis?: boolean;
+  images_accordees_le?: string | null;
 }
 
 export interface AvisExpert {
@@ -216,7 +219,9 @@ export type EvenementDialogue =
   | { type: "erreur"; donnees: { message: string; conversation_id?: string } }
   | { type: "avis"; donnees: AvisExpert }
   | { type: "titre"; donnees: { conversation_id: string; titre: string } }
-  | { type: "invente"; donnees: { message_id: number; affirmations: AffirmationInventee[] } };
+  | { type: "invente"; donnees: { message_id: number; affirmations: AffirmationInventee[] } }
+  /** Image jointe pour un connecteur cloud sans accord : rien n'est parti, l'accord est demandé. */
+  | { type: "accord_images"; donnees: { connecteur: string; nom: string; message: string } };
 
 // --- Premier lancement ---
 export interface Verification {
@@ -479,3 +484,28 @@ export interface LieuTrouve {
   longitude: number;
 }
 export type Prereglage = "conversation" | "code" | "recherche" | "point_du_matin";
+
+// --- Où partent mes données ---
+export type DestinationFlux = "pc" | "reseau" | "internet" | "variable";
+
+/** Un flux de données de cette installation, généré par le Core depuis la configuration réelle. */
+export interface FluxDonnee {
+  id: string;
+  categorie: string;
+  fonction: string;
+  service: string;
+  destination: DestinationFlux;
+  local: boolean;
+  etat: "actif" | "sur_accord" | "inactif";
+  envoie: string[];
+  jamais: string[];
+  detail: string | null;
+  desactiver: { texte: string; reglage: string | null; vue: string | null };
+  images: { accorde: boolean; accorde_le: string | null } | null;
+}
+
+export interface CarteFlux {
+  genere_le: string;
+  resume: { flux: number; locaux: number; sortants_actifs: number; internet_actifs: number; connecteurs_inactifs: number };
+  flux: FluxDonnee[];
+}

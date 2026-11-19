@@ -43,6 +43,10 @@ class Plafond(BaseModel):
     plafond_usd: float | None = Field(default=None, ge=0, le=100_000)  # None : aucun plafond
 
 
+class AccordImages(BaseModel):
+    accorde: bool  # True : les images jointes peuvent partir vers ce connecteur ; False : accord révoqué
+
+
 class Inclusion(BaseModel):
     inclus: bool
 
@@ -105,6 +109,12 @@ async def supprimer_cle(request: Request, ident: str) -> dict[str, Any]:
 async def definir_plafond(request: Request, ident: str, corps: Plafond) -> dict[str, Any]:
     """Plafond de dépenses mensuel d'un connecteur payant (alerte à 80 %, refus au-delà)."""
     return await _agir(gestion(request).definir_plafond(ident, corps.plafond_usd, appareil_courant(request)))
+
+
+@routeur.put("/connecteurs/{ident}/images")
+async def accorder_images(request: Request, ident: str, corps: AccordImages) -> dict[str, Any]:
+    """Accord séparé avant d'envoyer une image jointe à un connecteur cloud (mémorisé, révocable)."""
+    return await _agir(gestion(request).accorder_images(ident, corps.accorde, appareil_courant(request)))
 
 
 @routeur.get("/couts")

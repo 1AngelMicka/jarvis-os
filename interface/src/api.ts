@@ -11,6 +11,7 @@ import type {
   EtapeChantier,
   StatutChantier,
   Appareil,
+  CarteFlux,
   Connecteur,
   Demande,
   Materiel,
@@ -171,6 +172,10 @@ export const supprimerCleApi = (id: string) => appeler<{ ok: boolean }>(`/v1/con
 export const lireCouts = () => unSeul("couts", () => appeler<ResumeCouts>("/v1/couts"));
 export const definirPlafond = (id: string, plafond_usd: number | null) =>
   appeler<{ ok: boolean }>(`/v1/connecteurs/${id}/plafond`, { methode: "PUT", corps: { plafond_usd } });
+/** Accord séparé avant d'envoyer une image jointe à un connecteur cloud (`false` : révoqué). */
+export const accorderImages = (id: string, accorde: boolean) =>
+  appeler<{ ok: boolean }>(`/v1/connecteurs/${encodeURIComponent(id)}/images`, { methode: "PUT", corps: { accorde } });
+export const lireFluxDonnees = () => unSeul("flux-donnees", () => appeler<CarteFlux>("/v1/donnees/flux"));
 export const lireMateriel = () => unSeul("materiel", () => appeler<Materiel>("/v1/materiel"));
 
 // --- Premier lancement : assistant, diagnostic, téléphone ---

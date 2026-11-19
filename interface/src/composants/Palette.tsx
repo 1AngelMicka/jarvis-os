@@ -30,7 +30,7 @@ interface PaletteProps {
 }
 
 /** Fenêtre modale : un champ en haut, la liste filtrée dessous (flèches, Entrée, Échap). */
-function Fenetre({ etiquette, surFermer, children, className }: { etiquette: string; surFermer: () => void; children: React.ReactNode; className?: string }) {
+export function Fenetre({ etiquette, surFermer, children, className }: { etiquette: string; surFermer: () => void; children: React.ReactNode; className?: string }) {
   const fenetre = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const d = fenetre.current;
