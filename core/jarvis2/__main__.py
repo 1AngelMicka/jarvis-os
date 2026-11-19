@@ -3,6 +3,7 @@
 - `migrer`  : applique les migrations du stockage choisi (SQLite par défaut, PostgreSQL en option)
 - `serveur` : lance le Core sur JARVIS2_HOTE:JARVIS2_PORT (127.0.0.1:8765 par défaut) ; `--sans-ecran` pour un
   serveur domestique (capture, clics et contrôle de l'écran refusés, voix par le micro du navigateur)
+- `mettre-a-jour` : cherche une nouvelle version publiée et l'installe après accord (`--oui` pour les scripts)
 """
 
 from __future__ import annotations
@@ -371,8 +372,16 @@ def main(argv: list[str] | None = None) -> int:
         choices=[u.id for u in TABLE_MATERIEL],
         help="une ligne « modèle<TAB>mémoire en Go<TAB>taille » pour cet usage (installeurs) ; code 1 si rien ne tient",
     )
+    maj = sous.add_parser(
+        "mettre-a-jour", help="chercher une nouvelle version du Core et l'installer, après votre accord"
+    )
+    maj.add_argument("--oui", action="store_true", help="installer sans poser la question (scripts)")
     sous.add_parser("atelier-mcp", help="(interne) outil d'autorisation des ateliers, lancé par Claude Code")
     args = analyseur.parse_args(argv)
+    if args.commande == "mettre-a-jour":  # sans paramètres ni base : fonctionne même si la configuration est cassée
+        from .mise_a_jour import mettre_a_jour
+
+        return mettre_a_jour(args.oui)
     if args.commande == "materiel":  # sans paramètres ni journal : lu par les installeurs avant toute configuration
         return _materiel(args.json, args.modele)
     if args.commande == "atelier-mcp":  # serveur MCP stdio : aucun journal sur la sortie standard

@@ -232,6 +232,47 @@ def _telechargements(c: Contexte, p: Parametres) -> list[Flux]:
     ]
 
 
+async def _mises_a_jour(c: Contexte) -> list[Flux]:
+    """Nouvelles versions : le Core (indicateur des Réglages) et l'application de bureau (son propre programme)."""
+    actif = await c.mises_a_jour.actif()
+    return [
+        Flux(
+            id="mises_a_jour",
+            categorie="installation",
+            fonction="Nouvelle version du Core (indicateur des Réglages)",
+            service="GitHub (API publique des versions, sans compte ni jeton)",
+            destination="internet",
+            etat="actif" if actif else "inactif",
+            envoie=[
+                "La demande de la dernière version publiée, au plus une fois par jour (votre adresse IP)",
+                "Le numéro de version du programme qui demande (en-tête « jarvis2 »)",
+            ],
+            jamais=["Vos données, votre mémoire, vos conversations : on reçoit un numéro de version, on n'envoie rien"],
+            desactiver=Desactivation("Décocher « Vérifier les nouvelles versions »", reglage="version"),
+            detail="Rien n'est installé sans votre accord (commande « jarvis2 mettre-a-jour »).",
+        ),
+        Flux(
+            id="mises_a_jour_bureau",
+            categorie="installation",
+            fonction="Mises à jour de l'application de bureau",
+            service="GitHub (fichier public latest.json des versions)",
+            destination="internet",
+            # Le Core ne voit pas l'application : indiqué actif, par prudence, avec ses conditions dans le détail
+            etat="actif",
+            envoie=["Le téléchargement de latest.json au démarrage puis une fois par jour (votre adresse IP)"],
+            jamais=["Vos données : on reçoit la description de la dernière version, on n'envoie rien"],
+            desactiver=Desactivation(
+                "Décocher « Vérifier les mises à jour chaque jour » dans le menu de l'icône de notification de "
+                "l'application (ou JARVIS2_MISES_A_JOUR=0)"
+            ),
+            detail=(
+                "Seulement si l'application de bureau est installée et que sa clé de vérification des mises à jour "
+                "est configurée ; installation seulement après votre accord."
+            ),
+        ),
+    ]
+
+
 def _locaux(c: Contexte) -> list[Flux]:
     flux = [
         Flux(
@@ -377,6 +418,7 @@ async def decrire(c: Contexte, p: Parametres) -> dict[str, Any]:
         *_recherche(c),
         *await _meteo(c),
         *_telechargements(c, p),
+        *await _mises_a_jour(c),
         *_telephone(c, p),
         *await _mcp(c),
         *await _elevenlabs(c),

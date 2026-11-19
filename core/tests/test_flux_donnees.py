@@ -233,3 +233,26 @@ async def test_accord_images_par_le_routeur(systeme: dict[str, Any]) -> None:
     with pytest.raises(AccordImagesRequis) as exc:
         [e async for e in systeme["service"].repondre("Vois", images=[Image("image/png", PNG)])]
     assert exc.value.connecteur == "compte"
+
+
+async def test_flux_mises_a_jour(systeme: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    """Core : actif par défaut, inactif une fois désactivé dans Réglages ; application de bureau : flux à part.
+    Désactiver ne contacte pas GitHub (tout vrai transport réseau est interdit ici)."""
+
+    async def interdit(self: Any, requete: httpx.Request) -> httpx.Response:
+        raise AssertionError(f"appel réseau réel interdit : {requete.url}")
+
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", interdit)
+    client = systeme["client"]
+    flux = {f["id"]: f for f in (await client.get("/v1/donnees/flux")).json()["flux"]}
+    maj = flux["mises_a_jour"]
+    assert maj["destination"] == "internet" and maj["etat"] == "actif" and maj["desactiver"]["reglage"] == "version"
+    assert "GitHub" in maj["service"]
+    bureau = flux["mises_a_jour_bureau"]
+    assert bureau["destination"] == "internet" and "latest.json" in bureau["service"]
+    assert "JARVIS2_MISES_A_JOUR=0" in bureau["desactiver"]["texte"]
+    r = await client.put("/v1/mises-a-jour", json={"verifier": False})
+    assert r.status_code == 200 and r.json()["active"] is False
+    assert (await client.get("/v1/mises-a-jour")).json() == r.json()
+    flux = {f["id"]: f for f in (await client.get("/v1/donnees/flux")).json()["flux"]}
+    assert flux["mises_a_jour"]["etat"] == "inactif"

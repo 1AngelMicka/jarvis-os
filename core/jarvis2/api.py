@@ -57,6 +57,7 @@ from .api_matin import routeur as routeur_matin
 from .api_medias import routeur as routeur_medias
 from .api_medias import routeur_pages as routeur_creations
 from .api_memoire import routeur as routeur_memoire
+from .api_mises_a_jour import routeur as routeur_mises_a_jour
 from .api_pc import routeur as routeur_pc
 from .api_pilotage import routeur as routeur_pilotage
 from .api_profil import routeur as routeur_profil
@@ -84,6 +85,7 @@ from .maison import GestionnaireMaison
 from .matin import ServiceMeteo
 from .memoire import Expurgateur, ReglagesRecherche
 from .memoire_v2 import EtatBascule, basculer, modele_actif, modele_majoritaire
+from .mise_a_jour import ServiceMisesAJour
 from .moteurs.base import ErreurMoteur, Options
 from .moteurs.telemetrie import EnregistreurBase, MoteurInstrumente
 from .nuit import taches_memoire
@@ -164,6 +166,7 @@ class Contexte:
     proprietaire: ServiceProprietaire = field(init=False)  # reconnaissance du propriétaire à la voix (lot K3)
     dictee: ServiceDictee = field(init=False)
     juge_fin_tour: JugeFinDeTour = field(init=False)
+    mises_a_jour: ServiceMisesAJour = field(init=False)  # « nouvelle version » : au plus 1×/jour, désactivable
 
     def __post_init__(self) -> None:
         self.ameliorations = ServiceAmeliorations(self.pool, self.ateliers, self.urgence)
@@ -207,6 +210,7 @@ class Contexte:
         self.approbations.apres_demande = self.notifier_demande
         self.proprietaire = ServiceProprietaire(self.pool, self.dossier_donnees, self.dossier_modeles)
         self.dictee = ServiceDictee(self.pool)
+        self.mises_a_jour = ServiceMisesAJour(self.pool)
         self.juge_fin_tour = JugeFinDeTour(self.url_ollama, self.modele_fin_tour)
         if isinstance(self.transcripteur, TranscripteurRobuste):  # chaque phrase : verdict du propriétaire
             self.transcripteur.observateur = self.proprietaire.observer
@@ -679,6 +683,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_pilotage)
     app.include_router(routeur_pc)
     app.include_router(routeur_eveil)
+    app.include_router(routeur_mises_a_jour)
 
     dossier = parametres.dossier_interface
     if (dossier / "index.html").is_file():
