@@ -24,7 +24,7 @@ curl -LsSf https://raw.githubusercontent.com/1AngelMicka/jarvis-os/main/install.
 
 Sans Docker ni Node. Détails et options [plus bas](#détails-de-linstallation) et dans [docs/INSTALLATION.md](docs/INSTALLATION.md) ; en cas de problème : [docs/DEPANNAGE.md](docs/DEPANNAGE.md).
 
-> **Statut : en développement (0.8.0).** Les phases 1 à 10 du plan sont faites (socle, dialogue, mémoire, sécurité, connecteurs d'IA, installation, agents, mémoire v2, ateliers Claude Code, voix et vision). L'application de bureau et ses installeurs sont construits par GitHub Actions, pas encore signés ; la sauvegarde chiffrée est prête. L'interface est en français ; une traduction anglaise est prévue.
+> **Statut : en développement (0.8.0).** Les phases 1 à 10 et 13 du plan sont faites (socle, dialogue, mémoire, sécurité, connecteurs d'IA, installation, agents, mémoire v2, ateliers Claude Code, voix et vision, toutes les capacités de JARVIS v1) ; la phase 14 est presque terminée. L'application de bureau et ses installeurs sont construits par GitHub Actions, pas encore signés ; la sauvegarde chiffrée est prête. L'interface existe en français et en anglais (écrans principaux ; quelques vues avancées restent en français).
 
 ## Captures
 
@@ -155,7 +155,7 @@ JARVIS 2 s'inspire de plusieurs projets d'assistants personnels. **Aucun n'est i
 | Dodaios | Apache-2.0 | Fin de tour, transcription anticipée (idée) | En place |
 | isair/jarvis | Non commerciale | Éveil en deux étages (idée seulement) | En place |
 | NeyorDEV/jarvis | GPL | MCP persistant, outils choisis par sens (idée seulement) | En place |
-| amanimran786/jarvis-ai | AGPL | Ateliers en bac à sable réel (repris à l'inverse : refus si indisponible) | Prévu |
+| amanimran786/jarvis-ai | AGPL | Ateliers en bac à sable réel (repris à l'inverse : refus si indisponible) | Fait (conteneur sans réseau, Windows Sandbox, bubblewrap, sandbox-exec ; pas encore essayé en vrai) |
 | Jarvis.sh | Sans licence claire | Commandes rapides sans LLM (idée seulement, sans `eval`) | En place |
 | jarvis799 | Sans licence claire | Actions vérifiées en relisant l'état (idée seulement) | En place (réglages du PC relus) |
 | hasibjaan | Sans licence claire | HUD séparé du fil audio (idée seulement) | En place (thème Présence) |

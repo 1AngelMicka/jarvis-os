@@ -24,7 +24,7 @@ curl -LsSf https://raw.githubusercontent.com/1AngelMicka/jarvis-os/main/install.
 
 No Docker, no Node. Details and options [below](#installation-details) and in [docs/INSTALLATION.md](docs/INSTALLATION.md); if something goes wrong: [docs/DEPANNAGE.md](docs/DEPANNAGE.md).
 
-> **Status: in development (0.8.0).** Phases 1 to 10 of the plan are done (foundation, dialogue, memory, security, AI connectors, installation, agents, memory v2, Claude Code workshops, voice and vision). The desktop app and its installers are built by GitHub Actions and are not signed yet; encrypted backup is ready. The interface is in French for now; an English translation is on the roadmap.
+> **Status: in development (0.8.0).** Phases 1 to 10 and 13 of the plan are done (foundation, dialogue, memory, security, AI connectors, installation, agents, memory v2, Claude Code workshops, voice and vision, every capability of JARVIS v1); phase 14 is nearly complete. The desktop app and its installers are built by GitHub Actions and are not signed yet; encrypted backup is ready. The interface is available in French and English (the main screens; a few advanced views are still French only).
 
 ## Screenshots
 
@@ -155,7 +155,7 @@ JARVIS 2 takes ideas from several personal-assistant projects. **None is install
 | Dodaios | Apache-2.0 | End of turn, early transcription (idea) | Built |
 | isair/jarvis | Non-commercial | Two-stage wake word (idea only) | Built |
 | NeyorDEV/jarvis | GPL | Persistent MCP, tools chosen by meaning (idea only) | Built |
-| amanimran786/jarvis-ai | AGPL | Workshops in a real sandbox (taken the other way round: refuse when unavailable) | Planned |
+| amanimran786/jarvis-ai | AGPL | Workshops in a real sandbox (taken the other way round: refuse when unavailable) | Done (container without network, Windows Sandbox, bubblewrap, sandbox-exec; not yet tried for real) |
 | Jarvis.sh | No clear licence | Quick commands without an LLM (idea only, without `eval`) | Built |
 | jarvis799 | No clear licence | Actions verified by re-reading the state (idea only) | Built (PC settings are read back) |
 | hasibjaan | No clear licence | HUD separated from the audio thread (idea only) | Built (Présence theme) |
