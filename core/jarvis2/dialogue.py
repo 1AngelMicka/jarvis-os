@@ -232,6 +232,10 @@ class ServiceDialogue:
                 extra = ""
             if extra:
                 consignes = "\n\n".join((consignes, extra))
+        if pilotage:  # widgets du HUD (phase 14, D 16) : fragment validé par le Core, jamais rendu brut
+            from . import widgets
+
+            consignes = "\n\n".join((consignes, widgets.consignes()))
         return consignes, contexte
 
     async def activite(self) -> str:
@@ -457,6 +461,29 @@ class ServiceDialogue:
                 journal.exception("Bloc d'actions non inscrit à l'audit")
         return extraction.texte, extraction.meta()
 
+    async def extraire_widgets(self, texte: str) -> tuple[str, dict[str, Any]]:
+        """(réponse sans bloc `<widget>`, meta « widgets ») : fragments validés et réécrits par `widgets.py`."""
+        from . import widgets
+
+        try:
+            extraction = widgets.extraire(texte)
+        except Exception:  # jamais bloquant : sans widget, la réponse reste
+            journal.exception("Blocs de widgets non validés : écartés")
+            return widgets.retirer_blocs(texte)[0], {}
+        if extraction.bloc:
+            try:
+                from .securite import audit
+
+                await audit.journaliser(
+                    self.depot.pool,
+                    acteur="jarvis",
+                    action="widgets.generes",
+                    details={"widgets": len(extraction.widgets), "ecartes": len(extraction.ecartes)},
+                )
+            except Exception:
+                journal.exception("Widgets non inscrits à l'audit")
+        return extraction.texte, extraction.meta()
+
     async def bloquer_actions(self, actions: list[dict[str, Any]]) -> None:
         try:
             await barriere.bloquer_pilotage(self.depot.pool, actions)
@@ -600,6 +627,10 @@ class ServiceDialogue:
                 "images": len(images),
             },
         )
+        if images:  # outil long (lecture d'images) : la phrase d'attente part tout de suite
+            from . import attente
+
+            yield EvenementDialogue("attente", attente.evenement("vision"))
         debut = time.perf_counter()
         morceaux: list[str] = []
         termine = False
@@ -612,6 +643,7 @@ class ServiceDialogue:
                 elif isinstance(evenement, Fin):
                     rep = evenement.reponse
                     texte_final, meta_actions = await self.extraire_actions(rep.texte)
+                    texte_final, meta_widgets = await self.extraire_widgets(texte_final)
                     meta = {
                         "moteur": instance.id_moteur,
                         "modele": rep.modele,
@@ -629,6 +661,7 @@ class ServiceDialogue:
                         **({"domaines": domaines_evoques(contexte)} if contexte.domaines else {}),
                     }
                     meta.update(meta_actions)
+                    meta.update(meta_widgets)
                     if tour.contamine:  # barrière d'injection : les propositions qui agissent sont bloquées
                         await self.bloquer_actions(meta.get("actions") or [])
                         meta["barriere"] = tour.bilan()
