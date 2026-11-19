@@ -69,13 +69,16 @@ describe("thèmes", () => {
     expect(themeDepuis("Studio nocturne")).toBe("studio");
     expect(themeDepuis("console")).toBe("console");
     expect(themeDepuis("JARVIS")).toBe("jarvis");
+    expect(themeDepuis("orbe")).toBe("presence");
+    expect(themeDepuis("Présence")).toBe("presence");
     expect(themeDepuis("")).toBeNull();
     expect(themeDepuis("arc-en-ciel")).toBeNull();
   });
 
   it("passe au thème suivant, en boucle", () => {
     expect(themeSuivant("jarvis")).toBe("studio");
-    expect(themeSuivant("console")).toBe("jarvis");
+    expect(themeSuivant("console")).toBe("presence");
+    expect(themeSuivant("presence")).toBe("jarvis");
   });
 });
 

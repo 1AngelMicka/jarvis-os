@@ -23,6 +23,9 @@ import { AccueilMatin } from "./composants/Matin";
 import { EcranJumelage } from "./composants/Jumelage";
 import { Panneau } from "./composants/Panneau";
 import { type EtatNoyau, Reacteur } from "./composants/Reacteur";
+import { OrbeFond, Presence } from "./composants/Orbe";
+import { etatPresence } from "./presence";
+import { usePresence } from "./usePresence";
 import { PanneauSecurite } from "./composants/Securite";
 import { CommandesVoix } from "./composants/Voix";
 import { SelecteurTheme } from "./composants/SelecteurTheme";
@@ -81,6 +84,8 @@ function Hud() {
   const [enCours, setEnCours] = useState(false);
   const [premierMorceau, setPremierMorceau] = useState(false);
   const [alerte, setAlerte] = useState(false);
+  const [compactage, setCompactage] = useState(false);
+  const presence = usePresence();
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
   const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire" | "connaissances" | "couts" | "reglages">("dialogue");
@@ -343,6 +348,7 @@ function Hud() {
   const resumer = () => {
     if (!active) return;
     notifier("Résumé en cours…");
+    setCompactage(true);
     resumerConversation(active)
       .then((r) => {
         notifier(
@@ -353,6 +359,9 @@ function Hud() {
       })
       .catch((e: unknown) => {
         notifier(e instanceof Error ? e.message : "Résumé impossible.");
+      })
+      .finally(() => {
+        setCompactage(false);
       });
   };
 
@@ -595,6 +604,8 @@ function Hud() {
   }, []);
 
   const etatNoyau: EtatNoyau = alerte || urgence ? "alerte" : enCours ? (premierMorceau ? "parole" : "reflexion") : "repos";
+  const etatOrbe = etatPresence({ enCours, premierMorceau, parle: presence.parle, microOuvert: presence.micro, compactage });
+  const alerteOrbe = alerte || urgence;
   const moteurs = etat?.moteurs ?? [];
   const titreActif = conversations.find((c) => c.id === active)?.titre;
   const nbDemandes = etat?.demandes.length ?? 0;
@@ -631,14 +642,15 @@ function Hud() {
   ];
 
   return (
-    <div className="hud" data-noyau={etatNoyau}>
+    <div className="hud" data-noyau={etatNoyau} data-orbe-fond={presence.fond || undefined}>
       <div className="fond" aria-hidden="true">
         <div className="fond-grille" />
+        {presence.fond && <OrbeFond etat={etatOrbe} alerte={alerteOrbe} />}
       </div>
 
       <header className="barre">
         <div className="barre-marque">
-          <Reacteur etat={etatNoyau} compact />
+          {presence.actif ? <Presence etat={etatOrbe} alerte={alerteOrbe} mode="compact" /> : <Reacteur etat={etatNoyau} compact />}
           <span className="marque">JARVIS</span>
           <span className="marque-version">2</span>
         </div>
@@ -759,7 +771,11 @@ function Hud() {
       <aside className="colonne-gauche">
         <Panneau titre="Noyau" className="panneau-noyau" ordre={0}>
           <div className="zone-noyau">
-            <Reacteur etat={etatNoyau} />
+            {presence.actif ? (
+              <Presence etat={etatOrbe} alerte={alerteOrbe} mode="panneau" avecToile={!presence.fond} />
+            ) : (
+              <Reacteur etat={etatNoyau} />
+            )}
           </div>
         </Panneau>
         <Panneau titre="État" className="panneau-etat" ordre={1} meta={etat ? `v${etat.version}` : undefined}>

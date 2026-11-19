@@ -8,6 +8,7 @@ import "./styles/tokens.css";
 import "./styles/hud.css";
 import "./styles/dialogue-avance.css";
 import "./styles/themes.css";
+import "./styles/presence.css";
 
 const racine = document.getElementById("racine");
 if (!racine) throw new Error("Élément #racine absent de index.html");

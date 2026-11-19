@@ -8,6 +8,8 @@ import "../styles/reglages.css";
 
 import { choisirAnimations, CHOIX_ANIMATIONS, type ChoixAnimations, estChoixAnimations, EVENEMENT_ANIMATIONS, lireAnimations } from "../animations";
 import { RACCOURCIS } from "../commandes";
+import { choisirFondEcran, EVENEMENT_FOND, lireFondEcran } from "../presence";
+import { EVENEMENT_THEME, lireTheme } from "../theme";
 import {
   CATEGORIES,
   categorie as infoCategorie,
@@ -123,6 +125,48 @@ function ChoixAnimationsAppareil() {
     };
   }, []);
   return <Segment libelle="Animations" options={CHOIX_ANIMATIONS} valeur={choix} surChoix={choisirAnimations} />;
+}
+
+const PLACES_ORBE = [
+  { id: "panneau", nom: "Dans le panneau Noyau" },
+  { id: "fond", nom: "HUD en fond d'écran" },
+] as const;
+
+/** Thème Présence : l'orbe reste dans le panneau Noyau ou passe derrière tout le HUD. */
+function ChoixPresence() {
+  const [fond, setFond] = useState(lireFondEcran);
+  const [theme, setTheme] = useState(lireTheme);
+  useEffect(() => {
+    const surFond = (e: Event) => {
+      setFond((e as CustomEvent<unknown>).detail === true);
+    };
+    const surTheme = () => {
+      setTheme(lireTheme());
+    };
+    window.addEventListener(EVENEMENT_FOND, surFond);
+    window.addEventListener(EVENEMENT_THEME, surTheme);
+    return () => {
+      window.removeEventListener(EVENEMENT_FOND, surFond);
+      window.removeEventListener(EVENEMENT_THEME, surTheme);
+    };
+  }, []);
+  return (
+    <>
+      <Segment
+        libelle="Place de l'orbe"
+        options={PLACES_ORBE}
+        valeur={fond ? "fond" : "panneau"}
+        surChoix={(v) => {
+          choisirFondEcran(v === "fond");
+        }}
+      />
+      <p className="sec-texte">
+        {theme === "presence"
+          ? "L'orbe suit JARVIS : veille, écoute, réflexion, réponse et compactage (résumé en mémoire). La jauge sous l'orbe montre le niveau du micro quand il est ouvert."
+          : "Choisissez d'abord le thème « Présence » (section Thème) : ce réglage est gardé pour lui."}
+      </p>
+    </>
+  );
 }
 
 /** Une ligne « nom · valeur » d'un réglage simple. */
@@ -310,6 +354,8 @@ export function VueReglages(p: Props) {
             <p className="sec-texte">Gardé sur cet appareil. Aussi : « /theme clair », ou la palette (Ctrl+K).</p>
           </>
         );
+      case "presence":
+        return <ChoixPresence />;
       case "animations":
         return (
           <>

@@ -43,7 +43,7 @@ export const COMMANDES: readonly Commande[] = [
   { id: "nouvelle", nom: "Nouvelle conversation", description: "Repartir d'un dialogue vide", slash: "nouvelle", alias: ["new", "n"], motsCles: ["vider", "commencer"] },
   { id: "historique", nom: "Ouvrir l'historique", description: "Liste des conversations", slash: "historique", alias: ["hist", "h"], raccourci: "Ctrl+H", motsCles: ["conversations", "liste"] },
   { id: "chercher", nom: "Chercher une conversation", description: "Dans les titres et les messages", slash: "chercher", alias: ["recherche", "cherche"], argument: "mots", motsCles: ["trouver", "rechercher"] },
-  { id: "theme", nom: "Changer de thème", description: "JARVIS, Studio nocturne, Atelier clair, Console épurée", slash: "theme", alias: ["themes"], argument: "nom du thème", motsCles: ["apparence", "couleurs", "clair", "sombre"] },
+  { id: "theme", nom: "Changer de thème", description: "JARVIS, Studio nocturne, Atelier clair, Console épurée, Présence", slash: "theme", alias: ["themes"], argument: "nom du thème", motsCles: ["apparence", "couleurs", "clair", "sombre"] },
   { id: "memoire", nom: "Ouvrir la mémoire", description: "Tout ce que JARVIS sait, par origine", slash: "memoire", alias: ["souvenirs"], motsCles: ["souvenirs", "vue"] },
   { id: "connecteurs", nom: "Ouvrir les connecteurs", description: "Vos IA : comptes, clés, modèles locaux", slash: "connecteurs", alias: ["ia", "moteurs"], motsCles: ["vue", "modèles"] },
   { id: "agents", nom: "Ouvrir les agents", description: "Missions, recettes, créations, outils MCP", slash: "agents", alias: ["missions"], motsCles: ["vue"] },
@@ -148,6 +148,7 @@ const SYNONYMES_THEMES: Record<Theme, readonly string[]> = {
   studio: ["studio", "nocturne", "graphite", "sombre", "nuit"],
   atelier: ["atelier", "clair", "papier", "jour"],
   console: ["console", "epuree", "mono", "terminal"],
+  presence: ["presence", "orbe", "particules"],
 };
 
 /** « /theme clair » → « atelier » ; sans argument ou inconnu : null. */
