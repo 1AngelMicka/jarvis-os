@@ -47,13 +47,15 @@ export const MODES_PILOTAGE: readonly { id: ModePilotage; nom: string }[] = [
 export function aAppliquerSeules(actions: readonly ActionPilotage[] | undefined, mode: ModePilotage): ActionPilotage[] {
   if (mode !== "oui" || !actions) return [];
   // Une seule navigation : la dernière vue demandée l'emporte (deux vues ne s'ouvrent pas en même temps)
-  const immediates = actions.filter((a) => a.genre === "immediate");
+  // Une action retenue par la barrière d'injection n'est jamais appliquée seule
+  const immediates = actions.filter((a) => a.genre === "immediate" && !a.bloquee);
   const derniere = immediates.at(-1);
   return derniere ? [derniere] : [];
 }
 
 /** Libellé du bouton d'une action. */
 export function libelleBouton(a: ActionPilotage, deja: boolean): string {
+  if (a.bloquee && !deja) return "Lancer moi-même";
   if (a.genre === "immediate") return deja ? "Rouvrir" : "Ouvrir";
   switch (a.type) {
     case "proposer_mission":

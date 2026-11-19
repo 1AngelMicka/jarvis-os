@@ -26,6 +26,11 @@ describe("actions appliquées seules", () => {
     expect(aAppliquerSeules([mission], "oui")).toEqual([]);
     expect(aAppliquerSeules([nav("agents"), nav("couts"), mission], "oui")).toEqual([nav("couts")]);
   });
+  it("n'applique jamais seule une action retenue par la barrière d'injection", () => {
+    const theme: ActionPilotage = { type: "regler", genre: "immediate", niveau: "vert", libelle: "Thème", parametres: {}, bloquee: "Barrière" };
+    expect(aAppliquerSeules([nav("agents"), theme], "oui")).toEqual([nav("agents")]);
+    expect(aAppliquerSeules([theme], "oui")).toEqual([]);
+  });
 });
 
 describe("libellés", () => {
@@ -34,5 +39,6 @@ describe("libellés", () => {
     expect(libelleBouton(mission, false)).toBe("Lancer la mission");
     expect(libelleBouton({ ...mission, type: "demander_action", niveau: "rouge" }, false)).toBe("Demander (clé d'accès)");
     expect(libelleBouton({ ...mission, type: "proposer_amelioration" }, false)).toBe("Garder la suggestion");
+    expect(libelleBouton({ ...mission, bloquee: "Barrière" }, false)).toBe("Lancer moi-même");
   });
 });

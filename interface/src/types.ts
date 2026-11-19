@@ -189,6 +189,21 @@ export interface MetaMessage {
   /** Bloc d'actions de JARVIS, validé par le Core (lot F) ; `actions_ecartees` : raisons, jamais le contenu. */
   actions?: ActionPilotage[];
   actions_ecartees?: string[];
+  /** Barrière d'injection (14 · B 6) : ce tour a lu du contenu non fiable ; ses actions qui agissent sont retenues. */
+  barriere?: BilanBarriere;
+}
+
+export interface LectureNonFiable {
+  source: string;
+  libelle: string;
+  detail: string;
+}
+
+export interface BilanBarriere {
+  sources: LectureNonFiable[];
+  /** Libellés des actions retenues pendant le tour. */
+  bloquees: string[];
+  message: string;
 }
 
 export interface AffirmationInventee {
@@ -646,6 +661,8 @@ export interface ActionPilotage {
   niveau: NiveauAction;
   libelle: string;
   parametres: Record<string, unknown>;
+  /** Retenue par la barrière d'injection (raison) : jamais appliquée seule, l'utilisateur la lance lui-même. */
+  bloquee?: string;
 }
 
 export type ModePilotage = "oui" | "demander" | "non";

@@ -31,6 +31,7 @@ from uuid import UUID, uuid4
 from ..db import Base, Executant
 from ..moteurs.claude_code import environnement_propre
 from ..moteurs.sousprocessus import trouver
+from ..securite import barriere
 from ..securite.filtre import masquer_secrets
 from ..securite.urgence import ArretUrgence
 from .autorisation import decider
@@ -152,6 +153,8 @@ class GestionnaireAteliers:
         self.processus: dict[UUID, asyncio.subprocess.Process] = {}
         self.taches: dict[UUID, asyncio.Task[None]] = {}
         self.jetons: dict[str, UUID] = {}
+        # Barrière d'injection : un tour par exécution de Claude Code (une consigne), tenu par son jeton
+        self.tours: dict[str, barriere.Tour] = {}
         self.attentes: dict[str, Attente] = {}
         # Pause : événement baissé = atelier en pause (processus suspendu, autorisations retenues)
         self.reprises: dict[UUID, asyncio.Event] = {}
@@ -357,6 +360,7 @@ class GestionnaireAteliers:
         """Une exécution de Claude Code → « pret », « erreur » ou « plantage » (à relancer)."""
         jeton = secrets.token_urlsafe(32)
         self.jetons[jeton] = ident
+        self.tours[jeton] = barriere.Tour("atelier", str(ident))
         reprise = asyncio.Event()
         reprise.set()
         self.reprises[ident] = reprise
@@ -406,6 +410,7 @@ class GestionnaireAteliers:
             return "erreur"
         finally:
             self.jetons.pop(jeton, None)
+            self.tours.pop(jeton, None)  # fin du tour : la consigne suivante repart saine
             proc_fini = self.processus.pop(ident, None)
             if proc_fini is not None and proc_fini.returncode is None:
                 with contextlib.suppress(ProcessLookupError):
@@ -492,6 +497,12 @@ class GestionnaireAteliers:
             await reprise.wait()  # en pause : la demande attend la reprise (l'arrêt la refuse)
             if ident not in self.processus:
                 return {"behavior": "deny", "message": "Atelier arrêté"}
+        tour = self.tours.get(jeton) or barriere.Tour("atelier", str(ident))
+        refus = await barriere.refus_outil(self.base, tour, outil, f"atelier:{ident}")
+        if refus is not None:  # contenu non fiable lu pendant cette consigne : plus aucune action
+            message = f"{refus} (Termine sans cet outil : l'utilisateur relancera l'action lui-même s'il la veut.)"
+            await self._noter(ident, "autorisation", {"outil": outil, "verdict": "deny", "raison": refus})
+            return {"behavior": "deny", "message": message}
         decision = decider(Path(atelier["chemin"]), outil, entree)
         if decision.verdict == "demander":
             attente = Attente(
@@ -517,12 +528,30 @@ class GestionnaireAteliers:
             "autorisation",
             {"outil": outil, "verdict": reponse["behavior"], "raison": reponse.get("message", decision.raison)},
         )
+        if reponse["behavior"] == "allow":
+            await self._marquer_lecture(ident, tour, outil, entree, decision.verdict == "demander")
         if reponse["behavior"] == "allow" and outil in OUTILS_ECRITURE:
             fichier = entree.get("file_path") or entree.get("notebook_path")
             relatif = chemin_relatif(Path(atelier["chemin"]), str(fichier)) if fichier else None
             if relatif:
                 await self.declarer_fichiers(ident, [relatif])
         return reponse
+
+    async def _marquer_lecture(
+        self, ident: UUID, tour: barriere.Tour, outil: str, entree: dict[str, Any], hors_atelier: bool
+    ) -> None:
+        """Outil accordé qui ramène du contenu non fiable (web, MCP, fichier hors du worktree) : tour contaminé."""
+        source = barriere.source_outil(outil)
+        detail = str(entree.get("url") or entree.get("query") or outil)
+        if source is None and hors_atelier and outil in barriere.OUTILS_LECTURE:
+            source = "fichier"
+            detail = str(entree.get("file_path") or entree.get("path") or entree.get("pattern") or outil)
+        if source is None:
+            return
+        avant = tour.contamine
+        tour.marquer(source, detail)
+        if not avant:
+            await self._noter(ident, "barriere", {"sources": tour.sources(), "message": tour.raison()})
 
     def en_attente(self, ident: UUID | None = None) -> list[dict[str, Any]]:
         return [a.en_dict() for a in self.attentes.values() if ident is None or a.atelier == ident]

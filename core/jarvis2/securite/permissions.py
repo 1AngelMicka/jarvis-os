@@ -25,7 +25,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from ..db import Base, Connexion, Ligne
-from . import audit, regles
+from . import audit, barriere, regles
 from .appareils import Appareil
 
 journal = logging.getLogger("jarvis2.permissions")
@@ -71,6 +71,9 @@ class Action:
 
     # Action facultative (connecteur maison…) : proposée et exécutable seulement quand elle renvoie True
     disponible: Callable[[], bool] | None = None
+
+    # Action 🟢 qui écrit ou envoie (réglage, état changé) : refusée comme une 🟡 dans un tour contaminé
+    ecrit: bool = False
 
     def est_disponible(self) -> bool:
         return self.disponible is None or self.disponible()
@@ -196,6 +199,8 @@ class Approbations:
             raise ErreurAction(f"Action indisponible : « {nom} » (connecteur désactivé)")
         async with self.pool.acquire() as conn:
             resume = action.resumer(params)
+            # Tour contaminé (contenu non fiable lu) : aucune action qui agit, même 🟢 « écrit » ou toujours autorisée
+            await barriere.verifier(conn, action, resume, appareil.acteur)
             interdit, a_demander = await regles.verifier(conn, action.nom, resume, params)
             if interdit is not None:
                 await self._interdite(conn, action, params, appareil.acteur)

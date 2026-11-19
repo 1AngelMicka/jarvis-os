@@ -19,6 +19,7 @@ import httpx
 
 from .moteurs.base import Image
 from .ocr import LecteurOCR, assez_de_texte
+from .securite import barriere
 
 journal = logging.getLogger("jarvis2.vision")
 
@@ -129,6 +130,7 @@ async def analyser(
     """OCR d'abord ; le modèle de vision local seulement s'il y a peu de texte (ou sur demande).
 
     Ollama n'est jamais démarré ici : s'il est arrêté, on rend le texte lu et on le dit (`ollama_requis`)."""
+    barriere.marquer("ecran", "image lue (OCR ou vision)")  # dans un tour : plus aucune action jusqu'à sa fin
     texte = ""
     if ocr is not None and not forcer_modele:
         try:

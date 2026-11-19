@@ -33,6 +33,7 @@ from .embeddings import Encodeur
 from .memoire import Resultat
 from .moteurs.base import Message
 from .moteurs.telemetrie import MoteurInstrumente
+from .securite import barriere
 from .securite.filtre import masquer
 
 if TYPE_CHECKING:
@@ -407,6 +408,8 @@ async def contexte_domaines(
         base, encodeur, texte, limite=24, exclure_local=exclure_local, origines=[ORIGINE]
     )
     fiches = [r for r in trouves if (r.souvenir.source or "").startswith(prefixes)][:FICHES_EN_TETE]
+    if fiches:  # fiches écrites depuis des rapports de mission (web, sources scientifiques) : contenu externe
+        barriere.marquer("connaissances", ", ".join(str(d["nom"]) for d in domaines[:3]))
     return domaines, fiches
 
 
