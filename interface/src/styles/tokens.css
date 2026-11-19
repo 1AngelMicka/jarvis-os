@@ -156,6 +156,7 @@
   --h-barre: 52px;
   --h-onglets: 58px;
   --colonne-lecture: 880px;
+  --colonne-reglages: 248px; /* catégories de la vue Réglages (large écran) */
   --cible: 44px;             /* cible tactile minimale */
   --vignette: 64px;          /* miniature d'une image jointe (saisie) */
   --vignette-fil: 112px;     /* miniature d'une image jointe (fil du dialogue) */

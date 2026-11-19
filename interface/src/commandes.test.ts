@@ -37,7 +37,7 @@ describe("suggererSlash", () => {
   it("filtre par préfixe, puis par alias", () => {
     expect(suggererSlash("/th").map((c) => c.id)).toEqual(["theme"]);
     expect(suggererSlash("/me").map((c) => c.id)).toEqual(["memoire"]);
-    expect(suggererSlash("/s").map((c) => c.id)).toEqual(["securite", "silence", "memoire", "urgence"]); // alias « souvenirs », « stop »
+    expect(suggererSlash("/s").map((c) => c.id)).toEqual(["securite", "silence", "memoire", "reglages", "urgence"]); // alias « souvenirs », « systeme », « stop »
     expect(suggererSlash("/chut").map((c) => c.id)).toEqual(["silence"]);
   });
 

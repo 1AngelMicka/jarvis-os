@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { decrireImage, transcrireAudio } from "../api";
-import { capturerEcran, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, type LecteurVocal } from "../voix";
+import { capturerEcran, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal } from "../voix";
 
 interface Props {
   lecteur: LecteurVocal;
@@ -41,14 +41,19 @@ export function CommandesVoix({ lecteur, enCours, bloquee, surEnvoyer, surDescri
     setParole(actif);
   };
 
-  // Ctrl+M, « /silence » ou la palette coupent la voix : le bouton suit
+  // Ctrl+M, « /silence », la palette ou les Réglages coupent (ou rallument) la voix : le bouton suit
   useEffect(() => {
     const couper = () => {
       setParole(false);
     };
+    const allumer = () => {
+      setParole(true);
+    };
     window.addEventListener(EVENEMENT_SILENCE, couper);
+    window.addEventListener(EVENEMENT_VOIX, allumer);
     return () => {
       window.removeEventListener(EVENEMENT_SILENCE, couper);
+      window.removeEventListener(EVENEMENT_VOIX, allumer);
     };
   }, []);
 

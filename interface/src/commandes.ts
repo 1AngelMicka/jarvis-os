@@ -14,6 +14,7 @@ export type IdCommande =
   | "ateliers"
   | "dialogue"
   | "installation"
+  | "reglages"
   | "demandes"
   | "securite"
   | "silence"
@@ -48,6 +49,7 @@ export const COMMANDES: readonly Commande[] = [
   { id: "agents", nom: "Ouvrir les agents", description: "Missions, recettes, créations, outils MCP", slash: "agents", alias: ["missions"], motsCles: ["vue"] },
   { id: "ateliers", nom: "Ouvrir les ateliers", description: "Claude Code dans vos projets", slash: "ateliers", alias: ["atelier"], motsCles: ["vue", "projets", "code"] },
   { id: "dialogue", nom: "Revenir au dialogue", description: "Fermer la vue en cours", slash: "dialogue", motsCles: ["vue", "retour"] },
+  { id: "reglages", nom: "Ouvrir les réglages", description: "Thème, voix, accueil du matin, IA, coûts, mémoire, sécurité", slash: "reglages", alias: ["parametres", "systeme", "options", "preferences"], argument: "réglage cherché", motsCles: ["vue", "configuration", "regler"] },
   { id: "installation", nom: "Diagnostic de l'installation", description: "Vérifications du premier lancement", slash: "installation", alias: ["diagnostic"], motsCles: ["vue", "accueil"] },
   { id: "demandes", nom: "Voir les demandes", description: "Actions en attente de votre accord", slash: "demandes", alias: ["approbations"], motsCles: ["accord", "file"] },
   { id: "securite", nom: "Ouvrir la sécurité", description: "Appareils, clés d'accès, apparence", slash: "securite", alias: ["appareils"], motsCles: ["clés", "jumelage"] },

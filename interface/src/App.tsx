@@ -17,6 +17,8 @@ import { choisirTheme, lireTheme, THEMES, type Theme } from "./theme";
 import { ListeConversations } from "./composants/Historique";
 import { VueMemoire } from "./composants/VueMemoire";
 import { VueConnaissances } from "./composants/Connaissances";
+import { type DemandeReglages, VueReglages } from "./composants/Reglages";
+import { adresse as adresseReglages, lireAdresse, resoudre as resoudreReglage } from "./reglages";
 import { AccueilMatin } from "./composants/Matin";
 import { EcranJumelage } from "./composants/Jumelage";
 import { Panneau } from "./composants/Panneau";
@@ -81,7 +83,8 @@ function Hud() {
   const [alerte, setAlerte] = useState(false);
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
-  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire" | "connaissances" | "couts">("dialogue");
+  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire" | "connaissances" | "couts" | "reglages">("dialogue");
+  const [demandeReglages, setDemandeReglages] = useState<DemandeReglages | null>(null);
   const [conseil, setConseil] = useState(false);
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
   const [annonce, setAnnonce] = useState("");
@@ -130,7 +133,8 @@ function Hud() {
     // Premier lancement : l'assistant s'ouvre tant qu'il n'a pas été terminé
     lireAccueil()
       .then((a) => {
-        if (!a.termine) setVue("accueil");
+        // …sauf si une adresse directe (`#reglages/…`) a déjà ouvert une autre vue
+        if (!a.termine && !lireAdresse(window.location.hash)) setVue("accueil");
       })
       .catch(() => {
         /* Core injoignable : l'écran d'erreur du dialogue le dit déjà */
@@ -180,6 +184,30 @@ function Hud() {
   // L'élément ciblé depuis l'Activité ne vaut que pour la vue qu'il a ouverte
   useEffect(() => {
     setCible((c) => (c && c.vue !== vue ? null : c));
+  }, [vue]);
+
+  // Réglages : `#reglages/<catégorie ou section>` ouvre la vue (au chargement, depuis un lien, ou en changeant l'adresse) ;
+  // l'adresse suit la catégorie affichée et disparaît quand on quitte la vue.
+  const ouvrirReglages = useCallback((demande: Omit<DemandeReglages, "jeton"> = {}) => {
+    setDemandeReglages({ ...demande, jeton: Date.now() });
+    setVue("reglages");
+    setLateralOuvert(false);
+  }, []);
+  useEffect(() => {
+    const suivre = () => {
+      const c = lireAdresse(window.location.hash);
+      if (c) ouvrirReglages(c);
+    };
+    suivre();
+    window.addEventListener("hashchange", suivre);
+    return () => {
+      window.removeEventListener("hashchange", suivre);
+    };
+  }, [ouvrirReglages]);
+  useEffect(() => {
+    // Téléphone : la rangée des vues défile de côté ; le bouton de la vue ouverte reste visible
+    document.querySelector(".barre-nav [aria-pressed='true']")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (vue !== "reglages" && window.location.hash.startsWith("#reglages")) history.replaceState(null, "", window.location.pathname + window.location.search);
   }, [vue]);
 
   // Surveillance de la connexion : l'état « Core en ligne / hors ligne » suit la réalité (toutes les 15 s, et dès que la
@@ -477,6 +505,11 @@ function Hud() {
       return;
     }
     switch (id) {
+      case "reglages": {
+        const c = argument.trim() ? resoudreReglage(argument) : null;
+        ouvrirReglages(c ?? (argument.trim() ? { recherche: argument.trim() } : {}));
+        break;
+      }
       case "nouvelle":
         nouvelle();
         break;
@@ -673,6 +706,17 @@ function Hud() {
             }}
           >
             Ateliers
+          </button>
+          <button
+            type="button"
+            className="btn btn-discret btn-mini btn-connecteurs"
+            aria-pressed={vue === "reglages"}
+            onClick={() => {
+              if (vue === "reglages") setVue("dialogue");
+              else ouvrirReglages();
+            }}
+          >
+            Réglages
           </button>
         </nav>
         <SelecteurTheme className="selecteur-theme--barre" />
@@ -902,6 +946,57 @@ function Hud() {
                 surAction={(r) => {
                   suiteAction(r, "Outil appelé.");
                 }}
+              />
+            </div>
+          </Panneau>
+        ) : vue === "reglages" ? (
+          <Panneau
+            titre="Réglages"
+            className="panneau-scene"
+            ordre={2}
+            id="reglages"
+            meta="tout ce qui se règle, par catégorie"
+            actions={
+              <button
+                type="button"
+                className="btn btn-mini"
+                onClick={() => {
+                  setVue("dialogue");
+                }}
+              >
+                Retour au dialogue
+              </button>
+            }
+          >
+            <div className="panneau-corps panneau-corps--reglages">
+              <VueReglages
+                etat={etat}
+                lecteur={lecteur}
+                cible={demandeReglages}
+                surPosition={(c) => {
+                  const a = adresseReglages(c);
+                  if (window.location.hash !== a) history.replaceState(null, "", a);
+                }}
+                surChangement={rafraichir}
+                surNotifier={notifier}
+                surRejouerMatin={() => {
+                  setVue("dialogue");
+                  setRejouerMatin((n) => n + 1);
+                }}
+                surInstallation={() => {
+                  setVue("accueil");
+                }}
+                surAide={() => {
+                  setAide(true);
+                }}
+                surPalette={() => {
+                  setPalette({ mode: "tout", requete: "" });
+                }}
+                surDemandes={montrerDemandes}
+                surUrgence={() => {
+                  setPalette({ mode: "urgence", requete: "" });
+                }}
+                surLeverUrgence={demanderLevee}
               />
             </div>
           </Panneau>

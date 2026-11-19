@@ -1,0 +1,264 @@
+// Registre de la vue Réglages : catégories, sections, recherche et adresses directes (`#reglages/<catégorie ou
+// section>`). Une seule liste, pour que la navigation, la recherche et les liens disent toujours la même chose.
+// Chaque nouvelle fonctionnalité réglable déclare ici sa section.
+
+import { normaliser } from "./commandes";
+
+export type IdCategorie = "ensemble" | "apparence" | "voix" | "cerveau" | "matin" | "memoire" | "securite" | "appareils";
+
+export interface Categorie {
+  id: IdCategorie;
+  nom: string;
+  description: string;
+}
+
+export interface Section {
+  id: string;
+  categorie: IdCategorie;
+  titre: string;
+  description: string;
+  /** Mots de la recherche en plus du titre et de la description (synonymes, libellés des contrôles). */
+  motsCles: readonly string[];
+  /** Autres adresses qui mènent à cette section (`#reglages/<alias>`). */
+  alias?: readonly string[];
+}
+
+export const CATEGORIES: readonly Categorie[] = [
+  { id: "ensemble", nom: "Vue d'ensemble", description: "État des systèmes et interrupteurs rapides" },
+  { id: "apparence", nom: "Interface & apparence", description: "Thème, animations, clavier" },
+  { id: "voix", nom: "Voix & écoute", description: "Lecture à voix haute, dictée, mains libres" },
+  { id: "cerveau", nom: "Cerveau & coûts", description: "Vos IA, modèles, dépenses et plafonds" },
+  { id: "matin", nom: "Accueil & localisation", description: "Accueil du matin, maison, installation" },
+  { id: "memoire", nom: "Mémoire & profil", description: "Blocs toujours donnés à JARVIS, tâches de nuit, profil" },
+  { id: "securite", nom: "Sécurité", description: "Arrêt d'urgence, clés d'accès, journal d'audit" },
+  { id: "appareils", nom: "Appareils", description: "Appareils autorisés, téléphone, version" },
+];
+
+export const SECTIONS: readonly Section[] = [
+  {
+    id: "apercu",
+    categorie: "ensemble",
+    titre: "État des systèmes",
+    description: "Core, mémoire, IA disponibles, demandes en attente",
+    motsCles: ["etat", "statut", "en ligne", "moteurs", "sante"],
+  },
+  {
+    id: "rapides",
+    categorie: "ensemble",
+    titre: "Interrupteurs rapides",
+    description: "Voix, thème et animations en un geste",
+    motsCles: ["raccourcis", "basculer", "activer", "couper"],
+  },
+  {
+    id: "themes",
+    categorie: "apparence",
+    titre: "Thème",
+    description: "JARVIS, Studio nocturne, Atelier clair, Console épurée",
+    motsCles: ["apparence", "couleurs", "clair", "sombre", "nuit", "jour", "studio", "atelier", "console"],
+    alias: ["theme", "apparence-theme"],
+  },
+  {
+    id: "animations",
+    categorie: "apparence",
+    titre: "Animations",
+    description: "Mouvements du fond et des panneaux, selon le système ou réduits",
+    motsCles: ["mouvement", "reduire", "accessibilite", "effets", "fond", "aurore"],
+  },
+  {
+    id: "clavier",
+    categorie: "apparence",
+    titre: "Clavier et commandes",
+    description: "Palette Ctrl+K, commandes « / », raccourcis",
+    motsCles: ["raccourcis", "palette", "ctrl+k", "slash", "aide", "touches"],
+    alias: ["raccourcis"],
+  },
+  {
+    id: "lecture",
+    categorie: "voix",
+    titre: "Voix de JARVIS",
+    description: "Lecture des réponses à voix haute avec une voix française du système",
+    motsCles: ["parole", "synthese", "parler", "lire", "son", "muet", "silence", "ctrl+m"],
+    alias: ["voix-jarvis"],
+  },
+  {
+    id: "ecoute",
+    categorie: "voix",
+    titre: "Écoute et dictée",
+    description: "Dictée, mains libres « Jarvis, … », écran décrit sur demande",
+    motsCles: ["micro", "transcription", "whisper", "mains libres", "eveil", "dictee", "ecran", "vision"],
+  },
+  {
+    id: "connecteurs",
+    categorie: "cerveau",
+    titre: "Connecteurs",
+    description: "Vos IA : compte Claude, clés d'API, modèles locaux",
+    motsCles: ["ia", "moteurs", "modeles", "claude", "ollama", "api", "cle", "openai", "anthropic", "cerveau"],
+    alias: ["cerveau-modeles", "modeles"],
+  },
+  {
+    id: "couts",
+    categorie: "cerveau",
+    titre: "Coûts et plafonds",
+    description: "Dépenses du jour et du mois, plafond par connecteur, jauges d'abonnement",
+    motsCles: ["argent", "depenses", "budget", "plafond", "limite", "abonnement", "jauge", "dollars"],
+    alias: ["plafonds"],
+  },
+  {
+    id: "accueil-matin",
+    categorie: "matin",
+    titre: "Accueil du matin et maison",
+    description: "Parlé, texte seul ou désactivé ; lieu de la météo (privé)",
+    motsCles: ["matin", "salutation", "meteo", "ville", "maison", "localisation", "lieu", "position", "rejouer"],
+    alias: ["localisation"],
+  },
+  {
+    id: "installation",
+    categorie: "matin",
+    titre: "Installation",
+    description: "Diagnostic du premier lancement, réparations, préréglages",
+    motsCles: ["diagnostic", "verifications", "assistant", "premier lancement", "reparer", "prereglages"],
+    alias: ["diagnostic"],
+  },
+  {
+    id: "blocs-memoire",
+    categorie: "memoire",
+    titre: "Mémoire",
+    description: "Blocs toujours donnés à JARVIS, modèle d'embeddings, tâches de nuit",
+    motsCles: ["souvenirs", "blocs", "preferences", "noyau", "nuit", "embeddings", "prive"],
+  },
+  {
+    id: "profil",
+    categorie: "memoire",
+    titre: "Profil",
+    description: "Questionnaire guidé par sections, réponses gardées en mémoire",
+    motsCles: ["questionnaire", "entretien", "moi", "qui je suis", "personnel"],
+  },
+  {
+    id: "urgence",
+    categorie: "securite",
+    titre: "Arrêt d'urgence",
+    description: "Tout arrêter tout de suite ; la levée demande une clé d'accès",
+    motsCles: ["stop", "arreter", "bloquer", "danger"],
+  },
+  {
+    id: "cles-acces",
+    categorie: "securite",
+    titre: "Clés d'accès",
+    description: "Empreinte, visage ou code de l'appareil pour approuver les actions 🔴",
+    motsCles: ["webauthn", "empreinte", "visage", "approuver", "rouge", "passkey"],
+    alias: ["cles"],
+  },
+  {
+    id: "audit",
+    categorie: "securite",
+    titre: "Journal d'audit",
+    description: "Toutes les actions, chaînées par empreintes",
+    motsCles: ["journal", "historique des actions", "traces", "chaine"],
+  },
+  {
+    id: "appareils",
+    categorie: "appareils",
+    titre: "Appareils autorisés",
+    description: "Associer, voir et révoquer les appareils",
+    motsCles: ["jumelage", "associer", "revoquer", "qr"],
+  },
+  {
+    id: "telephone",
+    categorie: "appareils",
+    titre: "Téléphone",
+    description: "JARVIS hors de chez vous par Tailscale, installation sur l'écran d'accueil",
+    motsCles: ["mobile", "iphone", "android", "tailscale", "pwa", "distance"],
+  },
+  {
+    id: "version",
+    categorie: "appareils",
+    titre: "Version",
+    description: "Version du Core et de l'interface",
+    motsCles: ["mise a jour", "numero", "a propos"],
+  },
+];
+
+export function categorie(id: IdCategorie): Categorie {
+  const trouvee = CATEGORIES.find((c) => c.id === id);
+  if (!trouvee) throw new Error(`Catégorie inconnue : ${id}`);
+  return trouvee;
+}
+
+export function sectionsDe(id: IdCategorie): Section[] {
+  return SECTIONS.filter((s) => s.categorie === id);
+}
+
+/** Score d'une section pour la recherche (0 : écartée). Tous les mots doivent être trouvés. */
+function score(s: Section, mots: string[]): number {
+  const titre = normaliser(s.titre);
+  const reste = normaliser([s.description, categorie(s.categorie).nom, s.id, ...(s.alias ?? []), ...s.motsCles].join(" "));
+  let total = 0;
+  for (const mot of mots) {
+    if (titre.startsWith(mot)) total += 4;
+    else if (titre.split(" ").some((m) => m.startsWith(mot))) total += 3;
+    else if (titre.includes(mot)) total += 2;
+    else if (reste.includes(mot)) total += 1;
+    else return 0;
+  }
+  return total;
+}
+
+/** Recherche dans les titres, descriptions, catégories et mots-clés, sans tenir compte des accents. */
+export function chercherSections(requete: string): Section[] {
+  const mots = normaliser(requete).split(" ").filter(Boolean);
+  if (!mots.length) return [];
+  return SECTIONS.map((s, i) => ({ s, n: score(s, mots), i }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n || a.i - b.i)
+    .map((x) => x.s);
+}
+
+export interface Cible {
+  categorie: IdCategorie;
+  /** Section à montrer dans la catégorie (absente : le haut de la catégorie). */
+  section?: string;
+}
+
+/** Une catégorie, une section ou un alias → où aller ; null si inconnu. */
+export function resoudre(nom: string): Cible | null {
+  const n = normaliser(nom);
+  if (!n) return null;
+  const cat = CATEGORIES.find((c) => c.id === n);
+  if (cat) return { categorie: cat.id };
+  const s = SECTIONS.find((x) => x.id === n) ?? SECTIONS.find((x) => x.alias?.includes(n));
+  return s ? { categorie: s.categorie, section: s.id } : null;
+}
+
+const PREFIXE = "#reglages";
+
+/** `#reglages` ou `#reglages/<nom>` → cible (null : autre adresse ; `#reglages` seul : `{}` sans catégorie). */
+export function lireAdresse(hash: string): Cible | Record<string, never> | null {
+  if (hash !== PREFIXE && !hash.startsWith(`${PREFIXE}/`)) return null;
+  const nom = decodeURIComponent(hash.slice(PREFIXE.length + 1));
+  return resoudre(nom) ?? {};
+}
+
+export function adresse(cible: Cible): string {
+  return `${PREFIXE}/${cible.section ?? cible.categorie}`;
+}
+
+const CLE_CATEGORIE = "jarvis2.reglages.categorie";
+
+/** Dernière catégorie ouverte sur cet appareil (vue d'ensemble par défaut). */
+export function lireDerniereCategorie(): IdCategorie {
+  try {
+    const c = localStorage.getItem(CLE_CATEGORIE);
+    if (CATEGORIES.some((x) => x.id === c)) return c as IdCategorie;
+  } catch {
+    /* stockage indisponible */
+  }
+  return "ensemble";
+}
+
+export function ecrireDerniereCategorie(id: IdCategorie): void {
+  try {
+    localStorage.setItem(CLE_CATEGORIE, id);
+  } catch {
+    /* stockage indisponible : la catégorie n'est pas retenue */
+  }
+}

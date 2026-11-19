@@ -18,7 +18,7 @@ function message(e: unknown, defaut: string): string {
 }
 
 /** Réglages de l'accueil : mode, « Rejouer l'accueil », lieu de « la maison » (privé : affiché ici seulement). */
-function ReglagesMatin({ surRejouer, surNotifier }: { surRejouer: () => void; surNotifier: (m: string) => void }) {
+export function ReglagesMatin({ surRejouer, surNotifier }: { surRejouer: () => void; surNotifier: (m: string) => void }) {
   const [reglages, setReglages] = useState<Reglages | null>(null);
   const [recherche, setRecherche] = useState("");
   const [lieux, setLieux] = useState<LieuTrouve[] | null>(null);
