@@ -15,7 +15,8 @@ use std::time::{Duration, Instant};
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::webview::NewWindowResponse;
+use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 /// Le Core lancé par l'application (None : il tournait déjà, on n'y touche pas).
@@ -56,6 +57,34 @@ fn lancer_core() -> Option<Child> {
     None
 }
 
+/// Adresse servie par le PC lui-même (Core, page d'attente) : elle reste dans la fenêtre.
+fn adresse_locale(url: &Url) -> bool {
+    !matches!(url.scheme(), "http" | "https")
+        || matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "tauri.localhost" | "[::1]"))
+}
+
+/// Un lien vers un autre site (« Comment installer », « Créer une clé »…) s'ouvre dans le navigateur du système :
+/// la fenêtre de l'application ne quitte jamais l'interface de JARVIS.
+fn ouvrir_dehors(url: &Url) {
+    if !matches!(url.scheme(), "http" | "https") {
+        return;
+    }
+    let adresse = url.as_str();
+    #[cfg(windows)]
+    let resultat = {
+        use std::os::windows::process::CommandExt;
+        Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", adresse])
+            .creation_flags(0x0800_0000)
+            .spawn()
+    };
+    #[cfg(target_os = "macos")]
+    let resultat = Command::new("open").arg(adresse).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let resultat = Command::new("xdg-open").arg(adresse).spawn();
+    let _ = resultat;
+}
+
 fn montrer(app: &AppHandle) {
     if let Some(f) = app.get_webview_window("principale") {
         let _ = f.show();
@@ -94,6 +123,17 @@ fn main() {
                 .title("JARVIS 2")
                 .inner_size(1280.0, 820.0)
                 .min_inner_size(380.0, 560.0)
+                .on_navigation(|url| {
+                    if adresse_locale(url) {
+                        return true;
+                    }
+                    ouvrir_dehors(url);
+                    false
+                })
+                .on_new_window(|url, _| {
+                    ouvrir_dehors(&url);
+                    NewWindowResponse::Deny
+                })
                 .build()?;
             thread::spawn(move || {
                 let debut = Instant::now();
