@@ -169,6 +169,12 @@ def test_plusieurs_affirmations_et_extrait() -> None:
     assert len(affirmations(long)[0].extrait) == 160 and affirmations(long)[0].extrait.endswith("…")
 
 
+def test_un_nom_de_fichier_ne_coupe_pas_la_phrase() -> None:
+    trouvees = affirmations("C'est fait, j'ai supprimé brouillon.txt du dossier Documents. Autre chose ?")
+    assert [a.extrait for a in trouvees] == ["C'est fait, j'ai supprimé brouillon.txt du dossier Documents."]
+    assert verbes("Il est 9.30 et j'ai lancé la sauvegarde.\nJe vais envoyer le mail.") == ["lancer"]
+
+
 def test_une_seule_affirmation_par_phrase_et_categorie() -> None:
     assert len(affirmations("J'ai envoyé le mail et j'ai transmis la pièce jointe.")) == 1
 

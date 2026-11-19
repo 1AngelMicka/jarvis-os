@@ -171,7 +171,8 @@ _CITATIONS = (
     re.compile(r'"[^"\n]*"'),
     re.compile(r"^\s*>.*$", re.M),
 )
-_PHRASES = re.compile(r"[^.!?\n;]+[.!?;]*")
+# Fin de phrase : ponctuation suivie d'un espace ou de la fin (« brouillon.txt », « 9.30 » ne coupent pas)
+_PHRASES = re.compile(r"\S.*?(?:[.!?;]+(?=\s|$)|$)", re.M)
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,7 +187,7 @@ def _regles() -> tuple[_Regle, ...]:
     regles: list[_Regle] = []
     for categorie, lemme, participe, infinitif, objet in VERBES_FR:
         objets = OBJETS_FR + ("|" + MESSAGERIE_FR if categorie in CATEGORIES_MESSAGERIE else "")
-        objet_ou_rien = rf"(?=[^.!?;\n]{{0,60}}\b(?:{objets})\b)" if objet else ""
+        objet_ou_rien = rf"(?=.{{0,60}}\b(?:{objets})\b)" if objet else ""  # dans la même phrase (déjà découpée)
         actif = re.compile(
             rf"(?:{_SUJET_FR}{_ADV_FR}(?:{participe})|{_VIENS_FR}(?:{infinitif}))(?![\w-]){objet_ou_rien}"
         )
@@ -195,7 +196,7 @@ def _regles() -> tuple[_Regle, ...]:
         regles.append(_Regle(categorie, lemme, actif, passif))
     for categorie, lemme, formes, objet in VERBES_EN:
         objets = OBJETS_EN + ("|" + MESSAGERIE_EN if categorie in CATEGORIES_MESSAGERIE else "")
-        objet_ou_rien = rf"(?=[^.!?;\n]{{0,60}}\b(?:{objets})\b)" if objet else ""
+        objet_ou_rien = rf"(?=.{{0,60}}\b(?:{objets})\b)" if objet else ""
         actif = re.compile(rf"{_SUJET_EN}{_ADV_EN}(?:{formes})(?![\w-]){objet_ou_rien}")
         passif = re.compile(rf"(?:{_PASSIF_EN})(?:{formes})(?![\w-])")
         regles.append(_Regle(categorie, lemme, actif, passif))
