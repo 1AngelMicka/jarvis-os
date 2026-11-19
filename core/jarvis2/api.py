@@ -44,6 +44,7 @@ from .api_ateliers import routeur as routeur_ateliers
 from .api_chantiers import routeur as routeur_chantiers
 from .api_connaissances import routeur as routeur_connaissances
 from .api_connecteurs import routeur as routeur_connecteurs
+from .api_matin import routeur as routeur_matin
 from .api_medias import routeur as routeur_medias
 from .api_medias import routeur_pages as routeur_creations
 from .api_memoire import routeur as routeur_memoire
@@ -60,6 +61,7 @@ from .conversations import DepotConversations
 from .db import Base, ErreurBaseOuReseau, ouvrir_base, version_schema
 from .dialogue import ServiceDialogue, SourceMemoire
 from .embeddings import EncodeurFastEmbed
+from .matin import ServiceMeteo
 from .memoire import Expurgateur, ReglagesRecherche
 from .memoire_v2 import EtatBascule, basculer, modele_actif, modele_majoritaire
 from .moteurs.base import ErreurMoteur, Options
@@ -107,6 +109,8 @@ class Contexte:
     transcripteur: Transcripteur | None = None
     url_ollama: str = "http://127.0.0.1:11434"
     modele_vision: str | None = None
+    meteo: ServiceMeteo = field(default_factory=ServiceMeteo)
+    matin_locale: dict[str, Any] = field(default_factory=dict)  # [matin] de la configuration locale (privé)
     approbations: Approbations = field(init=False)
     conseil: ServiceConseil = field(init=False)
     connaissances: ServiceConnaissances = field(init=False)
@@ -204,6 +208,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
         transcripteur=TranscripteurWhisper(p.dossier_modeles, p.modele_voix),
         url_ollama=p.ollama_url,
         modele_vision=locale.connecteur("ollama").get("modele_vision"),
+        matin_locale=locale.matin,
     )
 
 
@@ -505,6 +510,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_chantiers)
     app.include_router(routeur_profil)
     app.include_router(routeur_connaissances)
+    app.include_router(routeur_matin)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():

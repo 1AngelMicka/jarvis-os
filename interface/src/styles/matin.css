@@ -1,0 +1,36 @@
+/* Accueil du matin (lot L) : carte du jour en tête du dialogue et ses réglages. Tokens seulement. */
+.matin-carte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  margin: var(--e-4) var(--e-4) 0;
+  padding: var(--e-5);
+  border: var(--l-fin) solid var(--ligne);
+  border-radius: var(--r-3);
+  background: linear-gradient(180deg, rgb(var(--c-verre) / .55), rgb(var(--c-verre-bas) / .55));
+}
+.matin-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--e-2) var(--e-4); }
+.matin-titre { margin: 0; font: 600 var(--t-grand)/1.2 var(--f-ui); color: var(--cyan-vif); }
+.matin-titre:focus { outline: none; }
+.matin-date { font-size: var(--t-petit); color: var(--texte-2); font-variant-numeric: tabular-nums; }
+.matin-meteo { margin: 0; font-size: var(--t-corps); color: var(--texte); }
+.matin-etiquette { color: var(--texte-2); }
+.matin-etiquette::after { content: " :"; }
+.matin-recettes, .matin-attention, .matin-lieux { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--e-2); }
+.matin-recette { font-size: var(--t-petit); color: var(--texte); }
+.matin-statut { margin-left: var(--e-2); font-size: var(--t-mini); color: var(--texte-3); }
+.matin-recette[data-statut="erreur"] .matin-statut { color: var(--ambre-texte); }
+.matin-attention li { padding-left: var(--e-4); border-left: 2px solid var(--ambre); font-size: var(--t-petit); color: var(--ambre-texte); }
+.matin-actions { display: flex; flex-wrap: wrap; gap: var(--e-3); justify-content: flex-end; }
+.matin-reglages { display: flex; flex-direction: column; gap: var(--e-4); padding-top: var(--e-4); border-top: var(--l-fin) solid var(--ligne-faible); }
+.matin-ligne { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--e-3); }
+.matin-champ { flex: 1 1 12rem; min-width: 0; }
+.prereglages { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--e-3); }
+.prereglage { display: flex; gap: var(--e-3); align-items: flex-start; padding: var(--e-4); border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); cursor: pointer; }
+.prereglage:has(input:checked) { border-color: var(--ligne-forte); background: rgb(var(--c-cyan) / .08); }
+.prereglage-nom { display: block; font-weight: 600; color: var(--texte); }
+@media (max-width: 480px) {
+  .matin-carte { margin: var(--e-3) var(--e-3) 0; padding: var(--e-4); }
+  .matin-actions { justify-content: stretch; }
+  .matin-actions .btn { flex: 1 1 auto; }
+}

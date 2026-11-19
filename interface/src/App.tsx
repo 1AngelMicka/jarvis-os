@@ -16,6 +16,7 @@ import { choisirTheme, lireTheme, THEMES, type Theme } from "./theme";
 import { ListeConversations } from "./composants/Historique";
 import { VueMemoire } from "./composants/VueMemoire";
 import { VueConnaissances } from "./composants/Connaissances";
+import { AccueilMatin } from "./composants/Matin";
 import { EcranJumelage } from "./composants/Jumelage";
 import { Panneau } from "./composants/Panneau";
 import { type EtatNoyau, Reacteur } from "./composants/Reacteur";
@@ -92,6 +93,7 @@ function Hud() {
   const [aide, setAide] = useState(false);
   const controleur = useRef<AbortController | null>(null);
   const lecteur = useRef(new LecteurVocal()).current;
+  const [rejouerMatin, setRejouerMatin] = useState(0); // « Rejouer l'accueil » du matin (panneau État)
   const minuterieNotif = useRef<number | undefined>(undefined);
 
   const notifier = useCallback((message: string) => {
@@ -739,6 +741,23 @@ function Hud() {
             )}
             {etat && (
               <li className="etat-item">
+                <span className="point-etat" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="etat-nom etat-lien"
+                  disabled={urgence}
+                  onClick={() => {
+                    setVue("dialogue");
+                    setRejouerMatin((n) => n + 1);
+                  }}
+                >
+                  Accueil du matin
+                </button>
+                <span className="etat-valeur">rejouer</span>
+              </li>
+            )}
+            {etat && (
+              <li className="etat-item">
                 <span className="point-etat" data-ok={nbDemandes === 0} aria-hidden="true" />
                 <button type="button" className="etat-nom etat-lien" onClick={montrerDemandes}>
                   Demandes
@@ -912,6 +931,7 @@ function Hud() {
               </div>
             ) : (
               <>
+                {etat && <AccueilMatin lecteur={lecteur} urgence={urgence} rejouer={rejouerMatin} surNotifier={notifier} />}
                 <Fil
                 messages={messages}
                 moteurs={moteurs}

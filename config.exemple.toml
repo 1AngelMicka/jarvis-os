@@ -29,6 +29,10 @@ sujets_prives = [
 # Les missions de recherche interrogent aussi OpenAlex, arXiv, PubMed et Europe PMC (API publiques, sans clé ;
 # seules les requêtes de la mission partent, jamais pour un sujet privé). Pour ne jamais les interroger :
 # scientifique = false
+# Accueil du matin : météo « à la maison » (Open-Meteo, sans clé). Lieu privé, jamais lu à voix haute ;
+# la vue Système peut aussi le choisir (recherche d'une ville ou position de l'appareil).
+# [matin]
+# ville = "Votre ville"            # ou : latitude = 48.85 et longitude = 2.35
 # Serveurs MCP : chaque outil reste inactif tant que vous ne l'activez pas (vue Agents), et chaque appel
 # attend votre accord (🟡).
 # [[mcp.serveurs]]

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { creerJumelage, lireDiagnostic, lireTailscale, reparer, terminerAccueil } from "../api";
-import type { EtatTailscale, Jumelage, Verification } from "../types";
+import { choisirPrereglages, creerJumelage, lireDiagnostic, lireTailscale, reparer, terminerAccueil } from "../api";
+import type { EtatTailscale, Jumelage, Prereglage, Verification } from "../types";
 import { VueConnecteurs } from "./Connecteurs";
 
 const ETAPES = [
   { id: "verifications", nom: "Vérifications" },
   { id: "cerveau", nom: "Cerveau" },
   { id: "telephone", nom: "Téléphone" },
+  { id: "prereglages", nom: "Préréglages" },
   { id: "pret", nom: "Prêt" },
 ] as const;
 type Etape = (typeof ETAPES)[number]["id"];
@@ -18,6 +19,36 @@ const TONS: Record<Verification["statut"], { ok: boolean | undefined; texte: str
   attention: { ok: false, texte: "À faire" },
   erreur: { ok: false, texte: "Erreur" },
 };
+const PREREGLAGES: { id: Prereglage; nom: string; aide: string }[] = [
+  { id: "conversation", nom: "Conversation", aide: "Parler de tout, au quotidien." },
+  { id: "code", nom: "Code", aide: "Projets de code et ateliers Claude Code." },
+  { id: "recherche", nom: "Recherche", aide: "Missions de recherche sur le web et dans la mémoire." },
+  { id: "point_du_matin", nom: "Point du matin", aide: "Accueil du jour (météo, recettes) et une recette « Point du matin » à 7 h 30." },
+];
+
+function Prereglages({ choix, surChoix }: { choix: Prereglage[]; surChoix: (c: Prereglage[]) => void }) {
+  return (
+    <fieldset className="prereglages">
+      <legend className="sec-texte">Ce qui vous intéresse (modifiable ensuite).</legend>
+      {PREREGLAGES.map((p) => (
+        <label key={p.id} className="prereglage">
+          <input
+            type="checkbox"
+            checked={choix.includes(p.id)}
+            onChange={(e) => {
+              surChoix(e.target.checked ? [...choix, p.id] : choix.filter((c) => c !== p.id));
+            }}
+          />
+          <span>
+            <span className="prereglage-nom">{p.nom}</span>
+            <span className="sec-texte">{p.aide}</span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 const HEURE = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
 function Aide({ aide }: { aide: string }) {
@@ -211,6 +242,7 @@ interface Props {
 export function VueAccueil({ surChangement, surTermine }: Props) {
   const [etape, setEtape] = useState<Etape>("verifications");
   const [occupe, setOccupe] = useState(false);
+  const [choix, setChoix] = useState<Prereglage[]>(["conversation", "point_du_matin"]);
   const titre = useRef<HTMLHeadingElement>(null);
   const indice = ETAPES.findIndex((e) => e.id === etape);
 
@@ -225,7 +257,8 @@ export function VueAccueil({ surChangement, surTermine }: Props) {
 
   const terminer = () => {
     setOccupe(true);
-    terminerAccueil()
+    choisirPrereglages(choix)
+      .then(() => terminerAccueil())
       .then(() => {
         surTermine();
       })
@@ -263,6 +296,7 @@ export function VueAccueil({ surChangement, surTermine }: Props) {
           {etape === "verifications" && "Vérifions l'installation"}
           {etape === "cerveau" && "Choisissez vos IA"}
           {etape === "telephone" && "JARVIS sur votre téléphone"}
+          {etape === "prereglages" && "Par quoi commencer ?"}
           {etape === "pret" && "Tout est prêt"}
         </h3>
         {etape === "verifications" && (
@@ -281,6 +315,7 @@ export function VueAccueil({ surChangement, surTermine }: Props) {
           </>
         )}
         {etape === "telephone" && <Telephone />}
+        {etape === "prereglages" && <Prereglages choix={choix} surChoix={setChoix} />}
         {etape === "pret" && (
           <p className="sec-texte">
             Parlez à JARVIS depuis le dialogue. Pour approuver les actions sensibles, enregistrez une clé d'accès (empreinte, visage ou code de

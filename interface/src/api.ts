@@ -35,6 +35,12 @@ import type {
   ResumeConversation,
   OrigineMemoire,
   Souvenir,
+  CarteMatin,
+  LieuTrouve,
+  LocalisationMatin,
+  ModeMatin,
+  Prereglage,
+  ReglagesMatin,
 } from "./types";
 
 export class ErreurApi extends Error {
@@ -168,6 +174,16 @@ export const terminerAccueil = () => envoyer<{ termine: boolean }>("/v1/accueil/
 export const lireDiagnostic = () => unSeul("diagnostic", () => appeler<{ verifications: Verification[] }>("/v1/diagnostic"));
 export const reparer = (id: string) => envoyer<{ verifications: Verification[] }>(`/v1/diagnostic/reparer/${encodeURIComponent(id)}`);
 export const lireTailscale = () => appeler<EtatTailscale>("/v1/tailscale");
+export const choisirPrereglages = (choix: Prereglage[]) =>
+  envoyer<{ prereglages: Prereglage[]; recette: "creee" | "existante" | null }>("/v1/accueil/prereglages", { choix });
+
+// --- Accueil du matin ---
+export const lireMatin = (rejouer = false) => appeler<CarteMatin>(`/v1/matin${rejouer ? "?rejouer=true" : ""}`);
+export const marquerMatinVu = () => envoyer<{ vu: string }>("/v1/matin/vu");
+export const lireReglagesMatin = () => appeler<ReglagesMatin>("/v1/matin/reglages");
+export const changerReglagesMatin = (r: { mode?: ModeMatin; localisation?: LocalisationMatin; effacer_localisation?: boolean }) =>
+  appeler<ReglagesMatin>("/v1/matin/reglages", { methode: "PUT", corps: r });
+export const chercherLieux = (q: string) => appeler<{ lieux: LieuTrouve[] }>(`/v1/matin/lieux?q=${encodeURIComponent(q)}`);
 
 // --- Agents : recettes, missions, outils MCP ---
 export const listerRecettes = () =>
