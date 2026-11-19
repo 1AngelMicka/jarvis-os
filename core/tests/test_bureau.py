@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import struct
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -290,7 +291,9 @@ async def test_abonnement_push_et_appel_de_decision(bureau: dict[str, Any], pool
     assert (await client.post(f"/v1/demandes/{demande['id']}/approuver", json={})).status_code == 409  # sans clé
 
     # Rappel dû : envoyé une seule fois
-    await pool.execute("UPDATE demandes SET rappel_le = $1 WHERE id = $2", "2000-01-01T00:00:00+00:00", demande["id"])
+    await pool.execute(
+        "UPDATE demandes SET rappel_le = $1 WHERE id = $2", datetime(2000, 1, 1, tzinfo=UTC), demande["id"]
+    )
     avant = len(faux.recus)
     assert await ctx.push.rappels(ctx.approbations) == 1
     assert json.loads(nav.dechiffrer(faux.recus[-1][2]))["titre"].startswith("Rappel")
@@ -366,7 +369,7 @@ async def test_liens_de_fichiers_a_usage_unique(bureau: dict[str, Any], pool: Ba
     assert (await anonyme.get("/f/inconnu")).status_code == 410
     # Expiré
     lien2 = (await client.post("/v1/envois/lien", json={"nom": "sous/photo.txt"})).json()
-    await pool.execute("UPDATE liens_fichiers SET expire_le = $1", "2000-01-01T00:00:00+00:00")
+    await pool.execute("UPDATE liens_fichiers SET expire_le = $1", datetime(2000, 1, 1, tzinfo=UTC))
     assert (await anonyme.get(lien2["chemin"])).status_code == 410
     assert await nb_audit(pool, "envoi.telecharge") == 1
     assert await pool.fetchval("SELECT count(*) FROM liens_fichiers WHERE length(code_hash) = 64") >= 1

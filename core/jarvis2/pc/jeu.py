@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
+import ntpath
 import time
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
@@ -64,7 +64,7 @@ class Detecteur(Protocol):
 def est_un_jeu(p: Premier, jeux: Iterable[str] = ()) -> str | None:
     """Nom du jeu (exécutable) si la fenêtre au premier plan en est un, sinon None."""
     chemin = p.chemin.replace("/", "\\").lower()
-    nom = os.path.basename(chemin)
+    nom = ntpath.basename(chemin)
     if not nom:
         return None
     if nom in {j.lower() for j in jeux}:

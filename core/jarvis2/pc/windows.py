@@ -20,6 +20,7 @@ import base64
 import ctypes
 import importlib
 import json
+import ntpath
 import os
 import re
 import subprocess
@@ -389,7 +390,7 @@ class PiloteWindows:
             titre = _titre(h)
             if not titre or _masquee(h):
                 continue
-            programme = os.path.basename(programme_de(h)).lower()
+            programme = ntpath.basename(programme_de(h)).lower()
             if programme in PROGRAMMES_SYSTEME or (programme == "explorer.exe" and titre == "Program Manager"):
                 continue
             sortie.append(Fenetre(h, titre[:200], programme or "?", h == active, bool(reduite(h))))
