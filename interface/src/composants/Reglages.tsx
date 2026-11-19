@@ -29,6 +29,7 @@ import { VueCouts } from "./Couts";
 import { FluxDonnees } from "./FluxDonnees";
 import { ReglagesMatin } from "./Matin";
 import { SectionMemoire } from "./Memoire";
+import { ControlePC, ModeJeuPC, RessourcesDuPC } from "./PC";
 import { AutorisationsPermanentes, CommandesRapides, ReglagePilotage, ReglesProtection } from "./Pilotage";
 import { PanneauSecurite } from "./Securite";
 import { SelecteurTheme } from "./SelecteurTheme";
@@ -484,6 +485,12 @@ export function VueReglages(p: Props) {
         return <Telephone />;
       case "veille-claude":
         return <VeilleClaude />;
+      case "ressources-pc":
+        return <RessourcesDuPC surNotifier={p.surNotifier} surChangement={p.surChangement} surDemandes={p.surDemandes} />;
+      case "mode-jeu":
+        return <ModeJeuPC surNotifier={p.surNotifier} surChangement={p.surChangement} surDemandes={p.surDemandes} />;
+      case "controle-pc":
+        return <ControlePC surNotifier={p.surNotifier} surChangement={p.surChangement} surDemandes={p.surDemandes} />;
       case "version":
         return (
           <ul className="reglage-lignes">

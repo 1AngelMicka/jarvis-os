@@ -4,7 +4,7 @@
 
 import { normaliser } from "./commandes";
 
-export type IdCategorie = "ensemble" | "apparence" | "voix" | "cerveau" | "matin" | "memoire" | "securite" | "appareils";
+export type IdCategorie = "ensemble" | "apparence" | "voix" | "cerveau" | "matin" | "pc" | "memoire" | "securite" | "appareils";
 
 export interface Categorie {
   id: IdCategorie;
@@ -29,6 +29,7 @@ export const CATEGORIES: readonly Categorie[] = [
   { id: "voix", nom: "Voix & écoute", description: "Lecture à voix haute, dictée, mains libres" },
   { id: "cerveau", nom: "Cerveau & coûts", description: "Vos IA, modèles, dépenses et plafonds" },
   { id: "matin", nom: "Accueil & localisation", description: "Accueil du matin, maison, installation" },
+  { id: "pc", nom: "PC & mode jeu", description: "Ressources, IA locales, mode jeu, contrôle de Windows" },
   { id: "memoire", nom: "Mémoire & profil", description: "Blocs toujours donnés à JARVIS, tâches de nuit, profil" },
   { id: "securite", nom: "Sécurité", description: "Arrêt d'urgence, clés d'accès, données, audit" },
   { id: "appareils", nom: "Appareils", description: "Appareils autorisés, téléphone, version" },
@@ -215,6 +216,30 @@ export const SECTIONS: readonly Section[] = [
     titre: "Téléphone",
     description: "JARVIS hors de chez vous par Tailscale, installation sur l'écran d'accueil",
     motsCles: ["mobile", "iphone", "android", "tailscale", "pwa", "distance"],
+  },
+  {
+    id: "ressources-pc",
+    categorie: "pc",
+    titre: "Ressources du PC",
+    description: "Processeur, mémoire vive, carte graphique, mémoire vidéo ; Ollama à la demande",
+    motsCles: ["cpu", "ram", "gpu", "vram", "processeur", "memoire video", "carte graphique", "ollama", "ia locales", "decharger", "modele", "courbe", "alerte"],
+    alias: ["ressources", "ollama", "ia-locales"],
+  },
+  {
+    id: "mode-jeu",
+    categorie: "pc",
+    titre: "Mode jeu",
+    description: "Veille stricte pendant une partie : automatique, forcée ou jamais",
+    motsCles: ["jeu", "jeux", "veille", "veille stricte", "partie", "steam", "plein ecran", "silence"],
+    alias: ["jeu", "veille-stricte"],
+  },
+  {
+    id: "controle-pc",
+    categorie: "pc",
+    titre: "Contrôle du PC",
+    description: "Volume, luminosité, média en cours, fenêtres, modes de Windows, verrouillage, extinction",
+    motsCles: ["volume", "son", "sourdine", "luminosite", "ecran", "musique", "media", "pause", "fenetres", "verrouiller", "eteindre", "extinction", "mode nuit", "concentration", "notifications", "plan d'alimentation", "windows"],
+    alias: ["controle", "pc-controle", "windows"],
   },
   {
     id: "veille-claude",
