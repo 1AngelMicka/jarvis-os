@@ -223,9 +223,9 @@ class Affirmation:
 
 
 def normaliser(texte: str) -> str:
-    """Minuscules, apostrophes droites, espaces simples, formes Unicode composées."""
-    texte = unicodedata.normalize("NFC", texte).replace("’", "'").replace("ʼ", "'").replace(" ", " ")
-    return texte.lower()
+    """Apostrophes droites, espaces insécables remplacées, formes Unicode composées (la casse est gardée pour
+    l'extrait ; les motifs travaillent sur la phrase en minuscules)."""
+    return unicodedata.normalize("NFC", texte).replace("’", "'").replace("ʼ", "'").replace("\u00a0", " ")
 
 
 def sans_citations(texte: str) -> str:
@@ -242,7 +242,8 @@ def affirmations(texte: str) -> list[Affirmation]:
     normalise = normaliser(texte)
     code = "```" in normalise
     for brute in _PHRASES.findall(sans_citations(normalise)):
-        phrase = " ".join(brute.split())
+        originale = " ".join(brute.split())
+        phrase = originale.lower()
         if not phrase or phrase.endswith("?") or _HYPOTHESES.search(phrase):
             continue
         textuelle = code or _TEXTUEL.search(phrase) is not None
@@ -259,7 +260,7 @@ def affirmations(texte: str) -> list[Affirmation]:
             if cle in vues:
                 continue
             vues.add(cle)
-            extrait = phrase if len(phrase) <= LONGUEUR_EXTRAIT else phrase[: LONGUEUR_EXTRAIT - 1] + "…"
+            extrait = originale if len(originale) <= LONGUEUR_EXTRAIT else originale[: LONGUEUR_EXTRAIT - 1] + "…"
             trouvees.append(Affirmation(regle.categorie, regle.lemme, extrait))
     return trouvees
 

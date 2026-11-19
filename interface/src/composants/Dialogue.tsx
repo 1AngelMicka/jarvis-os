@@ -63,17 +63,18 @@ function Avis({ avis }: { avis: AvisExpert[] }) {
 /** Exécution inventée : la réponse affirme avoir agi, mais le journal du tour ne montre aucune action. Discret,
  * jamais une correction de la réponse : le détail (phrases en cause) se déplie. */
 export function AvertissementInvente({ affirmations }: { affirmations: AffirmationInventee[] }) {
+  const phrases = [...new Set(affirmations.map((a) => a.extrait))]; // une phrase peut affirmer plusieurs actions
   return (
     <details className="msg-invente">
       <summary>
         <span className="msg-invente-titre">JARVIS dit avoir agi, mais aucune action n'a été faite</span>
       </summary>
       <p className="msg-invente-texte">
-        Aucun outil ni aucune action n'a été exécuté pendant cette réponse. Phrase{affirmations.length > 1 ? "s" : ""} en cause :
+        Aucun outil ni aucune action n'a été exécuté pendant cette réponse. Phrase{phrases.length > 1 ? "s" : ""} en cause :
       </p>
       <ul className="msg-invente-liste">
-        {affirmations.map((a, i) => (
-          <li key={`${a.categorie}-${String(i)}`}>{a.extrait}</li>
+        {phrases.map((p) => (
+          <li key={p}>{p}</li>
         ))}
       </ul>
     </details>

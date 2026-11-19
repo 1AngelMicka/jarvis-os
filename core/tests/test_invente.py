@@ -164,7 +164,7 @@ def test_plusieurs_affirmations_et_extrait() -> None:
     texte = "C'est fait. J'ai envoyé l'e-mail à Paul. J'ai aussi supprimé le brouillon du dossier Envois."
     trouvees = affirmations(texte)
     assert [(a.categorie, a.verbe) for a in trouvees] == [("envoi", "envoyer"), ("suppression", "supprimer")]
-    assert trouvees[0].extrait == "j'ai envoyé l'e-mail à paul."
+    assert trouvees[0].extrait == "J'ai envoyé l'e-mail à Paul."
     long = "J'ai envoyé " + "très " * 80 + "longtemps le message."
     assert len(affirmations(long)[0].extrait) == 160 and affirmations(long)[0].extrait.endswith("…")
 
@@ -293,7 +293,7 @@ async def test_dialogue_signale_une_action_inventee(pool: Base) -> None:
     fin, signal = evenements[2].donnees, evenements[3].donnees
     assert fin["texte"] == "C'est fait : j'ai envoyé l'e-mail à Paul."  # la réponse n'est jamais modifiée
     assert fin["invente"] == [
-        {"categorie": "envoi", "verbe": "envoyer", "extrait": "c'est fait : j'ai envoyé l'e-mail à paul."}
+        {"categorie": "envoi", "verbe": "envoyer", "extrait": "C'est fait : j'ai envoyé l'e-mail à Paul."}
     ]
     assert signal == {"message_id": fin["message_id"], "affirmations": fin["invente"]}
     # Gardé dans l'historique
