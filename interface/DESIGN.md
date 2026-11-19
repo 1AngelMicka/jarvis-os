@@ -1,6 +1,6 @@
 # Système de design de l'interface JARVIS 2
 
-> Né du système de JARVIS v1 (mêmes jetons, mêmes règles d'ergonomie), mais avec sa propre identité et quatre thèmes.
+> Né du système de JARVIS v1 (mêmes jetons, mêmes règles d'ergonomie), mais avec sa propre identité et cinq thèmes.
 
 ## Intention
 
@@ -16,10 +16,13 @@ Ce qui distingue JARVIS 2 de JARVIS v1 : plus de coins en équerre ni de tracé 
 | **Studio nocturne** | Graphite, accent indigo-violet, cartes arrondies, typographie système, aucune lueur |
 | **Atelier clair** | Papier chaud, encre, titres en sérif, accent terre cuite (`color-scheme: light`) |
 | **Console épurée** | Noir et blanc, traits fins, tout en mono et en minuscules, accent lime, angles vifs |
+| **Présence** | Nuit profonde, accent aqua pâle, verre léger ; le noyau devient un **orbe de particules** WebGL (`composants/Orbe.tsx`, `src/presence.ts`) |
+
+**Orbe (thème Présence).** Cinq états : veille (« Prêt »), écoute, réflexion, parole, compactage ; alerte en rouge. Le mouvement vit dans le shader ; les teintes viennent des jetons (`--c-cyan`, `--c-cyan-vif`, `--c-bleu`, `--c-aurore`, `--c-rouge`). Densité de pixels ≤ 2. Le fil audio publie le niveau du micro, la boucle de rendu le lit : jamais l'un n'attend l'autre. Animations réduites : une image fixe. Sans WebGL : le noyau SVG. Option « HUD en fond d'écran » (Réglages › Présence) : l'orbe passe derrière tout le HUD, verre `--flou-fond`. Jetons : `--orbe`, `--orbe-compact`, `--jauge-micro`, `--jauge-micro-h`, `--flou-fond`.
 
 Un thème ne redéfinit **que des jetons** sous `html[data-theme="…"]` : couleurs (canaux RVB), polices, rayons et interrupteurs de décor (`--lueur-k`, `--grille-k`, `--aurore-k`, `--arete-k`, `--flou`, `--casse`). Le choix est gardé par appareil (`jarvis2.theme`, stockage local), appliqué avant le premier rendu, et met à jour `theme-color` et `color-scheme`. Sélecteur : barre du haut (≥ 700 px), onglet Sécurité et vue Réglages (`#reglages/themes`). L'arrêt d'urgence passe l'accent au rouge dans tous les thèmes (rouge foncé dans le thème clair).
 
-Contrastes mesurés dans les quatre thèmes : texte ≥ 15:1, texte secondaire ≥ 5,5:1 sur le fond et les panneaux, accent ≥ 5:1 sur le fond.
+Contrastes mesurés dans les cinq thèmes : texte ≥ 15:1, texte secondaire ≥ 5,5:1 sur le fond et les panneaux, accent ≥ 5:1 sur le fond.
 
 ## Tokens (`src/styles/tokens.css`)
 
