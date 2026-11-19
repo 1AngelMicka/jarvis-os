@@ -6,8 +6,21 @@ Le format suit [Keep a Changelog 1.1.0](https://keepachangelog.com/fr/1.1.0/) et
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-19
+
 ### Ajouté
 
+- Barrière d'injection par tour : après lecture de contenu non fiable (web, écran, fichier, partage, MCP), les actions qui agissent sont retenues jusqu'à la fin du tour.
+- Approbation liée à l'empreinte du plan exact (un plan modifié fait tomber l'approbation) ; pile d'annulation des actions 🟡 réversibles pendant 24 h, « Annuler » et `/annuler`.
+- Routeur par type de tâche (code, raisonnement, rapide, privé) : classifieur local qui donne sa raison, scores sur 7 jours, rétrogradation et « Rétablir » ; avis 👍 / 👎 sous les réponses.
+- Skills `SKILL.md` importables : revue des capacités dangereuses, empreinte SHA-256 vérifiée à chaque usage, exécution confinée ; sessions MCP persistantes, relance, outils choisis par le sens (11 au plus par tour).
+- Missions projet : brainstorm, spec, plan à cases modifiable, exécution en graphe de dépendances (étapes en parallèle, approbation par étape).
+- Ateliers dans un vrai bac à sable (conteneur sans réseau, Windows Sandbox, bubblewrap, sandbox-exec) ; refus si aucun n'est disponible.
+- Home Assistant (MCP + OAuth/PKCE, repli REST), serveur Wyoming, satellites vocaux par pièce et profils par personne ; serrures, alarme et portail exigent la clé d'accès et la voix du propriétaire.
+- Widgets du HUD générés à la demande, validés par listes fermées (Core et DOMPurify), épinglables ; phrase d'attente pendant les outils longs.
+- Mise à jour automatique : application de bureau (signée, installation sur clic seulement) et `jarvis2 mettre-a-jour` ; indicateur « nouvelle version » désactivable.
+- Interface traduisible : français et anglais (écrans principaux), langue choisie par appareil.
+- Documentation : README en anglais et en français, installation, dépannage, architecture, sécurité, extensions, FAQ, Home Assistant, mises à jour ; captures et démonstration ; modèles d'issues et de PR, code de conduite.
 - Historique des conversations : recherche (titres et messages), renommer, épingler, archives restaurables ; titre écrit par l'IA après le premier échange ; résumé daté de chaque conversation rangé en mémoire.
 - Vue Mémoire : chronologie par jour, filtres par origine, recherche, rendu Markdown ; nouveautés de la mémoire au début de chaque conversation (rien de privé vers une IA externe) ; notification « JARVIS a appris ».
 - Connaissances : domaines (carte, fiches, questions de contrôle, niveau, journal), extraction après chaque mission de recherche, révision ; vue Savoir.
@@ -113,5 +126,6 @@ Première version étiquetée (pré-version).
 
 - Publication : seuls les secrets de signature réellement configurés sont transmis.
 
-[Unreleased]: https://github.com/1AngelMicka/jarvis-os/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/1AngelMicka/jarvis-os/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/1AngelMicka/jarvis-os/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/1AngelMicka/jarvis-os/releases/tag/v0.8.0

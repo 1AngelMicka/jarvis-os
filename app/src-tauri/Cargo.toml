@@ -1,6 +1,6 @@
 [package]
 name = "jarvis"
-version = "0.8.0"
+version = "0.9.0"
 description = "JARVIS 2 — application de bureau (coque autour du Core local)"
 edition = "2021"
 license = "Apache-2.0"
