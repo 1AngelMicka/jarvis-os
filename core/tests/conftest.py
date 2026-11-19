@@ -51,7 +51,7 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
             " creation_versions, creations, missions, profil_reponses, messages, conversations, memoires,"
             " defis_webauthn, cles_acces, demandes, jumelages, appareils, connecteurs, executions_recettes, outils_mcp,"
             " evenements_atelier, ateliers, memoire_vecteurs, domaines, fiches_concepts, questions_controle,"
-            " extractions_domaines, journal_domaines"
+            " extractions_domaines, journal_domaines, connecteurs_maison"
             " RESTART IDENTITY CASCADE"
         )
         # Le journal d'audit est en ajout seul, même pour les tests : on ne le vide jamais (assertions relatives).

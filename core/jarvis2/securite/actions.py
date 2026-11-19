@@ -13,6 +13,7 @@ from .urgence import ArretUrgence
 if TYPE_CHECKING:
     from ..agents.mcp import GestionnaireMCP
     from ..ateliers.gestionnaire import GestionnaireAteliers
+    from ..maison import GestionnaireMaison
 
 
 def _uuid(params: dict[str, Any], cle: str) -> UUID:
@@ -30,7 +31,10 @@ async def _titre(conn: Connexion, conversation: UUID) -> str:
 
 
 def creer_registre(
-    urgence: ArretUrgence, mcp: GestionnaireMCP | None = None, ateliers: GestionnaireAteliers | None = None
+    urgence: ArretUrgence,
+    mcp: GestionnaireMCP | None = None,
+    ateliers: GestionnaireAteliers | None = None,
+    maison: GestionnaireMaison | None = None,
 ) -> Registre:
     registre = Registre()
 
@@ -101,6 +105,8 @@ def creer_registre(
         _ajouter_mcp(registre, mcp)
     if ateliers is not None:
         _ajouter_ateliers(registre, ateliers)
+    if maison is not None:
+        _ajouter_maison(registre, maison, urgence)
     return registre
 
 
@@ -187,3 +193,105 @@ def _ajouter_mcp(registre: Registre, mcp: GestionnaireMCP) -> None:
             appeler_outil,
         )
     )
+
+
+def _ajouter_maison(registre: Registre, maison: GestionnaireMaison, urgence: ArretUrgence) -> None:
+    """Hue et OBS : actions présentes seulement quand le connecteur est activé (voir `Action.disponible`)."""
+    from ..maison import OUTILS
+    from ..maison.hue import ErreurHue, couleur_xy, luminosite_pont
+    from ..maison.obs import ErreurOBS
+
+    def cible(p: dict[str, Any]) -> tuple[str, str]:
+        quoi, ident = str(p.get("cible") or "lumiere"), str(p.get("id", ""))
+        return quoi, ident
+
+    def libelle(p: dict[str, Any]) -> str:
+        quoi, ident = cible(p)
+        nom = p.get("nom")
+        return f"{'le groupe' if quoi == 'groupe' else 'la lampe'} « {nom or ident} »"
+
+    async def hue_etat(p: dict[str, Any]) -> dict[str, Any]:
+        return await maison.pont().etat()
+
+    async def hue_regler(p: dict[str, Any], etat: dict[str, Any]) -> dict[str, Any]:
+        quoi, ident = cible(p)
+        await maison.pont().regler(quoi, ident, etat)
+        return {"cible": quoi, "id": ident, **etat}
+
+    async def hue_scene(p: dict[str, Any]) -> dict[str, Any]:
+        return await maison.pont().scene(str(p.get("scene", "")))
+
+    async def obs_etat(p: dict[str, Any]) -> dict[str, Any]:
+        return await maison.obs().etat()
+
+    async def obs_scene(p: dict[str, Any]) -> dict[str, Any]:
+        scene = str(p.get("scene", ""))
+        await maison.obs().changer_scene(scene)
+        return {"scene": scene}
+
+    async def obs_enregistrement(p: dict[str, Any]) -> dict[str, Any]:
+        demarrer = p.get("demarrer") in (True, "true", "1", 1)
+        await maison.obs().enregistrement(demarrer)
+        return {"enregistrement": demarrer}
+
+    async def obs_direct(demarrer: bool) -> dict[str, Any]:
+        await maison.obs().direct(demarrer)
+        return {"direct": demarrer}
+
+    executeurs: dict[str, Any] = {
+        "hue.etat": hue_etat,
+        "hue.allumer": lambda p: hue_regler(p, {"on": True}),
+        "hue.eteindre": lambda p: hue_regler(p, {"on": False}),
+        "hue.luminosite": lambda p: hue_regler(p, {"on": True, "bri": luminosite_pont(p.get("pourcent"))}),
+        "hue.couleur": lambda p: hue_regler(p, {"on": True, "xy": couleur_xy(str(p.get("couleur", "")))}),
+        "hue.scene": hue_scene,
+        "obs.etat": obs_etat,
+        "obs.scene": obs_scene,
+        "obs.enregistrement": obs_enregistrement,
+        "obs.direct.arreter": lambda p: obs_direct(False),
+        "obs.direct.demarrer": lambda p: obs_direct(True),
+    }
+    resumes: dict[str, Any] = {
+        "hue.etat": lambda p: "Lire l'état des lumières Hue",
+        "hue.allumer": lambda p: f"Allumer {libelle(p)} (Hue)",
+        "hue.eteindre": lambda p: f"Éteindre {libelle(p)} (Hue)",
+        "hue.luminosite": lambda p: f"Régler {libelle(p)} à {p.get('pourcent')} % (Hue)",
+        "hue.couleur": lambda p: f"Passer {libelle(p)} en {p.get('couleur')} (Hue)",
+        "hue.scene": lambda p: f"Activer la scène Hue « {p.get('nom') or p.get('scene')} »",
+        "obs.etat": lambda p: "Lire l'état d'OBS",
+        "obs.scene": lambda p: f"Passer OBS sur la scène « {p.get('scene')} »",
+        "obs.enregistrement": lambda p: (
+            "Démarrer l'enregistrement OBS"
+            if p.get("demarrer") in (True, "true", "1", 1)
+            else "Arrêter l'enregistrement OBS"
+        ),
+        "obs.direct.arreter": lambda p: "Arrêter le direct OBS",
+        "obs.direct.demarrer": lambda p: "Démarrer un DIRECT OBS (diffusion publique)",
+    }
+
+    def executeur(nom: str) -> Any:
+        appel = executeurs[nom]
+
+        async def executer(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
+            if urgence.actif:  # une demande approuvée pendant l'arrêt d'urgence n'agit pas
+                raise ErreurAction("Arrêt d'urgence actif : aucune commande maison n'est envoyée")
+            try:
+                resultat: dict[str, Any] = await appel(p)
+            except (ErreurHue, ErreurOBS) as exc:
+                raise ErreurAction(str(exc)) from exc
+            return resultat  # état lu sur un appareil : une donnée, jamais une instruction
+
+        return executer
+
+    for outil in OUTILS:
+        nom, connecteur = str(outil["nom"]), str(outil["connecteur"])
+        registre.ajouter(
+            Action(
+                nom,
+                outil["niveau"],
+                str(outil["description"]),
+                resumes[nom],
+                executeur(nom),
+                disponible=lambda c=connecteur: maison.actif(c),  # type: ignore[misc]
+            )
+        )

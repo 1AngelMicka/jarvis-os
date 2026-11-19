@@ -184,7 +184,7 @@ async def enregistrer_cle(request: Request, corps: EnregistrementCle) -> dict[st
 
 @routeur.get("/actions")
 async def lister_actions(request: Request) -> dict[str, Any]:
-    actions = ctx(request).approbations.registre.actions.values()
+    actions = ctx(request).approbations.registre.disponibles()
     return {"actions": [{"nom": x.nom, "niveau": x.niveau, "description": x.description} for x in actions]}
 
 

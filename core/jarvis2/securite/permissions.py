@@ -50,6 +50,11 @@ class Action:
     description: str
     resumer: Callable[[dict[str, Any]], str]
     executer: Executeur
+    # Action facultative (connecteur maison…) : proposée et exécutable seulement quand elle renvoie True
+    disponible: Callable[[], bool] | None = None
+
+    def est_disponible(self) -> bool:
+        return self.disponible is None or self.disponible()
 
 
 class Registre:
@@ -66,6 +71,10 @@ class Registre:
             return self.actions[nom]
         except KeyError as exc:
             raise ErreurAction(f"Action inconnue : « {nom} »") from exc
+
+    def disponibles(self) -> list[Action]:
+        """Actions proposables maintenant (celles d'un connecteur désactivé n'apparaissent pas)."""
+        return [a for a in self.actions.values() if a.est_disponible()]
 
 
 @dataclass(frozen=True)
@@ -139,6 +148,8 @@ class Approbations:
     async def demander(self, nom: str, params: dict[str, Any], appareil: Appareil) -> dict[str, Any]:
         """🟢 : exécute ; 🟡 / 🔴 : crée une demande en attente."""
         action = self.registre.get(nom)
+        if not action.est_disponible():
+            raise ErreurAction(f"Action indisponible : « {nom} » (connecteur désactivé)")
         async with self.pool.acquire() as conn:
             if action.niveau == "vert":
                 return {
@@ -221,6 +232,8 @@ class Approbations:
                 return {"statut": "refusee"}
             action = self.registre.get(demande.action)
             try:
+                if not action.est_disponible():
+                    raise ErreurAction(f"Action indisponible : « {action.nom} » (connecteur désactivé)")
                 resultat = await self._executer(conn, action, demande.parametres, appareil.acteur, demande_id)
             except ErreurAction as exc:
                 await conn.execute(
