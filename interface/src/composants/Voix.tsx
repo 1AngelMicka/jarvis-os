@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { EVENEMENT_ECOUTER, EVENEMENT_ECRAN, prendre } from "../bureau";
 import { decrireImage, ErreurApi, transcrireAudio } from "../api";
 import { appliquerDecision, ecouterPhrase, EVENEMENT_ECOUTE_FOND, horodatage, lireEcouteFond, signalerEveil, suivreFinDeReponse } from "../eveil";
+import { chargerReglagesSynthese, GardeCoupure, reglagesSynthese } from "../synthese";
 import { capturerEcran, couperVoix, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal } from "../voix";
 
 interface Props {
@@ -27,6 +28,7 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
   const [ecran, setEcran] = useState(false);
   const enregistreur = useRef<Enregistreur | null>(null);
   const ecoute = useRef<EcouteMainsLibres | null>(null);
+  const garde = useRef<GardeCoupure | null>(null); // coupure quand on parle par-dessus (mains libres)
   const finSuivie = useRef<(() => void) | null>(null); // réponse suivie jusqu'à la fin de la voix de JARVIS
   const modeleSignale = useRef(false);
   const etat = useRef({ enCours, bloquee, surEnvoyer, surArreter, surNotifier });
@@ -36,12 +38,14 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
 
   useEffect(
     () => () => {
+      garde.current?.arreter();
       ecoute.current?.arreter();
       finSuivie.current?.();
       lecteur.arreter();
     },
     [lecteur],
   );
+  useEffect(chargerReglagesSynthese, []); // voix choisie (navigateur, Piper, ElevenLabs)
 
   const basculerParole = (actif: boolean) => {
     lecteur.actif = actif;
@@ -101,13 +105,32 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
       });
   };
 
-  // L'écoute se met en pause pendant que JARVIS parle (écho) ; pendant qu'il réfléchit, « stop » reste entendu
+  // Parole par-dessus JARVIS (lot K2) : comme « stop », la lecture et la réponse s'arrêtent ; le Core apprend tout de
+  // suite que la voix s'est tue, donc la phrase dite par-dessus entre dans la relance (sans « Jarvis »).
+  const surCoupure = () => {
+    lecteur.interrompre();
+    if (etat.current.enCours) etat.current.surArreter?.();
+    finSuivie.current?.();
+    finSuivie.current = null;
+    void signalerEveil("parole_fin", Date.now()).catch(() => undefined);
+  };
+
+  // L'écoute se met en pause pendant que JARVIS parle (écho) ; pendant qu'il réfléchit, « stop » reste entendu.
+  // Pendant la lecture, la garde de coupure écoute le même micro et coupe JARVIS si on parle par-dessus.
   const demarrerEcoute = (annonce: boolean) => {
     if (ecoute.current) return;
     const e = new EcouteMainsLibres(traiterPhrase, () => lecteur.parle);
     ecoute.current = e;
     e.demarrer()
       .then(() => {
+        const flux = e.fluxMicro;
+        if (flux && reglagesSynthese().coupure && !garde.current) {
+          const g = new GardeCoupure(flux, lecteur, surCoupure);
+          garde.current = g;
+          g.demarrer().catch(() => {
+            garde.current = null; // pas d'analyse possible : la coupure reste au clavier (Ctrl+M) et à « stop »
+          });
+        }
         setMainsLibres(true);
         basculerParole(true);
         if (annonce) surNotifier("Mains libres : dites « Jarvis, … ».");
@@ -119,6 +142,8 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
   };
 
   const arreterEcoute = () => {
+    garde.current?.arreter();
+    garde.current = null;
     ecoute.current?.arreter();
     ecoute.current = null;
     finSuivie.current?.();

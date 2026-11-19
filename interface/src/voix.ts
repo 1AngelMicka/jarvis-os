@@ -1,49 +1,58 @@
-// Voix de JARVIS : lecture à voix haute avec les voix LOCALES du système (jamais une voix en ligne), phrase par
-// phrase pendant la réponse ; enregistrement du micro (à la demande ou mains libres) pour la transcription sur le PC.
+// Voix de JARVIS : lecture à voix haute phrase par phrase pendant la réponse, par la voix choisie (navigateur, Piper
+// ou ElevenLabs : voir synthese.ts) ; enregistrement du micro (à la demande ou mains libres) pour la transcription
+// sur le PC.
 
 import { impulsionVoix, publierNiveauMicro, signalerMicro, signalerParole } from "./presence";
+import { FileSynthese, sortieNavigateur } from "./synthese";
 
 const FIN_DE_PHRASE = /[^.!?…\n]+[.!?…]+["»)]*\s+|[^\n]+\n+/g;
-
-function voixFrancaiseLocale(): SpeechSynthesisVoice | null {
-  const voix = window.speechSynthesis.getVoices().filter((v) => v.localService && v.lang.toLowerCase().startsWith("fr"));
-  return voix.find((v) => v.default) ?? voix[0] ?? null;
-}
 
 /** Lecteur à voix haute : `pousser` reçoit les morceaux du flux, chaque phrase complète est dite tout de suite. */
 export class LecteurVocal {
   actif = false;
   private tampon = "";
-  parle = false;
+  /** Coupé par l'utilisateur qui parle par-dessus : le reste de cette réponse n'est pas lu. */
+  interrompu = false;
+  // Phrases synthétisées en parallèle, lues dans l'ordre ; voix du système en secours. Créée au premier usage.
+  private fileLecture: FileSynthese | null = null;
 
   get disponible(): boolean {
-    return "speechSynthesis" in window;
+    return "speechSynthesis" in window || "AudioContext" in window;
+  }
+
+  get parle(): boolean {
+    return this.fileLecture?.parle ?? false;
+  }
+
+  private get file(): FileSynthese {
+    this.fileLecture ??= new FileSynthese(sortieNavigateur(impulsionVoix), {
+      debut: () => {
+        signalerParole(true);
+      },
+      fin: () => {
+        signalerParole(false);
+      },
+    });
+    return this.fileLecture;
   }
 
   private dire(phrase: string): void {
-    const texte = phrase.replace(/[*_`#>|]/g, "").trim();
-    if (!texte || !this.disponible) return;
-    const voix = voixFrancaiseLocale();
-    if (!voix) return; // aucune voix française locale : rien n'est envoyé à un service en ligne
-    const enonce = new SpeechSynthesisUtterance(texte);
-    enonce.voice = voix;
-    enonce.lang = voix.lang;
-    enonce.onstart = () => {
-      this.parle = true;
-      signalerParole(true);
-    };
-    enonce.onboundary = () => {
-      impulsionVoix(); // chaque mot dit fait vibrer l'orbe du thème Présence
-    };
-    enonce.onend = () => {
-      this.parle = window.speechSynthesis.speaking;
-      signalerParole(this.parle);
-    };
-    window.speechSynthesis.speak(enonce);
+    if (this.disponible) this.file.dire(phrase);
+  }
+
+  /** Niveau de ce que JARVIS envoie au haut-parleur (référence de la coupure quand on parle par-dessus). */
+  niveauSortie(): number {
+    return this.fileLecture?.niveau() ?? 0;
+  }
+
+  /** L'utilisateur parle par-dessus : la lecture s'arrête, le reste de la réponse en cours n'est pas lu. */
+  interrompre(): void {
+    this.arreter();
+    this.interrompu = true;
   }
 
   pousser(morceau: string): void {
-    if (!this.actif) return;
+    if (!this.actif || this.interrompu) return;
     this.tampon += morceau;
     let reste = this.tampon;
     for (const m of this.tampon.matchAll(FIN_DE_PHRASE)) {
@@ -55,19 +64,19 @@ export class LecteurVocal {
 
   /** Lit un texte entier tout de suite, même si la lecture des réponses est coupée (demande explicite). */
   lire(texte: string): void {
+    this.interrompu = false;
     for (const m of `${texte}\n`.matchAll(FIN_DE_PHRASE)) this.dire(m[0]);
   }
 
   finir(): void {
-    if (this.actif && this.tampon.trim()) this.dire(this.tampon);
+    if (this.actif && !this.interrompu && this.tampon.trim()) this.dire(this.tampon);
     this.tampon = "";
+    this.interrompu = false; // la réponse suivante sera lue
   }
 
   arreter(): void {
     this.tampon = "";
-    if (this.disponible) window.speechSynthesis.cancel();
-    this.parle = false;
-    signalerParole(false);
+    this.fileLecture?.arreter();
   }
 }
 
@@ -192,6 +201,11 @@ export class EcouteMainsLibres {
     private readonly surPhrase: (audio: Blob, debut: number, fin: number) => void,
     private readonly enPause: () => boolean,
   ) {}
+
+  /** Flux du micro ouvert (pour la coupure quand on parle par-dessus). */
+  get fluxMicro(): MediaStream | null {
+    return this.flux;
+  }
 
   async demarrer(): Promise<void> {
     this.flux = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });

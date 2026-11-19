@@ -33,6 +33,7 @@ import { ReglagesMatin } from "./Matin";
 import { SectionMemoire } from "./Memoire";
 import { ControlePC, ModeJeuPC, RessourcesDuPC } from "./PC";
 import { AutorisationsPermanentes, CommandesRapides, ReglagePilotage, ReglesProtection } from "./Pilotage";
+import { ReglageSynthese } from "./ReglageSynthese";
 import { PanneauSecurite } from "./Securite";
 import { SelecteurTheme } from "./SelecteurTheme";
 import { VeilleClaude } from "./VeilleClaude";
@@ -202,8 +203,8 @@ function VoixInstallees() {
   if (!voix.length)
     return (
       <p className="sec-texte" data-etat="alerte">
-        Aucune voix française locale sur cet appareil : JARVIS reste muet plutôt que d'envoyer le texte à un service en ligne. Ajoutez une voix
-        française dans les réglages de langue du système.
+        Aucune voix française locale sur cet appareil : JARVIS lit avec Piper s'il est prêt, sinon il reste muet plutôt que d'envoyer le texte à
+        un service en ligne. Ajoutez une voix française dans les réglages de langue du système.
       </p>
     );
   return (
@@ -400,6 +401,7 @@ export function VueReglages(p: Props) {
         return (
           <>
             <ChoixVoix lecteur={p.lecteur} />
+            <ReglageSynthese lecteur={p.lecteur} surNotifier={p.surNotifier} />
             <VoixInstallees />
             <p className="sec-texte">Ctrl+M ou « /silence » coupe la voix tout de suite.</p>
           </>

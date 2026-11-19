@@ -258,7 +258,7 @@ def _locaux(c: Contexte) -> list[Flux]:
             id="lecture",
             categorie="voix",
             fonction="Lecture à voix haute",
-            service="Voix installées sur l'appareil (jamais une voix en ligne)",
+            service="Voix de l'appareil ou Piper (voix neuronale sur ce PC)",
             destination="pc",
             etat="actif",
             envoie=[],
@@ -343,6 +343,33 @@ async def _mcp(c: Contexte) -> list[Flux]:
     ]
 
 
+async def _elevenlabs(c: Contexte) -> list[Flux]:
+    """Voix en ligne ElevenLabs : seulement si l'utilisateur a rangé sa clé ; active quand c'est la voix choisie."""
+    if c.synthese is None:
+        return []
+    from . import synthese
+
+    cle = c.synthese.cle_elevenlabs()
+    choisie = (await synthese.lire_reglages(c.pool))["moteur"] == "elevenlabs"
+    return [
+        Flux(
+            id="elevenlabs",
+            categorie="voix",
+            fonction="Lecture à voix haute par ElevenLabs",
+            service="ElevenLabs (voix en ligne, avec votre clé)",
+            destination="internet",
+            etat="actif" if cle and choisie else "inactif",
+            envoie=["Le texte de chaque phrase lue à voix haute, secrets et données personnelles masqués"],
+            jamais=[
+                "Les phrases sur un sujet ou des souvenirs privés : lues par une voix locale",
+                "Votre mémoire, vos conversations entières",
+            ],
+            desactiver=Desactivation("Choisir une voix locale dans Voix & écoute", reglage="lecture"),
+            detail=None if cle else "Aucune clé enregistrée : rien ne part.",
+        )
+    ]
+
+
 async def decrire(c: Contexte, p: Parametres) -> dict[str, Any]:
     connecteurs, inactifs = await _connecteurs(c)
     flux = [
@@ -352,6 +379,7 @@ async def decrire(c: Contexte, p: Parametres) -> dict[str, Any]:
         *_telechargements(c, p),
         *_telephone(c, p),
         *await _mcp(c),
+        *await _elevenlabs(c),
         *_locaux(c),
     ]
     sortants = [f for f in flux if not f.local and f.etat == "actif"]

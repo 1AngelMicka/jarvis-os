@@ -100,8 +100,8 @@ export const SECTIONS: readonly Section[] = [
     id: "lecture",
     categorie: "voix",
     titre: "Voix de JARVIS",
-    description: "Lecture des réponses à voix haute avec une voix française du système",
-    motsCles: ["parole", "synthese", "parler", "lire", "son", "muet", "silence", "ctrl+m"],
+    description: "Lecture à voix haute : voix de l'appareil, Piper (locale) ou ElevenLabs ; coupure quand on parle par-dessus",
+    motsCles: ["parole", "synthese", "parler", "lire", "son", "muet", "silence", "ctrl+m", "piper", "elevenlabs", "coupure", "stop"],
     alias: ["voix-jarvis"],
   },
   {
