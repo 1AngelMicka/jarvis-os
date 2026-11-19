@@ -37,6 +37,7 @@ import type {
   ApercuAmelioration,
   Atelier,
   AttenteOutil,
+  BacASable,
   EvenementAtelier,
   EtatVeille,
   ModeleAtelier,
@@ -346,12 +347,23 @@ export const lancerTacheMemoire = (id: string) => envoyer<{ lancee: string }>(`/
 // --- Ateliers Claude Code ---
 export const listerAteliers = () =>
   unSeul("ateliers", () =>
-    appeler<{ projets: { id: string; nom: string }[]; modeles: ModeleAtelier[]; ateliers: Atelier[]; attentes: AttenteOutil[] }>(
-      "/v1/ateliers",
-    ),
+    appeler<{
+      projets: { id: string; nom: string }[];
+      modeles: ModeleAtelier[];
+      ateliers: Atelier[];
+      attentes: AttenteOutil[];
+      /** Absent avec un Core antérieur au point 14 · B 9 */
+      bacs?: BacASable[];
+    }>("/v1/ateliers"),
   );
-export const creerAtelier = (projet: string, nom: string, modele: string | null = null) =>
-  envoyer<Atelier>("/v1/ateliers", { projet, nom, modele });
+/** `bac` n'est envoyé qu'à un Core qui connaît les bacs à sable ; « aucun » exige `confirmer: true` (sinon 409). */
+export const creerAtelier = (projet: string, nom: string, modele: string | null = null, bac?: { choix: string; confirmer: boolean }) =>
+  envoyer<Atelier>("/v1/ateliers", { projet, nom, modele, ...(bac ? { bac_a_sable: bac.choix, confirmer_sans_bac: bac.confirmer } : {}) });
+/** Change le bac à sable entre deux consignes ; 409 si l'atelier travaille, est clôturé, ou « aucun » sans confirmation. */
+export const bacAtelier = (id: string, choix: string, confirmer = false) =>
+  appeler<Atelier>(`/v1/ateliers/${id}/bac-a-sable`, { methode: "PUT", corps: { choix, confirmer } });
+/** Redétecte les bacs à sable (Docker démarré entre-temps…). */
+export const detecterBacs = () => appeler<{ bacs: BacASable[] }>("/v1/ateliers/bacs-a-sable?rafraichir=true");
 export const pauseAtelier = (id: string) => envoyer<{ fait: boolean }>(`/v1/ateliers/${id}/pause`);
 export const reprendreAtelier = (id: string) => envoyer<{ fait: boolean }>(`/v1/ateliers/${id}/reprendre`);
 export const relancerAtelier = (id: string) => envoyer<{ fait: boolean }>(`/v1/ateliers/${id}/relancer`);

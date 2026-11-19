@@ -403,6 +403,22 @@ export interface Atelier {
   clos_le: string | null;
   /** Fichiers aussi modifiés par un autre atelier ouvert du même projet */
   conflits: { fichier: string; ateliers: { id: string; nom: string }[] }[];
+  /** Bac à sable choisi (absent avec un Core antérieur au point 14 · B 9) */
+  bac_a_sable?: ChoixBac;
+  /** Bac que le prochain lancement utilisera (null : « aucun » ou refus) et raison du refus éventuel */
+  bac?: { effectif: string | null; refus: string | null };
+}
+
+/** Choix du bac à sable d'un atelier : automatique, un bac précis, ou sans bac à sable (🟡, journalisé). */
+export type ChoixBac = "auto" | "docker" | "podman" | "windows_sandbox" | "bubblewrap" | "sandbox_exec" | "aucun";
+
+/** Un bac à sable détecté par le Core, disponible ou non. */
+export interface BacASable {
+  id: string;
+  nom: string;
+  disponible: boolean;
+  /** Pourquoi il est (in)disponible */
+  raison: string;
 }
 
 // --- Amélioration continue (lot O) ---

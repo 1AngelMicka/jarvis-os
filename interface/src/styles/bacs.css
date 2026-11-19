@@ -1,0 +1,28 @@
+/* --- Bacs à sable des ateliers (point 14 · B 9) : choix, état, refus, détection --- */
+.atelier-bac { margin: 0; font: var(--t-mini)/1.4 var(--f-donnees); color: var(--texte-2); overflow-wrap: anywhere; }
+.atelier-bac[data-ton="ok"] { color: var(--vert); }
+.atelier-bac[data-ton="attention"] { color: var(--ambre-texte); }
+.atelier-bac[data-ton="risque"] { color: var(--rouge-pale); }
+.atelier-bac-refus {
+  margin: 0; padding: var(--e-2) var(--e-3); border: var(--l-fin) solid rgb(var(--c-rouge) / .45); border-radius: var(--r-2);
+  background: rgb(var(--c-rouge) / .06); color: var(--texte-2); font-size: var(--t-mini); line-height: 1.45; overflow-wrap: anywhere;
+}
+.atelier-bac-choix { display: inline-flex; align-items: center; gap: var(--e-2); min-width: 0; max-width: 100%; font-size: var(--t-mini); color: var(--texte-2); }
+.atelier-bac-choix > span { flex: none; }
+.atelier-bac-choix > .select, .carte-co-actions > .select { min-width: 0; max-width: 100%; }
+.atelier-fil li[data-type="bac_a_sable_refuse"] { color: var(--rouge-pale); }
+.atelier-fil li[data-type="sans_bac_a_sable"] { color: var(--ambre-texte); }
+
+.bacs-liste { display: flex; flex-direction: column; gap: var(--e-2); margin: 0; padding: 0; list-style: none; }
+.bacs-liste li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-1) var(--e-3); min-width: 0; padding: var(--e-2) var(--e-3);
+  border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-2); background: rgb(var(--c-verre-bas) / .7);
+}
+.bac-nom { font: 600 var(--t-petit)/1.3 var(--f-ui); color: var(--texte-fort); }
+.bac-raison { flex: 1 1 100%; margin: 0; font: var(--t-mini)/1.4 var(--f-donnees); color: var(--texte-3); overflow-wrap: anywhere; }
+
+/* Confirmation « sans bac à sable » : même fenêtre que les accords 🟡, en ambre */
+.palette--sans-bac { border-color: rgb(var(--c-ambre) / .6); }
+.palette--sans-bac .palette-confirmation-titre { color: var(--ambre-texte); }
+.palette--sans-bac .palette-confirmation-texte { display: flex; flex-direction: column; gap: var(--e-3); line-height: 1.5; }
+.palette--sans-bac .palette-confirmation-texte p { margin: 0; }
