@@ -57,7 +57,7 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
         # Le journal d'audit est en ajout seul, même pour les tests : on ne le vide jamais (assertions relatives).
         await conn.execute("UPDATE etat_systeme SET valeur = '{\"actif\": false}' WHERE cle = 'arret_urgence'")
         await conn.execute("UPDATE etat_systeme SET valeur = '{\"termine\": false}' WHERE cle = 'accueil'")
-        await conn.execute("UPDATE etat_systeme SET valeur = '{\"mode\": \"parle\", \"vus\": {}}' WHERE cle = 'matin'")
+        await conn.execute('UPDATE etat_systeme SET valeur = \'{"mode": "parle", "vus": {}}\' WHERE cle = \'matin\'')
     finally:
         await conn.close()
     return BasePostgres(await creer_pool(parametres.url_base("app", BASE_TEST), max_size=4))
