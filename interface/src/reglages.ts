@@ -112,6 +112,28 @@ export const SECTIONS: readonly Section[] = [
     motsCles: ["micro", "transcription", "whisper", "mains libres", "eveil", "dictee", "ecran", "vision"],
   },
   {
+    id: "transcription",
+    categorie: "voix",
+    titre: "Transcription",
+    description: "Modèle Whisper, carte graphique ou processeur, préchauffage, fin de tour",
+    motsCles: ["whisper", "cuda", "rocm", "gpu", "carte graphique", "latence", "vad", "silero", "prechauffage", "hallucinations"],
+  },
+  {
+    id: "proprietaire",
+    categorie: "voix",
+    titre: "Reconnaissance de ma voix",
+    description: "Vérifier que c'est vous avant une action 🟡🔴 demandée à voix haute",
+    motsCles: ["locuteur", "empreinte", "ecapa", "voix", "securite", "biometrie", "proprietaire"],
+    alias: ["ma-voix"],
+  },
+  {
+    id: "dictee",
+    categorie: "voix",
+    titre: "Dictée globale",
+    description: "Maintenir Ctrl+Alt+D pour dicter dans n'importe quelle application",
+    motsCles: ["dicter", "coller", "raccourci", "corrections", "dictionnaire", "windows", "presse-papiers"],
+  },
+  {
     id: "connecteurs",
     categorie: "cerveau",
     titre: "Connecteurs",

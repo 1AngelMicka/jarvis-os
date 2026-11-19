@@ -14,6 +14,7 @@ import { VueAteliers } from "./composants/Ateliers";
 import { VueConnecteurs } from "./composants/Connecteurs";
 import { VueCouts } from "./composants/Couts";
 import { ListeDemandes } from "./composants/Demandes";
+import { DicteeGlobale } from "./composants/Dictee";
 import { Console, EVENEMENT_JOINDRE, Fil, type MessageAffiche } from "./composants/Dialogue";
 import { FenetreAccordImages } from "./composants/AccordImages";
 import { Aide, type ModePalette, Palette } from "./composants/Palette";
@@ -1467,6 +1468,7 @@ function Hud() {
           </Panneau>
         )}
       </main>
+      <DicteeGlobale />
 
       <aside className="colonne-droite" data-ouvert={lateralOuvert || undefined}>
         <section className="panneau panneau-lateral" style={{ "--ordre": 3 } as React.CSSProperties} aria-label="Panneau latéral">

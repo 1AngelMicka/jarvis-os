@@ -1,0 +1,42 @@
+/* ---------- Voix, lot K3 : transcription, reconnaissance du propriétaire, dictée globale ---------- */
+
+.voix-k3 { display: flex; flex-direction: column; gap: var(--e-3); min-width: 0; }
+.voix-k3 .sec-texte { margin: 0; }
+.voix-k3-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2); }
+.voix-k3-ok { font: var(--t-mini)/1 var(--f-ui); color: var(--vert); }
+.voix-k3-alerte {
+  margin: 0; padding: var(--e-2) var(--e-3); border-radius: var(--r-1);
+  font: var(--t-mini)/1.4 var(--f-ui); color: var(--ambre-texte);
+  border: var(--l-fin) solid rgb(var(--c-ambre) / .5); background: rgb(var(--c-ambre) / .08);
+}
+.voix-k3-liste { display: flex; flex-direction: column; gap: var(--e-1); margin: 0; padding: 0; list-style: none; }
+.voix-k3-liste li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2) var(--e-3); min-height: var(--cible);
+  padding: var(--e-1) var(--e-3); border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-2);
+  font-size: var(--t-mini); color: var(--texte-2);
+}
+.voix-k3-liste li > span:first-child { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.voix-k3-mono { font-family: var(--f-mono); color: var(--texte); }
+.voix-k3-champ textarea { width: 100%; min-height: calc(var(--cible) * 2); resize: vertical; font-family: var(--f-mono); }
+.voix-k3-seuil { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2) var(--e-3); font-size: var(--t-mini); color: var(--texte-2); }
+.voix-k3-seuil input { flex: 1 1 160px; min-width: 0; accent-color: var(--cyan); }
+.voix-k3-seuil output { font-variant-numeric: tabular-nums; color: var(--texte); }
+.voix-k3-ajout { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--e-2) var(--e-3); }
+.voix-k3-ajout .champ { flex: 1 1 160px; min-width: 0; }
+.voix-k3-ajout .champ input, .voix-k3-ajout .select { width: 100%; }
+.voix-k3-ajout .btn { min-height: var(--cible); }
+
+/* Bulle de la dictée globale : discrète, en bas, au-dessus du reste */
+.dictee-bulle {
+  position: fixed; left: 50%; bottom: calc(var(--e-6) + var(--sa-bas)); z-index: var(--z-notifs);
+  display: inline-flex; align-items: center; gap: var(--e-2); max-width: calc(100vw - 2 * var(--e-4));
+  padding: var(--e-2) var(--e-4); transform: translateX(-50%); border-radius: var(--r-pilule);
+  font: var(--t-mini)/1.3 var(--f-ui); color: var(--texte-fort); background: var(--verre);
+  border: var(--l-fin) solid var(--ligne-forte); box-shadow: var(--ombre-panneau); backdrop-filter: blur(var(--flou));
+}
+.dictee-bulle[hidden] { display: none; }
+.dictee-bulle[data-etape="erreur"] { color: var(--ambre-texte); border-color: rgb(var(--c-ambre) / .5); }
+.dictee-point { width: 8px; height: 8px; flex: none; border-radius: var(--r-rond); background: var(--rouge); animation: dictee-pulse var(--d-lent) var(--e-sortie) infinite alternate; }
+@keyframes dictee-pulse { to { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .dictee-point { animation: none; } }
+html[data-animations="reduites"] .dictee-point { animation: none; }

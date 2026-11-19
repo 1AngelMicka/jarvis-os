@@ -32,6 +32,7 @@ import { ReglagesMatin } from "./Matin";
 import { SectionMemoire } from "./Memoire";
 import { ControlePC, ModeJeuPC, RessourcesDuPC } from "./PC";
 import { AutorisationsPermanentes, CommandesRapides, ReglagePilotage, ReglesProtection } from "./Pilotage";
+import { EtatTranscriptionVoix, ReglageDictee, ReglageProprietaire } from "./ReglagesVoix";
 import { PanneauSecurite } from "./Securite";
 import { SelecteurTheme } from "./SelecteurTheme";
 import { VeilleClaude } from "./VeilleClaude";
@@ -423,6 +424,12 @@ export function VueReglages(p: Props) {
           </>
         );
       }
+      case "transcription":
+        return <EtatTranscriptionVoix />;
+      case "proprietaire":
+        return <ReglageProprietaire />;
+      case "dictee":
+        return <ReglageDictee />;
       case "connecteurs":
         return <VueConnecteurs surChangement={p.surChangement} />;
       case "couts":

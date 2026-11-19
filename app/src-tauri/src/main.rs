@@ -224,6 +224,18 @@ fn naviguer(app: &AppHandle, url: &Url) -> bool {
     false
 }
 
+/// Dictée globale (lot K3) : prévient l'interface (même cachée) que le raccourci est tenu ou relâché ; elle enregistre,
+/// le Core transcrit et colle dans l'application au premier plan. La fenêtre de JARVIS ne prend pas le focus.
+fn signaler_dictee(app: &AppHandle, debut: bool) {
+    if !*app.state::<Etat>().prete.lock().unwrap() {
+        return;
+    }
+    if let Some(f) = app.get_webview_window("principale") {
+        let etape = if debut { "debut" } else { "fin" };
+        let _ = f.eval(&format!("window.dispatchEvent(new CustomEvent('jarvis2:dictee', {{ detail: '{etape}' }}))"));
+    }
+}
+
 fn main() {
     // Ctrl+Maj+J, sinon Ctrl+Alt+J si une autre application le tient déjà ; sans raccourci libre, l'application
     // démarre quand même (l'icône de notification suffit). Idem pour la voix et l'écran.
@@ -239,6 +251,11 @@ fn main() {
         Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::PrintScreen),
         Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::PrintScreen),
     ];
+    // Dictée globale (lot K3) : raccourci MAINTENU (enfoncé puis relâché)
+    let dictee = [
+        Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyD),
+        Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT | Modifiers::ALT), Code::KeyD),
+    ];
     let app = tauri::Builder::default()
         // Instance unique : un lien jarvis:// ouvert par le système relance l'exécutable ; l'instance qui tourne
         // le reçoit (fonction « deep-link » du greffon) et la seconde s'arrête.
@@ -247,6 +264,10 @@ fn main() {
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, sc, ev| {
+                    if dictee.contains(sc) {
+                        signaler_dictee(app, ev.state() == ShortcutState::Pressed);
+                        return;
+                    }
                     if ev.state() != ShortcutState::Pressed {
                         return;
                     }
@@ -339,7 +360,7 @@ fn main() {
                 icone = icone.icon(image.clone());
             }
             icone.build(app)?;
-            for groupe in [fenetre, voix, ecran] {
+            for groupe in [fenetre, voix, ecran, dictee] {
                 for raccourci in groupe {
                     if app.global_shortcut().register(raccourci).is_ok() {
                         break; // le premier raccourci libre de chaque groupe suffit

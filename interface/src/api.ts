@@ -390,6 +390,17 @@ export async function transcrireAudio(audio: Blob): Promise<{ texte: string; eve
   if (!rep.ok) throw await lireErreur(rep);
   return (await rep.json()) as { texte: string; eveil: boolean; commande: string };
 }
+/** Enregistrement brut vers une route du Core (lot K3 : anticipation, empreinte de voix, dictée). */
+export async function posterAudio<T>(chemin: string, audio: Blob, extra: Record<string, string> = {}): Promise<T> {
+  let rep: Response;
+  try {
+    rep = await fetch(chemin, { method: "POST", headers: entetes({ "Content-Type": audio.type || "audio/webm", ...extra }), body: audio });
+  } catch {
+    throw new ErreurApi(INJOIGNABLE, 0);
+  }
+  if (!rep.ok) throw await lireErreur(rep);
+  return (await rep.json()) as T;
+}
 export const decrireImage = (image: string, question?: string) =>
   envoyer<{ description: string; modele: string }>("/v1/vision/decrire", { image, ...(question ? { question } : {}) });
 export const listerCreations = () =>

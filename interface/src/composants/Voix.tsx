@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { EVENEMENT_ECOUTER, EVENEMENT_ECRAN, prendre } from "../bureau";
 import { decrireImage, transcrireAudio } from "../api";
+import { brancherAnticipation } from "../voixAvancee";
 import { capturerEcran, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal } from "../voix";
 
 interface Props {
@@ -89,6 +90,7 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
       return;
     }
     const e = new EcouteMainsLibres(traiterPhrase, () => lecteur.parle || etat.current.enCours);
+    brancherAnticipation(e); // lot K3 : préchauffage, transcription anticipée et fin de tour
     e.demarrer()
       .then(() => {
         ecoute.current = e;
