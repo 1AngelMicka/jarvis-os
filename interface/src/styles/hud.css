@@ -364,7 +364,7 @@ html[data-animations="reduites"] .noyau-couche, html[data-animations="reduites"]
 .hist-outils { display: flex; align-items: center; gap: var(--e-2); }
 .hist-recherche {
   flex: 1; display: flex; align-items: center; gap: var(--e-2); min-width: 0; min-height: var(--cible); padding: 0 var(--e-3);
-  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-saisie); background: rgb(var(--c-creux) / .6);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); background: rgb(var(--c-creux) / .6);
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 .hist-recherche:focus-within { border-color: var(--cyan); box-shadow: 0 0 0 3px rgb(var(--c-cyan) / .14); }
@@ -713,3 +713,51 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
 .memoire-reglages { border-top: var(--l-fin) solid var(--ligne-faible); padding-top: var(--e-4); }
 .memoire-reglages > summary { cursor: pointer; font: var(--t-petit)/1.4 var(--f-ui); color: var(--texte-2); min-height: var(--cible); display: flex; align-items: center; }
 .memoire-reglages[open] > summary { margin-bottom: var(--e-4); color: var(--cyan-vif); }
+
+/* --- Panneau Activité : chantiers, missions, ateliers, créations (phase 13, lot C) -------------------------- */
+.pastille:not(.pastille--ambre) { background: rgb(var(--c-cyan) / .18); color: var(--cyan-vif); }
+.activite { display: flex; flex-direction: column; gap: var(--e-5); }
+.activite-direct { display: flex; align-items: center; gap: var(--e-2); margin: 0; padding: 0 var(--e-2); font: var(--t-mini)/1.3 var(--f-donnees); color: var(--texte-2); }
+.point-etat[data-direct] { animation: respire var(--d-cine) var(--e-holo) infinite alternate; }
+html[data-animations="reduites"] .point-etat[data-direct] { animation: none; }
+@media (prefers-reduced-motion: reduce) { .point-etat[data-direct] { animation: none; } }
+.activite-section { display: flex; flex-direction: column; gap: var(--e-2); }
+.activite-titre { display: flex; align-items: center; gap: var(--e-2); margin-bottom: 0; }
+.activite-nombre { font: var(--t-micro)/1 var(--f-donnees); color: var(--texte-3); font-variant-numeric: tabular-nums; }
+.activite-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-1); }
+.activite-item { display: flex; flex-direction: column; border-radius: var(--r-2); border: var(--l-fin) solid transparent; transition: background var(--transition), border-color var(--transition); }
+.activite-item[data-ouvert] { border-color: var(--ligne); background: rgb(var(--c-creux) / .45); }
+.activite-item--clos { gap: var(--e-2); padding: var(--e-3); border-color: var(--ligne-faible); }
+.activite-tete {
+  display: flex; flex-direction: column; gap: var(--e-2); width: 100%; min-height: var(--cible); padding: var(--e-3);
+  border: 0; border-radius: var(--r-2); background: transparent; text-align: left; color: inherit; cursor: pointer;
+}
+.activite-tete:hover { background: var(--voile-2); }
+.activite-tete:focus-visible { outline: var(--l-moyen) solid var(--cyan); outline-offset: -2px; }
+.activite-ligne { display: flex; align-items: center; gap: var(--e-2); min-width: 0; }
+.activite-nom { flex: 1 1 auto; min-width: 0; font-size: var(--t-petit); line-height: 1.3; color: var(--texte); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.activite-ligne .badge-co { flex: none; }
+.activite-meta { font: var(--t-micro)/1.35 var(--f-donnees); color: var(--texte-3); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.activite-actions { display: flex; flex-wrap: wrap; gap: var(--e-2); padding: 0 var(--e-3) var(--e-3); }
+.activite-rouvrir { align-self: flex-start; }
+.activite-clos { align-self: flex-start; margin: 0 var(--e-2); }
+.chantier-detail { display: flex; flex-direction: column; gap: var(--e-2); padding: 0 var(--e-3) var(--e-3); }
+.chantier-description { margin: 0; font-size: var(--t-mini); line-height: 1.45; color: var(--texte-2); overflow-wrap: anywhere; }
+.chantier-etapes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.chantier-etape { display: flex; align-items: flex-start; gap: var(--e-3); min-height: 32px; padding: var(--e-1) 0; font-size: var(--t-mini); line-height: 1.4; color: var(--texte); cursor: pointer; overflow-wrap: anywhere; }
+.chantier-etape input { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--cyan); }
+.chantier-etape[data-fait] span { color: var(--texte-3); text-decoration: line-through; text-decoration-color: var(--ligne-forte); }
+.chantier-ajout { display: flex; gap: var(--e-2); }
+.chantier-ajout input {
+  flex: 1; min-width: 0; min-height: 32px; padding: 0 var(--e-3); border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2);
+  background: rgb(var(--c-creux) / .7); color: var(--texte); font: var(--t-mini)/1.2 var(--f-ui);
+}
+.chantier-ajout input::placeholder { color: var(--texte-3); }
+.chantier-ajout input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgb(var(--c-cyan) / .14); }
+.activite-section > .chantier-ajout { padding: 0 var(--e-2); }
+@media (pointer: coarse) {
+  .chantier-ajout input, .chantier-etape { min-height: var(--cible); font-size: 16px; }
+  .chantier-etape { align-items: center; }
+  .chantier-etape input { width: 22px; height: 22px; margin: 0; }
+}
+.carte-co[data-cible] { border-color: var(--cyan); box-shadow: var(--lueur-1); }

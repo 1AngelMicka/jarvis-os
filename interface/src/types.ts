@@ -321,3 +321,39 @@ export interface OrigineMemoire {
   nom: string;
   nombre: number;
 }
+
+// --- Chantiers et activité (phase 13, lot C) ---
+export type StatutChantier = "propose" | "a_faire" | "en_cours" | "en_attente_utilisateur" | "bloque" | "termine" | "abandonne";
+
+export interface EtapeChantier {
+  titre: string;
+  fait: boolean;
+}
+
+export interface Chantier {
+  id: string;
+  titre: string;
+  description: string | null;
+  categorie: string;
+  statut: StatutChantier;
+  progression: number;
+  etape_courante: string | null;
+  etapes: EtapeChantier[];
+  responsable: string;
+  action_utilisateur: string | null;
+  priorite: number;
+  origine: string;
+  motif: string | null;
+  cree_le: string;
+  maj_le: string;
+  termine_le: string | null;
+}
+
+export interface Activite {
+  chantiers: Chantier[];
+  missions: Pick<Mission, "id" | "type" | "objectif" | "statut" | "progression" | "cree_le" | "termine_le">[];
+  ateliers: Pick<Atelier, "id" | "projet" | "nom" | "statut" | "actif">[];
+  attentes_ateliers: number;
+  creations: { id: string; titre: string; version_courante: number; maj_le: string }[];
+  en_cours: number;
+}

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat, lireNouveautes, listerDemandes, resumerConversation, sonderCore } from "./api";
+import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, listerDemandes, resumerConversation, sonderCore } from "./api";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
+import { type CibleActivite, PanneauActivite } from "./composants/Activite";
 import { VueAgents } from "./composants/Agents";
 import { VueAteliers } from "./composants/Ateliers";
 import { VueConnecteurs } from "./composants/Connecteurs";
@@ -18,7 +19,7 @@ import { CommandesVoix } from "./composants/Voix";
 import { SelecteurTheme } from "./composants/SelecteurTheme";
 import { ecrirePreferences, lirePreferences } from "./preferences";
 import { LecteurVocal } from "./voix";
-import type { AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
+import type { Activite, AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
 
 let compteur = 0;
 const nouvelleCle = () => `m${String(++compteur)}`;
@@ -56,7 +57,7 @@ export function App() {
   );
 }
 
-type Onglet = "conversations" | "demandes" | "securite";
+type Onglet = "conversations" | "activite" | "demandes" | "securite";
 
 function Hud() {
   const [etat, setEtat] = useState<Etat | null>(null);
@@ -78,6 +79,10 @@ function Hud() {
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
   const [annonce, setAnnonce] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
+  // Panneau Activité (chantiers, missions, ateliers, créations) et élément à ouvrir dans une vue
+  const [activite, setActivite] = useState<Activite | null>(null);
+  const [erreurActivite, setErreurActivite] = useState<string | null>(null);
+  const [cible, setCible] = useState<CibleActivite | null>(null);
   const controleur = useRef<AbortController | null>(null);
   const lecteur = useRef(new LecteurVocal()).current;
   const minuterieNotif = useRef<number | undefined>(undefined);
@@ -151,6 +156,22 @@ function Hud() {
     }
   }, [notifier]);
 
+  const rafraichirActivite = useCallback(() => {
+    lireActivite()
+      .then((a) => {
+        setErreurActivite(null);
+        setActivite((avant) => (avant && JSON.stringify(avant) === JSON.stringify(a) ? avant : a));
+      })
+      .catch((e: unknown) => {
+        setErreurActivite(e instanceof Error ? e.message : "Activité illisible.");
+      });
+  }, []);
+  useEffect(rafraichirActivite, [rafraichirActivite]);
+  // L'élément ciblé depuis l'Activité ne vaut que pour la vue qu'il a ouverte
+  useEffect(() => {
+    setCible((c) => (c && c.vue !== vue ? null : c));
+  }, [vue]);
+
   // Surveillance de la connexion : l'état « Core en ligne / hors ligne » suit la réalité (toutes les 15 s, et dès que la
   // fenêtre revient au premier plan) ; au retour du Core, tout est rechargé.
   const horsLigne = erreurEtat !== null;
@@ -164,6 +185,7 @@ function Hud() {
           }
           // File d'approbations : une demande créée ou close ailleurs (autre appareil, expiration) apparaît ici
           void signalerAppris();
+          rafraichirActivite(); // panneau Activité et sa pastille
           return listerDemandes().then(({ demandes }) => {
             setEtat((e) => (e && JSON.stringify(e.demandes) !== JSON.stringify(demandes) ? { ...e, demandes } : e));
           });
@@ -183,7 +205,7 @@ function Hud() {
       document.removeEventListener("visibilitychange", auRetour);
       window.removeEventListener("online", sonder);
     };
-  }, [horsLigne, charger, signalerAppris]);
+  }, [horsLigne, charger, signalerAppris, rafraichirActivite]);
 
   const rafraichir = useCallback(
     (message?: string) => {
@@ -448,6 +470,7 @@ function Hud() {
 
   const ONGLETS: { id: Onglet; nom: string; pastille?: number }[] = [
     { id: "conversations", nom: "Conversations" },
+    { id: "activite", nom: "Activité", pastille: activite?.en_cours ?? 0 },
     { id: "demandes", nom: "Demandes", pastille: nbDemandes },
     { id: "securite", nom: "Sécurité" },
   ];
@@ -636,6 +659,7 @@ function Hud() {
           >
             <div className="panneau-corps">
               <VueAteliers
+                initial={cible?.vue === "ateliers" ? cible.id : undefined}
                 surChangement={rafraichir}
                 surAction={(r) => {
                   suiteAction(r, "Atelier fusionné.");
@@ -687,6 +711,7 @@ function Hud() {
           >
             <div className="panneau-corps">
               <VueAgents
+                cible={cible?.vue === "agents" ? cible : null}
                 surChangement={rafraichir}
                 surOuvrirConversation={(id) => {
                   setVue("dialogue");
@@ -801,7 +826,7 @@ function Hud() {
                   }}
                 >
                   {o.nom}
-                  {o.pastille ? <span className="pastille pastille--ambre">{o.pastille}</span> : null}
+                  {o.pastille ? <span className={o.id === "demandes" ? "pastille pastille--ambre" : "pastille"}>{o.pastille}</span> : null}
                 </button>
               ))}
             </div>
@@ -820,6 +845,23 @@ function Hud() {
           </header>
           <div className="panneau-corps" role="tabpanel" id={`vue-${onglet}`} aria-labelledby={`onglet-${onglet}`}>
             {onglet === "conversations" && <ListeConversations conversations={conversations} active={active} surChoisir={ouvrir} surMiseAJour={mettreAJourConversation} surErreur={notifier} />}
+            {onglet === "activite" && (
+              <PanneauActivite
+                activite={activite}
+                erreur={erreurActivite}
+                surRafraichir={rafraichirActivite}
+                surNotifier={notifier}
+                surAction={(r) => {
+                  suiteAction(r, "Chantier abandonné.");
+                  rafraichirActivite();
+                }}
+                surOuvrir={(c) => {
+                  setCible(c);
+                  setVue(c.vue);
+                  setLateralOuvert(false);
+                }}
+              />
+            )}
             {onglet === "demandes" && <ListeDemandes demandes={etat?.demandes ?? []} nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />}
             {onglet === "securite" && <PanneauSecurite nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />}
           </div>
