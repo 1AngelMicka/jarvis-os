@@ -46,11 +46,33 @@ export interface AvisExpert {
   duree_ms: number;
 }
 
+export interface PalierModele {
+  taille: string;
+  modele: string;
+  besoin_go: number;
+  exemples?: string[];
+}
+
+export interface ConseilModele {
+  usage: "conversation" | "vision" | "embeddings" | "transcription";
+  titre: string;
+  ou: string;
+  budget_go: number;
+  note: string;
+  raison: string;
+  conseille: PalierModele | null;
+  maximum: PalierModele | null;
+}
+
 export interface Materiel {
   ram_go: number | null;
   vram_go: number | null;
   carte: string | null;
-  recommandations: { taille: string; ou: string; exemples: string[]; raison: string }[];
+  type_carte: "nvidia" | "amd" | "apple" | "intel" | "autre" | "aucune";
+  acceleration: "cuda" | "rocm" | "vulkan" | "metal" | "processeur";
+  memoire_unifiee: boolean;
+  resume: string;
+  conseils: ConseilModele[];
 }
 
 export interface ResumeConversation {

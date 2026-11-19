@@ -557,6 +557,8 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
 .materiel { padding: var(--e-3) var(--e-4); border-left: var(--l-fort) solid var(--i-local); background: color-mix(in srgb, var(--i-local) 6%, transparent); }
 .materiel-liste { margin: var(--e-2) 0 0; padding-left: var(--e-5); font-size: var(--t-mini); color: var(--texte-2); }
 .materiel-liste b { color: var(--texte); font-weight: 600; }
+.materiel-liste code { overflow-wrap: anywhere; }
+.materiel-note { margin: var(--e-2) 0 0; font-size: var(--t-mini); color: var(--texte-3); }
 
 /* Console : cerveau et conseil */
 .reglage-cerveau { align-items: center; gap: var(--e-2); }
