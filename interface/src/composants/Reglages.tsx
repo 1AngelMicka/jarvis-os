@@ -26,6 +26,7 @@ import { EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal, reglerVoix, voixL
 import { Telephone, Verifications } from "./Accueil";
 import { VueConnecteurs } from "./Connecteurs";
 import { VueCouts } from "./Couts";
+import { ReglagesEveil } from "./Eveil";
 import { FluxDonnees } from "./FluxDonnees";
 import { ReglagesMatin } from "./Matin";
 import { SectionMemoire } from "./Memoire";
@@ -421,6 +422,8 @@ export function VueReglages(p: Props) {
           </>
         );
       }
+      case "eveil":
+        return <ReglagesEveil surNotifier={p.surNotifier} />;
       case "connecteurs":
         return <VueConnecteurs surChangement={p.surChangement} />;
       case "couts":
