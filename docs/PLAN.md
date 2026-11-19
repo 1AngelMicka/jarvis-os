@@ -171,7 +171,7 @@ Les meilleures idées des autres assistants personnels (voir [INSPIRATIONS.md](I
     - niveaux : 🟢 lecture, 🟡 lumières, prises, média, 🔴 serrures, alarme, portail (confirmation + voix du propriétaire) ;
     - satellites (Home Assistant Voice ou ESP32-S3 sous ESPHome) : seul l'audio après l'éveil part vers le PC, clé par appareil, présence par pièce, déblocage après 25 s, plafond de volume, minuteurs sur le satellite d'origine ;
     - profils par personne liés à la reconnaissance de voix.
-19. Mode serveur sans écran (`jarvis2 --sans-ecran`) : micro du navigateur ou des satellites, contrôle d'écran désactivé.
+19. Mode serveur sans écran (`jarvis2 serveur --sans-ecran`, ou `JARVIS2_SANS_ECRAN=true`) : micro du navigateur ou des satellites, contrôle d'écran désactivé. ✅ Fait : captures, clics et contrôle de l'écran refusés par le Core (409, `ecran.garde_ecran` pour toute future route d'écran) ; aucun navigateur ouvert au démarrage ; `jarvis2 docteur` l'indique ; interface « Écran indisponible » ; guide [SERVEUR.md](SERVEUR.md) (Tailscale, jumelage).
 
 **Terminé quand** : chaque point est en place et vérifié en vrai, et INSPIRATIONS.md dit d'où vient chaque idée.
 
