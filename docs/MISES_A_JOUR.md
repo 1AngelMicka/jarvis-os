@@ -40,8 +40,8 @@ L'application de bureau (Tauri) a son propre mécanisme, signé :
 - elle vérifie au démarrage, puis une fois par jour, en téléchargeant `latest.json` depuis la page des versions de GitHub ;
 - si une version plus récente existe, une boîte demande **« Installer et redémarrer »** ou **« Plus tard »** ; l'entrée correspondante du menu de l'icône de notification permet de l'installer plus tard. Rien n'est installé sans votre accord ;
 - l'installeur téléchargé est vérifié avec la clé publique de mise à jour avant d'être lancé ;
-- la case **« Vérifier les mises à jour chaque jour »** du menu de l'icône de notification coupe la vérification quotidienne ; la variable d'environnement `JARVIS2_MISES_A_JOUR=0` la désactive complètement ;
-- sans clé publique configurée dans la version installée, la mise à jour est désactivée et le menu le dit.
+- la case **« Vérifier les mises à jour chaque jour »** du menu de l'icône de notification coupe la vérification quotidienne (réglage gardé dans `reglages.json` du dossier de configuration de l'application) ; **« Rechercher une mise à jour maintenant »** vérifie à la demande ; la variable d'environnement `JARVIS2_MISES_A_JOUR=0` la désactive complètement ;
+- sans clé publique configurée dans la version installée, la mise à jour est désactivée et le menu le dit (« Mises à jour : clé de signature non configurée »).
 
 ## Pour le mainteneur : activer les mises à jour signées
 
@@ -54,12 +54,12 @@ L'application de bureau (Tauri) a son propre mécanisme, signé :
    ```
 
    Gardez la clé privée (`~/.tauri/jarvis.key`) **hors du dépôt** et **sauvegardée** : la perdre, c'est ne plus jamais pouvoir publier de mise à jour pour les installations existantes (elles n'accepteront que des mises à jour signées par cette clé).
-2. Donner la clé **publique** (contenu de `~/.tauri/jarvis.key.pub`) à l'application : dans `app/src-tauri/tauri.conf.json`, champ `plugins.updater.pubkey`, ou bien, si le workflow le prend en charge, dans la variable de dépôt `TAURI_UPDATER_PUBKEY` (Settings → Secrets and variables → Actions → Variables). La clé publique n'est pas un secret.
+2. Donner la clé **publique** (contenu de `~/.tauri/jarvis.key.pub`) à l'application : dans `app/src-tauri/tauri.conf.json`, champ `plugins.updater.pubkey`, ou bien dans la variable de dépôt `TAURI_UPDATER_PUBKEY` (Settings → Secrets and variables → Actions → Variables), que le workflow injecte au moment de la construction (le champ du fichier est prioritaire). La clé publique n'est pas un secret.
 3. Ajouter les secrets du dépôt (Settings → Secrets and variables → Actions → Secrets) :
    - `TAURI_SIGNING_PRIVATE_KEY` : le contenu de la clé privée ;
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` : son mot de passe (vide si aucun).
 
-   Sans ces secrets, le workflow de publication construit les installeurs mais saute `latest.json`, avec un message dans le journal.
+   Sans ces secrets, le workflow de publication construit les installeurs mais saute `latest.json`, avec un message dans le journal. Les artefacts de mise à jour (`createUpdaterArtifacts`) ne sont activés par le workflow que lorsque la clé privée et la clé publique sont présentes : une construction locale sans clé (`npm run construire`) continue de fonctionner.
 4. Publier : une étiquette `v*` lance `.github/workflows/publication.yml`, qui crée une version **brouillon**. Une fois le brouillon publié depuis GitHub, `https://github.com/1AngelMicka/jarvis-os/releases/latest/download/latest.json` devient visible et les applications installées voient la nouvelle version (au plus tard le lendemain).
 
 La **signature du code** (certificat Windows, signature et notarisation Apple) est un autre sujet, à la charge de l'utilisateur qui publie : elle évite les avertissements SmartScreen et Gatekeeper, pas la vérification des mises à jour. Les secrets correspondants sont listés en tête de `.github/workflows/publication.yml`.
