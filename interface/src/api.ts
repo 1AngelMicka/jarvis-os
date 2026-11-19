@@ -26,11 +26,14 @@ import type {
   Jumelage,
   Telechargement,
   Verification,
+  Amelioration,
+  ApercuAmelioration,
   Atelier,
   AttenteOutil,
   EvenementAtelier,
   EtatVeille,
   ModeleAtelier,
+  ProjetAmelioration,
   ReglagesVeille,
   BlocMemoire,
   EtatMemoire,
@@ -161,9 +164,17 @@ export const enregistrerCle = (credential: Record<string, unknown>, nom: string)
   envoyer<{ id: string }>("/v1/cles/enregistrement", { credential, nom });
 export const demanderAction = (d: DemandeAction) => envoyer<ReponseAction>("/v1/actions", d);
 export const optionsApprobation = (id: string) => envoyer<Record<string, unknown>>(`/v1/demandes/${id}/options`);
+/** Émis après la décision sur une demande : les vues concernées (améliorations…) relisent leur état. */
+export const EVENEMENT_DEMANDE_DECIDEE = "jarvis2:demande-decidee";
+const signalerDecision = <T>(r: T): T => {
+  window.dispatchEvent(new CustomEvent(EVENEMENT_DEMANDE_DECIDEE));
+  return r;
+};
 export const approuver = (id: string, credential?: Record<string, unknown>, toujours = false) =>
-  envoyer<ReponseAction>(`/v1/demandes/${id}/approuver`, { ...(credential ? { credential } : {}), ...(toujours ? { toujours } : {}) });
-export const refuser = (id: string) => envoyer<{ statut: string }>(`/v1/demandes/${id}/refuser`);
+  envoyer<ReponseAction>(`/v1/demandes/${id}/approuver`, { ...(credential ? { credential } : {}), ...(toujours ? { toujours } : {}) }).then(
+    signalerDecision,
+  );
+export const refuser = (id: string) => envoyer<{ statut: string }>(`/v1/demandes/${id}/refuser`).then(signalerDecision);
 
 // --- Arrêt d'urgence, audit ---
 export const arreterUrgence = () => envoyer<{ reponses_interrompues: number }>("/v1/urgence/arreter");
@@ -336,6 +347,23 @@ export const consigneAtelier = (id: string, consigne: string, reprendre = false)
 export const arreterAtelier = (id: string) => envoyer<{ arrete: boolean }>(`/v1/ateliers/${id}/arreter`);
 export const abandonnerAtelier = (id: string) => envoyer<{ abandonne: boolean }>(`/v1/ateliers/${id}/abandonner`);
 export const repondreAttente = (id: string, accorde: boolean) => envoyer<{ accorde: boolean }>(`/v1/ateliers/attentes/${id}`, { accorde });
+// --- Amélioration continue (lot O) ---
+export const listerAmeliorations = () =>
+  appeler<{ disponible: boolean; projets: ProjetAmelioration[]; ameliorations: Amelioration[] }>("/v1/ameliorations");
+export const proposerAmelioration = (s: {
+  projet: string;
+  titre: string;
+  raison: string;
+  description?: string;
+  origine?: "jarvis" | "utilisateur";
+}) => envoyer<Amelioration>("/v1/ameliorations", s);
+export const ouvrirAtelierAmelioration = (id: string, lancer = true) =>
+  envoyer<Amelioration>(`/v1/ameliorations/${id}/atelier`, { lancer });
+export const apercuAmelioration = (id: string) => appeler<ApercuAmelioration>(`/v1/ameliorations/${id}/apercu`);
+export const testerAmelioration = (id: string) => envoyer<{ lance: boolean }>(`/v1/ameliorations/${id}/tests`);
+export const rejeterAmelioration = (id: string) => envoyer<Amelioration>(`/v1/ameliorations/${id}/rejeter`);
+export const demanderMiseEnService = (id: string) => envoyer<ReponseAction>(`/v1/ameliorations/${id}/mise-en-service`);
+export const demanderRetourArriere = (id: string) => envoyer<ReponseAction>(`/v1/ameliorations/${id}/retour`);
 // --- Voix et vision (phase 10) ---
 /** Enregistrement → texte (transcription sur le PC) ; `eveil` : la phrase commence par « Jarvis ». */
 export async function transcrireAudio(audio: Blob): Promise<{ texte: string; eveil: boolean; commande: string }> {

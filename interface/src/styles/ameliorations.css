@@ -1,0 +1,46 @@
+/* Lot O : amélioration continue (suggestions, aperçu d'un atelier, tests, mise en service, retour arrière).
+   Uniquement des tokens (DESIGN.md, règle 1). */
+
+.amelio-form { display: flex; flex-direction: column; gap: var(--e-3); width: 100%; }
+.amelio-ligne { display: flex; flex-wrap: wrap; gap: var(--e-3); }
+.amelio-ligne .select { flex: 0 1 auto; max-width: 100%; }
+.amelio-form input,
+.amelio-form textarea {
+  min-width: 0; width: 100%; min-height: 36px; padding: var(--e-3) var(--e-4);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); background: rgb(var(--c-creux) / .7);
+  color: var(--texte); font: var(--t-corps)/1.45 var(--f-texte);
+}
+.amelio-ligne input { flex: 1 1 220px; width: auto; }
+.amelio-form textarea { min-height: 64px; resize: vertical; }
+.amelio-form input:focus,
+.amelio-form textarea:focus { outline: none; border-color: var(--cyan); }
+
+.carte-amelio { grid-column: 1 / -1; gap: var(--e-3); }
+.amelio-description { white-space: pre-wrap; color: var(--texte-2); }
+
+.amelio-apercu {
+  display: flex; flex-direction: column; gap: var(--e-3); padding: var(--e-4);
+  border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-2); background: rgb(var(--c-creux) / .5);
+}
+.amelio-fichiers { display: flex; flex-direction: column; gap: var(--e-1); margin: 0; padding: 0; list-style: none; font: var(--t-mini)/1.45 var(--f-donnees); }
+.amelio-fichiers li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--e-3); overflow-wrap: anywhere; }
+.amelio-fichiers code { flex: 1 1 200px; min-width: 0; color: var(--texte); }
+.amelio-etat { color: var(--texte-3); }
+.amelio-compte { white-space: nowrap; }
+.amelio-plus { color: var(--vert); }
+.amelio-moins { color: var(--rouge-pale); }
+
+.amelio-details summary { cursor: pointer; font-size: var(--t-mini); color: var(--texte-2); }
+.amelio-details[open] summary { margin-bottom: var(--e-2); }
+.amelio-pre {
+  max-height: 360px; margin: 0; padding: var(--e-3); overflow: auto;
+  border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-1); background: rgb(var(--c-vide) / .6);
+  color: var(--texte-2); font: var(--t-mini)/1.45 var(--f-mono); white-space: pre; tab-size: 4;
+}
+.amelio-diff span[data-ligne="plus"] { color: var(--vert); }
+.amelio-diff span[data-ligne="moins"] { color: var(--rouge-pale); }
+
+.amelio-essai { display: flex; flex-direction: column; gap: var(--e-2); padding-left: var(--e-3); border-left: var(--l-fort) solid var(--ligne); }
+.amelio-essai[data-ton="ok"] { border-left-color: rgb(var(--c-vert) / .6); }
+.amelio-essai[data-ton="risque"] { border-left-color: var(--rouge); }
+.badge-co[data-origine="jarvis"] { color: var(--cyan-vif); border-color: rgb(var(--c-aurore) / .5); background: rgb(var(--c-aurore) / .1); }

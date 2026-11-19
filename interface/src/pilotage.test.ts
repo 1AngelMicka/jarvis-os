@@ -33,5 +33,6 @@ describe("libellés", () => {
     expect(libelleBouton(nav("agents"), true)).toBe("Rouvrir");
     expect(libelleBouton(mission, false)).toBe("Lancer la mission");
     expect(libelleBouton({ ...mission, type: "demander_action", niveau: "rouge" }, false)).toBe("Demander (clé d'accès)");
+    expect(libelleBouton({ ...mission, type: "proposer_amelioration" }, false)).toBe("Garder la suggestion");
   });
 });

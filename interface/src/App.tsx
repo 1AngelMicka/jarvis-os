@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { accorderImages, ajouterRegle, arreterUrgence, conseiller, creerAtelier, demanderAction, dialoguer, ErreurApi, executerCommandeRapide, lancerMission, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, lirePilotage, listerDemandes, resumerConversation, sonderCore } from "./api";
+import { accorderImages, ajouterRegle, arreterUrgence, conseiller, creerAtelier, demanderAction, dialoguer, ErreurApi, executerCommandeRapide, lancerMission, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, lirePilotage, listerDemandes, proposerAmelioration, resumerConversation, sonderCore } from "./api";
 import { choisirAnimations, estChoixAnimations } from "./animations";
 import { aAppliquerSeules, EVENEMENT_PILOTAGE, texteVisible } from "./pilotage";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
 import { type CibleActivite, PanneauActivite } from "./composants/Activite";
 import { VueAgents } from "./composants/Agents";
+import { VueAmeliorations } from "./composants/Ameliorations";
 import { VueAteliers } from "./composants/Ateliers";
 import { VueConnecteurs } from "./composants/Connecteurs";
 import { VueCouts } from "./composants/Couts";
@@ -92,7 +93,7 @@ function Hud() {
   const presence = usePresence();
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
-  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire" | "connaissances" | "couts" | "reglages">("dialogue");
+  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "ameliorations" | "memoire" | "connaissances" | "couts" | "reglages">("dialogue");
   const [demandeReglages, setDemandeReglages] = useState<DemandeReglages | null>(null);
   const [conseil, setConseil] = useState(false);
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
@@ -730,6 +731,11 @@ function Hud() {
         rafraichirActivite();
         return "Mission lancée";
       }
+      case "proposer_amelioration": {
+        await proposerAmelioration({ projet: texte("projet"), titre: texte("titre"), raison: texte("raison"), origine: "jarvis" });
+        setVue("ameliorations");
+        return "Suggestion gardée";
+      }
       case "proposer_atelier": {
         const atelier = await creerAtelier(texte("projet"), texte("nom"));
         setVue("ateliers");
@@ -894,6 +900,16 @@ function Hud() {
             }}
           >
             Ateliers
+          </button>
+          <button
+            type="button"
+            className="btn btn-discret btn-mini btn-connecteurs"
+            aria-pressed={vue === "ameliorations"}
+            onClick={() => {
+              setVue((v) => (v === "ameliorations" ? "dialogue" : "ameliorations"));
+            }}
+          >
+            Améliorer
           </button>
           <button
             type="button"
@@ -1065,6 +1081,38 @@ function Hud() {
                 surChangement={rafraichir}
                 surAction={(r) => {
                   suiteAction(r, "Atelier fusionné.");
+                }}
+              />
+            </div>
+          </Panneau>
+        ) : vue === "ameliorations" ? (
+          <Panneau
+            titre="Améliorations"
+            className="panneau-scene"
+            ordre={2}
+            id="ameliorations"
+            meta="suggestions, atelier, aperçu testé, mise en service et retour arrière"
+            actions={
+              <button
+                type="button"
+                className="btn btn-mini"
+                onClick={() => {
+                  setVue("dialogue");
+                }}
+              >
+                Retour au dialogue
+              </button>
+            }
+          >
+            <div className="panneau-corps">
+              <VueAmeliorations
+                surChangement={rafraichir}
+                surAction={(r) => {
+                  suiteAction(r, "Fait.");
+                }}
+                surOuvrirAtelier={(id) => {
+                  setVue("ateliers");
+                  setCible({ vue: "ateliers", id });
                 }}
               />
             </div>
