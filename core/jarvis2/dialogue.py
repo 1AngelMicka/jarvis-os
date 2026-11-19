@@ -126,13 +126,43 @@ class ServiceDialogue:
         contexte = await self.memoire.contexte(texte, externe=False)
         return any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs)
 
-    async def consignes(self, texte: str, externe: bool) -> tuple[str, ContexteMemoire]:
+    async def consignes(
+        self, texte: str, externe: bool, conversation_id: UUID | None = None
+    ) -> tuple[str, ContexteMemoire]:
         contexte = (
             await self.memoire.contexte(texte, externe)
             if self.memoire is not None
             else ContexteMemoire(consultee=False)
         )
-        return CONSIGNES_SYSTEME.format(maintenant=maintenant_paris(), memoire=contexte.bloc()), contexte
+        bloc = contexte.bloc()
+        if conversation_id is not None:
+            nouveautes = await self.nouveautes(conversation_id, externe)
+            if nouveautes:
+                bloc = "\n\n".join(b for b in (bloc, nouveautes) if b)
+        return CONSIGNES_SYSTEME.format(maintenant=maintenant_paris(), memoire=bloc), contexte
+
+    async def nouveautes(self, conversation_id: UUID, externe: bool) -> str:
+        """Début d'une conversation : ce que la mémoire a appris depuis la conversation précédente (missions,
+        résumés, imports…), pour que JARVIS le sache même sans l'avoir vu passer."""
+        if self.memoire is None:
+            return ""
+        from .memoire import bloc_nouveautes, parcourir
+
+        try:
+            depuis = await self.memoire.pool.fetchval(
+                "SELECT max(m.horodatage) FROM messages m JOIN conversations c ON c.id = m.conversation_id"
+                " WHERE m.role = 'utilisateur' AND m.conversation_id <> $1 AND NOT c.interne",
+                conversation_id,
+            )
+            if depuis is None:
+                return ""
+            if isinstance(depuis, str):  # SQLite : un agrégat perd le type déclaré de la colonne
+                depuis = datetime.fromisoformat(depuis)
+            recents = await parcourir(self.memoire.pool, depuis=depuis, limite=24, exclure_local=externe)
+            return bloc_nouveautes(recents, depuis, self.memoire.reglages.expurgateur)
+        except Exception:  # jamais bloquant pour la réponse
+            journal.exception("Nouveautés de la mémoire indisponibles")
+            return ""
 
     async def choisir_moteur(
         self, moteur: str | None, conversation: Conversation | None = None, texte: str | None = None
@@ -165,11 +195,18 @@ class ServiceDialogue:
             )
         return self.moteurs[cle]
 
-    async def preparer(self, instance: MoteurInstrumente, message: str, historique: list[MessageStocke]) -> Envoi:
+    async def preparer(
+        self,
+        instance: MoteurInstrumente,
+        message: str,
+        historique: list[MessageStocke],
+        conversation_id: UUID | None = None,
+    ) -> Envoi:
         """Consignes + mémoire + historique + message ; pour un connecteur externe : souvenirs privés exclus,
-        réponses locales privées masquées, secrets et données personnelles remplacés."""
+        réponses locales privées masquées, secrets et données personnelles remplacés. `conversation_id` d'une
+        conversation qui commence : les nouveautés de la mémoire s'y ajoutent."""
         externe = instance.interne.externe
-        consignes, contexte = await self.consignes(message, externe=externe)
+        consignes, contexte = await self.consignes(message, externe=externe, conversation_id=conversation_id)
         messages = [Message("systeme", consignes)]
         for m in historique:
             contenu = m.contenu
@@ -250,7 +287,7 @@ class ServiceDialogue:
             )
         historique = await self.depot.messages(conversation.id, limite=NB_MESSAGES_HISTORIQUE)
         msg_utilisateur = await self.depot.ajouter_message(conversation.id, "utilisateur", message)
-        envoi = await self.preparer(instance, message, historique)
+        envoi = await self.preparer(instance, message, historique, None if historique else conversation.id)
         messages, contexte, masques, prive = envoi.messages, envoi.contexte, envoi.masques, envoi.prive
         if self.memoire is not None and contexte.souvenirs:  # base de l'oubli : ce qui sert n'est jamais archivé
             from .memoire_v2 import noter_acces

@@ -767,3 +767,78 @@ class ContexteMemoire:
             f"\nSouvenirs pertinents (du plus pertinent au moins pertinent) :\n{formater_souvenirs(self.souvenirs)}"
         )
         return self.expurgateur.texte(texte)
+
+
+# --- Parcourir la mémoire (vue Mémoire) et nouveautés -----------------------------------------------------
+
+LIBELLES_ORIGINE = {
+    "conversation": "conversations",
+    "mission": "missions",
+    "import_ia": "imports d'IA",
+    "import_google": "synthèses Google",
+    "profil": "profil",
+    "ecoute": "écoute",
+    "creation": "créations",
+    "projet": "projets",
+    "systeme": "système",
+    "utilisateur": "vos notes",
+    "connaissances": "connaissances",
+    "autre": "autres",
+}
+
+
+async def parcourir(
+    conn: Executant,
+    *,
+    origine: str | None = None,
+    avant: datetime | None = None,
+    depuis: datetime | None = None,
+    limite: int = 50,
+    exclure_local: bool = False,
+) -> list[Souvenir]:
+    """Souvenirs vivants, du plus récent au plus ancien (pages : `avant` = date du dernier reçu)."""
+    conditions = ["valid_to IS NULL", "NOT archived"]
+    valeurs: list[Any] = []
+    if origine:
+        valeurs.append(origine)
+        conditions.append(f"origine = ${len(valeurs)}")
+    if avant is not None:
+        valeurs.append(avant)
+        conditions.append(f"cree_le < ${len(valeurs)}")
+    if depuis is not None:
+        valeurs.append(depuis)
+        conditions.append(f"cree_le >= ${len(valeurs)}")
+    if exclure_local:
+        conditions.append("confidentialite <> 'local_uniquement'")
+    valeurs.append(max(1, min(limite, 200)))
+    lignes = await conn.fetch(
+        f"SELECT {COLONNES} FROM memoires WHERE {' AND '.join(conditions)}"  # noqa: S608 — constantes
+        f" ORDER BY cree_le DESC LIMIT ${len(valeurs)}",
+        *valeurs,
+    )
+    return [_souvenir(ligne) for ligne in lignes]
+
+
+async def par_origine(conn: Executant) -> dict[str, int]:
+    lignes = await conn.fetch(
+        "SELECT origine, count(*) AS n FROM memoires WHERE valid_to IS NULL AND NOT archived GROUP BY origine"
+    )
+    return {str(ligne["origine"]): int(ligne["n"]) for ligne in lignes}
+
+
+def bloc_nouveautes(souvenirs: list[Souvenir], depuis: datetime, expurgateur: Expurgateur | None = None) -> str:
+    """« Nouveautés de ta mémoire » depuis la dernière conversation : par origine, avec leurs thèmes."""
+    expurgateur = expurgateur or Expurgateur()
+    groupes: dict[str, list[str]] = {}
+    for s in souvenirs:
+        if expurgateur.mentionne(s.contenu):
+            continue
+        apercu = " ".join(s.contenu.split())
+        apercu = apercu if len(apercu) <= 140 else apercu[:139].rsplit(" ", 1)[0] + "…"
+        groupes.setdefault(s.origine, []).append(apercu)
+    if not groupes:
+        return ""
+    lignes = [f"Nouveautés de ta mémoire depuis la dernière conversation ({depuis:%d/%m %H:%M} UTC) :"]
+    for origine, apercus in groupes.items():
+        lignes.append(f"- {LIBELLES_ORIGINE.get(origine, origine)} ({len(apercus)}) : " + " | ".join(apercus[:3]))
+    return "\n".join(lignes)

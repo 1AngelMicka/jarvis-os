@@ -301,3 +301,23 @@ export interface EvenementAtelier {
   type: string;
   contenu: Record<string, unknown>;
 }
+
+// --- Mémoire : souvenirs ---
+export interface Souvenir {
+  id: string;
+  contenu: string;
+  type: string;
+  tags: string[];
+  source: string | null;
+  confidentialite: "normal" | "local_uniquement";
+  origine: string;
+  cree_le: string;
+  maj_le: string;
+  importance: number;
+  acces: number;
+}
+export interface OrigineMemoire {
+  id: string;
+  nom: string;
+  nombre: number;
+}

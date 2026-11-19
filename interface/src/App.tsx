@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat, listerDemandes, resumerConversation, sonderCore } from "./api";
+import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat, lireNouveautes, listerDemandes, resumerConversation, sonderCore } from "./api";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
 import { VueAgents } from "./composants/Agents";
@@ -9,6 +9,7 @@ import { VueConnecteurs } from "./composants/Connecteurs";
 import { ListeDemandes } from "./composants/Demandes";
 import { Console, Fil, type MessageAffiche } from "./composants/Dialogue";
 import { ListeConversations } from "./composants/Historique";
+import { VueMemoire } from "./composants/VueMemoire";
 import { EcranJumelage } from "./composants/Jumelage";
 import { Panneau } from "./composants/Panneau";
 import { type EtatNoyau, Reacteur } from "./composants/Reacteur";
@@ -72,7 +73,7 @@ function Hud() {
   const [alerte, setAlerte] = useState(false);
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
-  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers">("dialogue");
+  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire">("dialogue");
   const [conseil, setConseil] = useState(false);
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
   const [annonce, setAnnonce] = useState("");
@@ -121,6 +122,35 @@ function Hud() {
       });
   }, [charger]);
 
+  // « JARVIS a appris : … » : ce qui entre dans la mémoire (missions, résumés, imports) est signalé une fois
+  const signalerAppris = useCallback(async () => {
+    const CLE = "jarvis2.memoire.vu";
+    let vu: string | null = null;
+    try {
+      vu = localStorage.getItem(CLE);
+    } catch {
+      /* stockage indisponible : pas de notification, rien de grave */
+    }
+    const maintenant = new Date().toISOString();
+    try {
+      if (!vu) return;
+      const r = await lireNouveautes(vu);
+      const premier = r.souvenirs[0];
+      if (r.nombre && premier) {
+        const apercu = premier.contenu.length > 90 ? `${premier.contenu.slice(0, 89)}…` : premier.contenu;
+        notifier(`JARVIS a appris : ${apercu}${r.nombre > 1 ? ` (+${String(r.nombre - 1)})` : ""}`);
+      }
+    } catch {
+      return; // Core injoignable : on retentera
+    } finally {
+      try {
+        localStorage.setItem(CLE, maintenant);
+      } catch {
+        /* idem */
+      }
+    }
+  }, [notifier]);
+
   // Surveillance de la connexion : l'état « Core en ligne / hors ligne » suit la réalité (toutes les 15 s, et dès que la
   // fenêtre revient au premier plan) ; au retour du Core, tout est rechargé.
   const horsLigne = erreurEtat !== null;
@@ -133,6 +163,7 @@ function Hud() {
             return;
           }
           // File d'approbations : une demande créée ou close ailleurs (autre appareil, expiration) apparaît ici
+          void signalerAppris();
           return listerDemandes().then(({ demandes }) => {
             setEtat((e) => (e && JSON.stringify(e.demandes) !== JSON.stringify(demandes) ? { ...e, demandes } : e));
           });
@@ -152,7 +183,7 @@ function Hud() {
       document.removeEventListener("visibilitychange", auRetour);
       window.removeEventListener("online", sonder);
     };
-  }, [horsLigne, charger]);
+  }, [horsLigne, charger, signalerAppris]);
 
   const rafraichir = useCallback(
     (message?: string) => {
@@ -451,6 +482,16 @@ function Hud() {
           <button
             type="button"
             className="btn btn-discret btn-mini btn-connecteurs"
+            aria-pressed={vue === "memoire"}
+            onClick={() => {
+              setVue((v) => (v === "memoire" ? "dialogue" : "memoire"));
+            }}
+          >
+            Mémoire
+          </button>
+          <button
+            type="button"
+            className="btn btn-discret btn-mini btn-connecteurs"
             aria-pressed={vue === "agents"}
             onClick={() => {
               setVue((v) => (v === "agents" ? "dialogue" : "agents"));
@@ -602,13 +643,36 @@ function Hud() {
               />
             </div>
           </Panneau>
+        ) : vue === "memoire" ? (
+          <Panneau
+            titre="Mémoire"
+            className="panneau-scene"
+            ordre={2}
+            id="memoire"
+            meta="tout ce que JARVIS sait, par origine"
+            actions={
+              <button
+                type="button"
+                className="btn btn-mini"
+                onClick={() => {
+                  setVue("dialogue");
+                }}
+              >
+                Retour au dialogue
+              </button>
+            }
+          >
+            <div className="panneau-corps">
+              <VueMemoire surChangement={rafraichir} />
+            </div>
+          </Panneau>
         ) : vue === "agents" ? (
           <Panneau
             titre="Agents"
             className="panneau-scene"
             ordre={2}
             id="agents"
-            meta="missions, recettes, mémoire, créations, outils MCP"
+            meta="missions, recettes, créations, outils MCP"
             actions={
               <button
                 type="button"

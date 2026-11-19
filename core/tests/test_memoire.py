@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -206,3 +207,46 @@ async def test_dialogue_injecte_noyau_et_souvenirs(pool: Base, externe: bool, mo
     fin = evenements[-1].donnees
     assert visible in fin["souvenirs"] and (prive in fin["souvenirs"]) is (not externe)
     assert evenements[0].donnees["noyau"] == 1
+
+
+@pytest.mark.base
+async def test_parcourir_par_origine_et_pages(pool: Base) -> None:
+    for i in range(5):
+        await memoire.ajouter(pool, f"Note numéro {i}", origine="utilisateur")
+    await memoire.ajouter(pool, "Rapport de mission sur les tomates", origine="mission")
+    page = await memoire.parcourir(pool, limite=3)
+    assert [s.contenu for s in page][0] == "Rapport de mission sur les tomates" and len(page) == 3
+    suite = await memoire.parcourir(pool, limite=10, avant=page[-1].cree_le)
+    assert len(suite) == 3 and not {s.id for s in suite} & {s.id for s in page}
+    assert [s.origine for s in await memoire.parcourir(pool, origine="mission")] == ["mission"]
+    assert await memoire.par_origine(pool) == {"utilisateur": 5, "mission": 1}
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("externe", [True, False])
+async def test_nouveautes_au_debut_d_une_conversation(
+    pool: Base, externe: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    capteur = MoteurCapteur()
+    monkeypatch.setattr(MoteurCapteur, "externe", externe)
+    depot = DepotConversations(pool)
+    service = ServiceDialogue(
+        depot,
+        {"capteur": MoteurInstrumente(capteur, EnregistreurMemoire())},
+        "capteur",
+        SourceMemoire(pool, EncodeurFactice()),
+    )
+    service.titre_auto = False
+    _ = [ev async for ev in service.repondre("Bonjour")]  # une première conversation
+    await memoire.ajouter(pool, "Rapport : les tomates anciennes se sèment en mars", origine="mission")
+    await memoire.ajouter(
+        pool, "Code secret du coffre : 9921", origine="utilisateur", confidentialite="local_uniquement"
+    )
+    evs = [ev async for ev in service.repondre("Quoi de neuf ?")]  # nouvelle conversation
+    consignes = capteur.recus[0].contenu
+    assert "Nouveautés de ta mémoire" in consignes and "tomates anciennes se sèment" in consignes
+    assert ("9921" in consignes) is (not externe)  # rien de privé vers une IA externe
+    # Dans la même conversation, les nouveautés ne sont pas répétées
+    conv = uuid.UUID(evs[0].donnees["conversation_id"])
+    _ = [ev async for ev in service.repondre("Et encore ?", conversation_id=conv)]
+    assert "Nouveautés de ta mémoire" not in capteur.recus[0].contenu

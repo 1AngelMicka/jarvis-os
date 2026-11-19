@@ -1,8 +1,10 @@
-"""Routes de la mémoire v2 : blocs éditables, état de la bascule de modèle, tâches de nuit."""
+"""Routes de la mémoire v2 : souvenirs (parcourir, chercher, nouveautés), blocs éditables, état de la bascule de
+modèle, tâches de nuit."""
 
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -32,6 +34,52 @@ def _appareil(request: Request) -> Appareil:
 class Ecriture(BaseModel):
     contenu: str = Field(max_length=blocs.LIMITE_MAX)
     confidentialite: Literal["normal", "local_uniquement"] | None = None
+
+
+@routeur.get("/souvenirs")
+async def souvenirs(
+    request: Request,
+    origine: str | None = None,
+    avant: datetime | None = None,
+    q: str = "",
+    limite: int = 40,
+) -> dict[str, Any]:
+    """Vue Mémoire : du plus récent au plus ancien (page suivante : `avant`), ou recherche hybride (`q`). Les
+    souvenirs privés sont montrés à l'utilisateur sur ses appareils, marqués comme tels."""
+    c = _ctx(request)
+    limite = max(1, min(limite, 100))
+    texte = q.strip()[:300]
+    if texte:
+        if c.memoire is None:
+            raise HTTPException(503, "Mémoire indisponible")
+        from dataclasses import replace
+
+        reglages = replace(c.memoire.reglages, limite=limite)
+        resultats = await memoire.rechercher_multi(
+            c.pool, c.memoire.encodeur, texte, exclure_local=False, reglages=reglages
+        )
+        liste = [r.souvenir for r in resultats if not origine or r.souvenir.origine == origine]
+        return {"souvenirs": [s.en_dict() for s in liste], "suite": False}
+    liste = await memoire.parcourir(c.pool, origine=origine or None, avant=avant, limite=limite)
+    return {"souvenirs": [s.en_dict() for s in liste], "suite": len(liste) == limite}
+
+
+@routeur.get("/origines")
+async def origines(request: Request) -> dict[str, Any]:
+    comptes = await memoire.par_origine(_ctx(request).pool)
+    return {
+        "origines": [
+            {"id": o, "nom": memoire.LIBELLES_ORIGINE.get(o, o), "nombre": n}
+            for o, n in sorted(comptes.items(), key=lambda x: -x[1])
+        ]
+    }
+
+
+@routeur.get("/nouveautes")
+async def nouveautes(request: Request, depuis: datetime) -> dict[str, Any]:
+    """Ce que JARVIS a appris depuis `depuis` (notification « JARVIS a appris »)."""
+    recents = await memoire.parcourir(_ctx(request).pool, depuis=depuis, limite=20)
+    return {"nombre": len(recents), "souvenirs": [s.en_dict() for s in recents[:5]]}
 
 
 @routeur.get("/etat")

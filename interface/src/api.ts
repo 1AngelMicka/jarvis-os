@@ -29,6 +29,8 @@ import type {
   EvenementDialogue,
   ReponseAction,
   ResumeConversation,
+  OrigineMemoire,
+  Souvenir,
 } from "./types";
 
 export class ErreurApi extends Error {
@@ -231,6 +233,13 @@ async function diffuser(
 
 // --- Mémoire v2 : blocs, bascule de modèle, tâches de nuit ---
 export const lireEtatMemoire = () => unSeul("memoire", () => appeler<EtatMemoire>("/v1/memoire/etat"));
+export const listerSouvenirs = (filtre: { origine?: string; avant?: string; q?: string }) =>
+  appeler<{ souvenirs: Souvenir[]; suite: boolean }>(
+    `/v1/memoire/souvenirs?${new URLSearchParams(Object.entries(filtre).filter((e): e is [string, string] => Boolean(e[1]))).toString()}`,
+  );
+export const listerOrigines = () => appeler<{ origines: OrigineMemoire[] }>("/v1/memoire/origines");
+export const lireNouveautes = (depuis: string) =>
+  appeler<{ nombre: number; souvenirs: Souvenir[] }>(`/v1/memoire/nouveautes?${new URLSearchParams({ depuis }).toString()}`);
 export const listerBlocs = () => appeler<{ blocs: BlocMemoire[] }>("/v1/memoire/blocs");
 export const ecrireBloc = (label: string, contenu: string, confidentialite?: BlocMemoire["confidentialite"]) =>
   appeler<BlocMemoire>(`/v1/memoire/blocs/${encodeURIComponent(label)}`, {
