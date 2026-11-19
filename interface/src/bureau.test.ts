@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { cleServeur, estGadget, lireDecision, lireLien, lirePartage, taille } from "./bureau";
+import { cleServeur, emettre, estGadget, lireDecision, lireLien, lirePartage, prendre, taille } from "./bureau";
 
 describe("liens de l'application de bureau", () => {
   it("lit le lien jarvis:// mis dans le fragment par l'application", () => {
@@ -48,5 +48,15 @@ describe("divers", () => {
     expect(taille(512)).toBe("512 o");
     expect(taille(2048)).toBe("2 Ko");
     expect(taille(3 * 1024 * 1024 + 200000)).toBe("3,2 Mo");
+  });
+});
+
+describe("demandes en attente", () => {
+  it("restent jusqu'à ce qu'un composant les prenne, une seule fois", () => {
+    vi.stubGlobal("window", new EventTarget());
+    emettre("essai", "bonjour");
+    expect(prendre("essai")).toBe("bonjour");
+    expect(prendre("essai")).toBeNull();
+    vi.unstubAllGlobals();
   });
 });

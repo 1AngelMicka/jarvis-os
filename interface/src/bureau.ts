@@ -9,8 +9,20 @@ export const EVENEMENT_ECRAN = "jarvis2:ecran";
 /** Préremplit la zone de saisie (texte venu d'un lien : non fiable, jamais envoyé seul). Détail : le texte. */
 export const EVENEMENT_PREREMPLIR = "jarvis2:preremplir";
 
+// Une demande reste en attente jusqu'à ce qu'un composant la prenne : au premier chargement, la saisie et le micro
+// ne sont pas encore montés quand le lien arrive ; ils la prennent en se montant.
+const enAttente = new Map<string, string>();
+
 export function emettre(evenement: string, detail?: string): void {
+  enAttente.set(evenement, detail ?? "");
   window.dispatchEvent(new CustomEvent(evenement, { detail }));
+}
+
+/** Prend la demande en attente pour cet événement (une seule fois), sinon null. */
+export function prendre(evenement: string): string | null {
+  const valeur = enAttente.get(evenement);
+  enAttente.delete(evenement);
+  return valeur ?? null;
 }
 
 function fragment(hash: string, cle: string): string | null {

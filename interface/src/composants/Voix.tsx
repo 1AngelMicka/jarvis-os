@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { EVENEMENT_ECOUTER, EVENEMENT_ECRAN } from "../bureau";
+import { EVENEMENT_ECOUTER, EVENEMENT_ECRAN, prendre } from "../bureau";
 import { decrireImage, transcrireAudio } from "../api";
 import { capturerEcran, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal } from "../voix";
 
@@ -135,11 +135,12 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
   const actions = useRef({ ecouter: () => {}, ecran: () => {} });
   useEffect(() => {
     const ecouter = () => {
-      actions.current.ecouter();
+      if (prendre(EVENEMENT_ECOUTER) !== null) actions.current.ecouter();
     };
     const ecranDemande = () => {
-      actions.current.ecran();
+      if (prendre(EVENEMENT_ECRAN) !== null) actions.current.ecran();
     };
+    ecouter(); // raccourci arrivé avant que les commandes vocales soient montées
     window.addEventListener(EVENEMENT_ECOUTER, ecouter);
     window.addEventListener(EVENEMENT_ECRAN, ecranDemande);
     return () => {
