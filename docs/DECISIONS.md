@@ -1,5 +1,13 @@
 # Décisions techniques
 
+## Connecteurs maison Hue et OBS (phase 14 · D, point 17, migration 013)
+
+- **Désactivés par défaut**, activés à la main dans Connecteurs → Maison (table `connecteurs_maison` : état et adresse). La clé du pont Hue et le mot de passe d'OBS vivent dans le coffre local (`maison.hue`, `maison.obs`), jamais en base, dans les réponses ni dans l'audit. « Oublier » retire le secret et désactive.
+- **Commandes = actions du registre** (`hue.*`, `obs.*`) : 🟢 `hue.etat`, `obs.etat` ; 🟡 allumer, éteindre, luminosité, couleur, scène Hue, scène OBS, enregistrement, arrêt du direct ; 🔴 `obs.direct.demarrer` (publication : clé d'accès). Elles passent par la file d'approbations et l'audit chaîné, et refusent d'agir pendant l'arrêt d'urgence, même approuvées. Une action porte désormais un prédicat `disponible` : celles d'un connecteur désactivé n'apparaissent pas dans `/v1/actions` ni dans `outils_actifs` de `/v1/maison` (la liste à proposer au dialogue), et une demande créée avant la désactivation échoue à l'approbation.
+- **Hue** : API v1 locale du pont en HTTPS. Le certificat du pont est signé par l'autorité de Signify, absente des magasins du système : il n'est pas vérifié ; en contrepartie seules les adresses privées sont acceptées, la clé ne part donc jamais sur Internet. Découverte par mDNS (`_hue._tcp.local`, TTL 1) ; le service en ligne `discovery.meethue.com` seulement si l'utilisateur coche l'accord (entrée d'audit 🟡), adresses publiques écartées. Appairage : bouton du pont puis `POST /api` (clé « username »).
+- **OBS** : WebSocket v5 (OBS 28+), une connexion courte par commande, sans abonnement aux événements ; mot de passe jamais envoyé en clair (empreinte SHA-256 sel + défi). Client WebSocket minimal écrit dans `maison/websocket.py` plutôt qu'une dépendance (texte seulement, réponses aux ping). Adresse : bouclage ou réseau local.
+- Le dialogue n'a pas encore d'appel d'outils natif : les commandes se déclenchent par `/v1/actions` ; `outils_actifs` est la liste à brancher quand il en aura un.
+
 ## Détecteur d'« exécution inventée » (phase 14 · B, point 8)
 
 - **Signaler, jamais corriger** : la réponse reste telle que le modèle l'a écrite ; le signalement va dans la meta du message (`invente`), un événement SSE `invente` après `fin`, et l'audit (🟡 `dialogue.execution_inventee`, cible = message ou mission, détails = catégories et verbes seulement, le texte pouvant être privé).
