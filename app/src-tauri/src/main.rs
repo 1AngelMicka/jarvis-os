@@ -119,7 +119,16 @@ fn main() {
                 *app.state::<Core>().0.lock().unwrap() = enfant;
             }
             // Page d'attente locale, puis l'interface du Core dès qu'il répond (60 s au plus)
-            let fenetre = WebviewWindowBuilder::new(app, "principale", WebviewUrl::App("index.html".into()))
+            let constructeur = WebviewWindowBuilder::new(app, "principale", WebviewUrl::App("index.html".into()));
+            // « Dis Jarvis » en fond : fenêtre cachée, la page n'est ni ralentie ni mise en sommeil (WebView2 ;
+            // les trois premiers drapeaux sont ceux que Tauri passe par défaut)
+            #[cfg(windows)]
+            let constructeur = constructeur.additional_browser_args(
+                "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+                 --disable-background-timer-throttling --disable-renderer-backgrounding \
+                 --disable-backgrounding-occluded-windows",
+            );
+            let fenetre = constructeur
                 .title("JARVIS 2")
                 .inner_size(1280.0, 820.0)
                 .min_inner_size(380.0, 560.0)
