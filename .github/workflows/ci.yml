@@ -123,12 +123,18 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    env:
-      JARVIS2_DOSSIER_DONNEES: ${{ runner.temp }}/jarvis2-ci/donnees
-      JARVIS2_CONFIG: ${{ runner.temp }}/jarvis2-ci/config/config.toml
-      JARVIS2_ETAT_INSTALLATION: ${{ runner.temp }}/jarvis2-ci/installation.etat
     steps:
       - uses: actions/checkout@v5
+      # Le contexte `runner` n'existe pas dans l'`env` d'une tâche : les dossiers d'essai sont posés ici
+      - name: Dossiers d'essai
+        shell: bash
+        run: |
+          base="$RUNNER_TEMP/jarvis2-ci"
+          {
+            echo "JARVIS2_DOSSIER_DONNEES=$base/donnees"
+            echo "JARVIS2_CONFIG=$base/config/config.toml"
+            echo "JARVIS2_ETAT_INSTALLATION=$base/installation.etat"
+          } >> "$GITHUB_ENV"
       - uses: actions/download-artifact@v4
         with:
           name: roue
