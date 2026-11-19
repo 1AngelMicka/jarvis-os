@@ -50,6 +50,7 @@ from .api_medias import routeur_pages as routeur_creations
 from .api_memoire import routeur as routeur_memoire
 from .api_profil import routeur as routeur_profil
 from .api_securite import routeur as routeur_securite
+from .api_telechargements import routeur as routeur_telechargements
 from .ateliers.gestionnaire import GestionnaireAteliers, Projet
 from .config import Parametres
 from .config_locale import charger as charger_config_locale
@@ -74,6 +75,7 @@ from .securite.permissions import Approbations
 from .securite.urgence import ArretUrgence
 from .tailscale import EtatTailscale
 from .tailscale import lire_etat as lire_tailscale
+from .telechargements import Telechargeur
 from .voix import Transcripteur, TranscripteurWhisper
 
 journal = logging.getLogger("jarvis2.api")
@@ -96,9 +98,10 @@ class Contexte:
     moteur_defaut: str
     memoire: SourceMemoire | None = None
     urgence: ArretUrgence = field(default_factory=ArretUrgence)
+    telechargeur: Telechargeur = field(default_factory=Telechargeur)  # gros téléchargements, sur accord
     connecteurs: Connecteurs | None = None
     tailscale: EtatTailscale | None = None
-    chargement_modele: str | None = None  # None, « en_cours », « termine », « erreur »
+    chargement_modele: str | None = None  # None, « absent », « en_cours », « termine », « erreur »
     mcp: GestionnaireMCP | None = None
     recherche: RechercheWeb = field(default_factory=lambda: RechercheWeb(None))
     scientifique: SourcesScientifiques | None = None  # bases scientifiques publiques des missions de recherche
@@ -252,8 +255,13 @@ async def decrire_moteur(moteur: MoteurInstrumente) -> dict[str, Any]:
 
 
 async def precharger_modele(ctx: Contexte) -> None:
-    """Télécharge (première fois) puis charge le modèle d'embeddings ; l'état est montré par le diagnostic."""
+    """Charge le modèle d'embeddings s'il est sur le disque ; ne le télécharge jamais (accord de l'utilisateur)."""
     if ctx.memoire is None:
+        return
+    encodeur = ctx.memoire.encodeur
+    if isinstance(encodeur, EncodeurFastEmbed) and not await asyncio.to_thread(encodeur.present):
+        ctx.chargement_modele = "absent"
+        journal.info("Modèle d'embeddings %s non téléchargé : à accepter dans le diagnostic", encodeur.nom_modele)
         return
     ctx.chargement_modele = "en_cours"
     try:
@@ -306,6 +314,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         try:
             yield
         finally:
+            ctx.telechargeur.arreter()  # fichiers partiels gardés : reprise au prochain accord
             for tache in taches:
                 if not tache.done():
                     tache.cancel()
@@ -511,6 +520,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_profil)
     app.include_router(routeur_connaissances)
     app.include_router(routeur_matin)
+    app.include_router(routeur_telechargements)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():

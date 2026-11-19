@@ -90,11 +90,26 @@ class TranscripteurWhisper:
             if self._charge is None:
                 from faster_whisper import WhisperModel
 
-                self.dossier.mkdir(parents=True, exist_ok=True)
+                from .telechargements import ModeleAbsent, dossier_whisper, est_pret
+
+                propre = dossier_whisper(self.dossier.parent, self.modele)
                 journal.info("Chargement du modèle de voix Whisper %s…", self.modele)
-                self._charge = WhisperModel(
-                    self.modele, device="cpu", compute_type="int8", download_root=str(self.dossier)
-                )
+                if est_pret(propre):  # téléchargé par jarvis2.telechargements
+                    self._charge = WhisperModel(str(propre), device="cpu", compute_type="int8")
+                else:  # ancien cache (installations antérieures) ; jamais de téléchargement implicite
+                    try:
+                        self._charge = WhisperModel(
+                            self.modele,
+                            device="cpu",
+                            compute_type="int8",
+                            download_root=str(self.dossier),
+                            local_files_only=True,
+                        )
+                    except Exception as exc:
+                        raise ModeleAbsent(
+                            f"Modèle de voix Whisper « {self.modele} » non téléchargé : acceptez son "
+                            "téléchargement dans le diagnostic (ou `jarvis2 docteur --reparer`)"
+                        ) from exc
             return self._charge
 
     def _transcrire(self, audio: bytes) -> tuple[str, str | None]:

@@ -68,11 +68,35 @@ class EncodeurFastEmbed:
                 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
                 from fastembed import TextEmbedding
 
+                from .telechargements import ModeleAbsent, dossier_embeddings, est_pret
+
                 _ajouter_modeles(TextEmbedding)
-                self.dossier_cache.mkdir(parents=True, exist_ok=True)
+                propre = dossier_embeddings(self.dossier_cache, self.nom_modele)
                 journal.info("Chargement du modèle d'embeddings %s…", self.nom_modele)
-                self._modele = TextEmbedding(self.nom_modele, cache_dir=str(self.dossier_cache))
+                if est_pret(propre):  # téléchargé par jarvis2.telechargements
+                    self._modele = TextEmbedding(
+                        self.nom_modele, cache_dir=str(self.dossier_cache), specific_model_path=str(propre)
+                    )
+                else:  # ancien cache fastembed (installations antérieures) ; jamais de téléchargement implicite
+                    try:
+                        self._modele = TextEmbedding(
+                            self.nom_modele, cache_dir=str(self.dossier_cache), local_files_only=True
+                        )
+                    except Exception as exc:
+                        raise ModeleAbsent(
+                            f"Modèle d'embeddings {self.nom_modele} non téléchargé : acceptez son téléchargement "
+                            "(page Mémoire ou diagnostic, ou `jarvis2 docteur --reparer`)"
+                        ) from exc
             return self._modele
+
+    def present(self) -> bool:
+        """Modèle sur le disque (téléchargé par JARVIS ou ancien cache), sans rien télécharger."""
+        from .diagnostic import modele_present
+        from .telechargements import dossier_embeddings, est_pret
+
+        return est_pret(dossier_embeddings(self.dossier_cache, self.nom_modele)) or modele_present(
+            self.dossier_cache, self.nom_modele
+        )
 
     def encoder_sync(self, texte: str) -> list[float]:
         vecteur = next(iter(self._charger().embed([texte])))

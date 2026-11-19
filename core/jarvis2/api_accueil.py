@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -53,19 +52,18 @@ async def lire_diagnostic(request: Request) -> dict[str, Any]:
 
 @routeur.post("/diagnostic/reparer/{reparation}")
 async def reparer(request: Request, reparation: str) -> dict[str, Any]:
-    """Réparations sûres seulement : créer ou mettre à jour le schéma SQLite, télécharger le modèle d'embeddings."""
+    """Réparations sûres seulement : schéma SQLite, téléchargement (sur ce clic) des modèles d'embeddings et de voix."""
     c, p, a = _ctx(request), _parametres(request), _appareil(request)
     if reparation == "migrer":
         if p.stockage_effectif != "sqlite":
             raise HTTPException(409, "PostgreSQL : lancez `jarvis2 migrer` (identifiants du propriétaire)")
         appliquees = await migrer(p)
         await audit.journaliser(c.pool, acteur=a.acteur, action="diagnostic.migrer", details={"versions": appliquees})
-    elif reparation == "telecharger_modele":
-        from .api import precharger_modele
+    elif reparation in ("telecharger_modele", "telecharger_voix"):  # le clic vaut accord de l'utilisateur
+        from .api_telechargements import lancer
 
-        if c.chargement_modele != "en_cours":
-            asyncio.get_running_loop().create_task(precharger_modele(c))
-        await audit.journaliser(c.pool, acteur=a.acteur, action="diagnostic.telecharger_modele")
+        lancer(c, p, "embeddings" if reparation == "telecharger_modele" else "voix")
+        await audit.journaliser(c.pool, acteur=a.acteur, action=f"diagnostic.{reparation}")
     else:
         raise HTTPException(404, f"Réparation inconnue : « {reparation} »")
     return {"verifications": await _verifications(request)}

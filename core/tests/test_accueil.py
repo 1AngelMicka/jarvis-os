@@ -86,6 +86,15 @@ async def test_diagnostic_et_reparations(systeme: dict[str, Any], pool: Base) ->
     assert rep.status_code == (200 if pool.dialecte == "sqlite" else 409)  # PostgreSQL : rôle propriétaire
 
 
+async def test_telechargements_sur_accord_seulement(systeme: dict[str, Any]) -> None:
+    client = systeme["client"]
+    etats = {e["id"]: e for e in (await client.get("/v1/telechargements")).json()["telechargements"]}
+    assert set(etats) == {"embeddings", "voix"} and all(e["statut"] == "absent" for e in etats.values())
+    assert (await client.post("/v1/telechargements/inconnu")).status_code == 404
+    verifs = {v["id"]: v for v in (await client.get("/v1/diagnostic")).json()["verifications"]}
+    assert verifs["voix"]["reparation"] == "telecharger_voix"  # proposé, jamais lancé seul
+
+
 def test_telephone_selon_tailscale() -> None:
     assert diagnostic.verifier_telephone(None, 8765).statut == "info"
     assert diagnostic.verifier_telephone(EtatTailscale(installe=True), 8765).aide == "tailscale up"

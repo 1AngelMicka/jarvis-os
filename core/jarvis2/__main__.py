@@ -136,11 +136,17 @@ async def _docteur(p: Parametres, en_json: bool, reparer: bool) -> int:
 
     if reparer and p.stockage_effectif == "sqlite":
         await migrer(p)
-    if reparer and not diagnostic.modele_present(p.dossier_modeles, p.modele_embeddings):
-        from .embeddings import EncodeurFastEmbed
+    if reparer:  # « --reparer » vaut accord : seul le modèle d'embeddings, indispensable à la mémoire
+        from . import telechargements
 
-        print("Téléchargement du modèle d'embeddings (une seule fois)…")
-        await asyncio.to_thread(EncodeurFastEmbed(p.dossier_modeles, p.modele_embeddings).encoder_sync, "essai")
+        modele = telechargements.modele_embeddings(p.dossier_modeles, p.modele_embeddings)
+        if not telechargements.est_pret(modele) and not diagnostic.modele_present(
+            p.dossier_modeles, p.modele_embeddings
+        ):
+            print("Téléchargement du modèle d'embeddings (une seule fois, reprise possible)…")
+            with telechargements.nouveau_client() as client:
+                etat = await asyncio.to_thread(telechargements.telecharger, modele, client)
+            print(f"  {diagnostic.decrire_telechargement(etat)}")
     base: Base | None
     try:
         base = await ouvrir_base(p, max_size=1)
