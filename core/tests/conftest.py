@@ -50,14 +50,18 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
             "TRUNCATE memory_block_versions, memory_blocks, telemetrie, imports, chantiers, creation_donnees,"
             " creation_versions, creations, missions, profil_reponses, messages, conversations, memoires,"
             " defis_webauthn, cles_acces, demandes, jumelages, appareils, connecteurs, executions_recettes, outils_mcp,"
-            " evenements_atelier, ateliers, memoire_vecteurs, domaines, fiches_concepts, questions_controle,"
-            " extractions_domaines, journal_domaines"
+            " fichiers_atelier, evenements_atelier, ateliers, memoire_vecteurs, domaines, fiches_concepts,"
+            " questions_controle, extractions_domaines, journal_domaines"
             " RESTART IDENTITY CASCADE"
         )
         # Le journal d'audit est en ajout seul, même pour les tests : on ne le vide jamais (assertions relatives).
         await conn.execute("UPDATE etat_systeme SET valeur = '{\"actif\": false}' WHERE cle = 'arret_urgence'")
         await conn.execute("UPDATE etat_systeme SET valeur = '{\"termine\": false}' WHERE cle = 'accueil'")
         await conn.execute('UPDATE etat_systeme SET valeur = \'{"mode": "parle", "vus": {}}\' WHERE cle = \'matin\'')
+        await conn.execute(
+            'UPDATE etat_systeme SET valeur = \'{"actif": false, "voix": false, "notification": true}\''
+            " WHERE cle = 'veille_claude_code'"
+        )
     finally:
         await conn.close()
     return BasePostgres(await creer_pool(parametres.url_base("app", BASE_TEST), max_size=4))

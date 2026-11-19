@@ -53,6 +53,7 @@ from .api_profil import routeur as routeur_profil
 from .api_securite import routeur as routeur_securite
 from .api_telechargements import routeur as routeur_telechargements
 from .ateliers.gestionnaire import GestionnaireAteliers, Projet
+from .ateliers.veille import SourceFichiersEtat, VeilleClaudeCode, dossier_par_defaut
 from .config import Parametres
 from .config_locale import charger as charger_config_locale
 from .config_locale import chemin_config
@@ -110,6 +111,7 @@ class Contexte:
     dossier_donnees: Path | None = None  # tâches de nuit de la mémoire (export Markdown dans memoire-md/)
     etat_bascule: EtatBascule | None = None
     ateliers: GestionnaireAteliers | None = None
+    veille: VeilleClaudeCode | None = None  # sessions Claude Code de l'utilisateur (lecture seule, inactive par défaut)
     transcripteur: Transcripteur | None = None
     url_ollama: str = "http://127.0.0.1:11434"
     modele_vision: str | None = None
@@ -139,6 +141,24 @@ class Contexte:
             if self.dossier_recettes is not None
             else None
         )
+        self.service.ce_qui_tourne = self.ce_qui_tourne
+
+    async def ce_qui_tourne(self) -> str:
+        """Résumé compact, à chaque échange : ateliers, sessions Claude Code veillées, missions en cours."""
+        parties: list[str] = []
+        if self.ateliers is not None:
+            parties.append(await self.ateliers.resume())
+        if self.veille is not None:
+            parties.append(self.veille.resume())
+        missions = [m for m in await self.missions.lister(10) if m["statut"] in ("en_file", "en_cours")]
+        if missions:
+            parties.append(
+                "Missions en cours : "
+                + " ; ".join(f"{m['type']} « {str(m['objectif'])[:80]} » ({m['statut']})" for m in missions[:5])
+                + "."
+            )
+        texte = "\n".join(p for p in parties if p)
+        return f"Ce qui tourne en ce moment :\n{texte}" if texte else ""
 
 
 class ModificationConversation(BaseModel):
@@ -208,6 +228,12 @@ async def construire_contexte(p: Parametres) -> Contexte:
             f"http://127.0.0.1:{p.port}",
             urgence,
             [p.claude_commande] if p.claude_commande else None,
+        ),
+        veille=VeilleClaudeCode(
+            pool,
+            SourceFichiersEtat(locale.dossier_veille_claude or dossier_par_defaut()),
+            reglages.expurgateur.mentionne,
+            [p.dossier_donnees / "ateliers"],
         ),
         urgence=urgence,
         transcripteur=TranscripteurWhisper(p.dossier_modeles, p.modele_voix),
@@ -303,6 +329,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         if ctx.memoire is not None:  # modèle d'embeddings chargé en tâche de fond : le 1er message n'attend pas
             taches.append(asyncio.create_task(precharger_modele(ctx)))
         taches.append(asyncio.create_task(detecter_tailscale(ctx, parametres.port, autorisees)))
+        if ctx.veille is not None:  # veille des sessions Claude Code : ne lit rien tant qu'elle est désactivée
+            taches.append(asyncio.create_task(ctx.veille.boucle()))
         if ctx.planificateur is not None:  # recettes planifiées et tâches de nuit de la mémoire
             taches.append(asyncio.create_task(ctx.planificateur.boucle()))
         if contexte is None:
