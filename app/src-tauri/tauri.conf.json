@@ -15,10 +15,16 @@
   "plugins": {
     "deep-link": {
       "desktop": { "schemes": ["jarvis"] }
+    },
+    "updater": {
+      "endpoints": ["https://github.com/1AngelMicka/jarvis-os/releases/latest/download/latest.json"],
+      "pubkey": "",
+      "windows": { "installMode": "passive" }
     }
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": false,
     "targets": ["nsis", "msi", "deb", "appimage", "dmg"],
     "category": "Productivity",
     "shortDescription": "Assistant personnel local d'abord",
