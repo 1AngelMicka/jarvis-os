@@ -26,6 +26,7 @@ import { VueConnecteurs } from "./Connecteurs";
 import { VueCouts } from "./Couts";
 import { ReglagesMatin } from "./Matin";
 import { SectionMemoire } from "./Memoire";
+import { AutorisationsPermanentes, CommandesRapides, ReglagePilotage, ReglesProtection } from "./Pilotage";
 import { PanneauSecurite } from "./Securite";
 import { SelecteurTheme } from "./SelecteurTheme";
 import { VueProfil } from "./VueProfil";
@@ -340,6 +341,10 @@ export function VueReglages(p: Props) {
             </div>
           </>
         );
+      case "pilotage":
+        return <ReglagePilotage surNotifier={p.surNotifier} />;
+      case "commandes-rapides":
+        return <CommandesRapides surNotifier={p.surNotifier} />;
       case "lecture":
         return (
           <>
@@ -419,6 +424,10 @@ export function VueReglages(p: Props) {
         return <PanneauSecurite nbCles={p.etat?.cles_acces ?? 0} surChangement={p.surChangement} blocs={["cles"]} />;
       case "audit":
         return <PanneauSecurite nbCles={p.etat?.cles_acces ?? 0} surChangement={p.surChangement} blocs={["audit"]} />;
+      case "regles-protection":
+        return <ReglesProtection surChangement={p.surChangement} />;
+      case "autorisations":
+        return <AutorisationsPermanentes surNotifier={p.surNotifier} />;
       case "appareils":
         return <PanneauSecurite nbCles={p.etat?.cles_acces ?? 0} surChangement={p.surChangement} blocs={["appareils"]} />;
       case "telephone":

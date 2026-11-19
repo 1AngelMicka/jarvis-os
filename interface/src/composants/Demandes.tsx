@@ -16,13 +16,15 @@ interface Props {
 export function ListeDemandes({ demandes, nbCles, surChangement }: Props) {
   const [occupee, setOccupee] = useState<string | null>(null);
   const [erreurs, setErreurs] = useState<Record<string, string>>({});
+  // « Toujours autoriser » coché, par demande (🟡 autorisable seulement : jamais 🔴, jamais un clic à l'écran)
+  const [toujours, setToujours] = useState<Record<string, boolean>>({});
 
   const traiter = (d: Demande, accepter: boolean) => {
     setOccupee(d.id);
     setErreurs((e) => ({ ...e, [d.id]: "" }));
     const appel = async () => {
       if (!accepter) return refuser(d.id);
-      if (d.niveau === "jaune") return approuver(d.id);
+      if (d.niveau === "jaune") return approuver(d.id, undefined, Boolean(d.toujours_possible && toujours[d.id]));
       if (nbCles === 0) {
         throw new Error("Aucune clé d'accès enregistrée : ajoutez-en une dans l'onglet Sécurité pour approuver les actions 🔴.");
       }
@@ -34,7 +36,14 @@ export function ListeDemandes({ demandes, nbCles, surChangement }: Props) {
     };
     appel()
       .then((r) => {
-        surChangement(r.statut === "executee" ? `Fait : ${d.resume}` : r.statut === "refusee" ? "Demande refusée." : undefined);
+        const permanent = r.statut === "executee" && d.toujours_possible && toujours[d.id];
+        surChangement(
+          r.statut === "executee"
+            ? `Fait : ${d.resume}${permanent ? " — désormais toujours autorisé (Réglages › Sécurité pour retirer)" : ""}`
+            : r.statut === "refusee"
+              ? "Demande refusée."
+              : undefined,
+        );
       })
       .catch((e: unknown) => {
         const message = e instanceof Error ? e.message : "Échec.";
@@ -70,6 +79,18 @@ export function ListeDemandes({ demandes, nbCles, surChangement }: Props) {
           <p className="demande-meta">
             {d.action} · demandée par {d.demandeur.replace(/^appareil:/, "")}
           </p>
+          {d.niveau === "jaune" && d.toujours_possible && (
+            <label className="demande-toujours">
+              <input
+                type="checkbox"
+                checked={Boolean(toujours[d.id])}
+                onChange={(e) => {
+                  setToujours((t) => ({ ...t, [d.id]: e.target.checked }));
+                }}
+              />
+              Toujours autoriser « {d.action} » (sans redemander)
+            </label>
+          )}
           {erreurs[d.id] && (
             <p className="demande-erreur" role="alert">
               {erreurs[d.id]}

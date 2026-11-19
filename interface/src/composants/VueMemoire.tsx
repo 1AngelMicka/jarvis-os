@@ -60,10 +60,16 @@ function Carte({ s, origines }: { s: Souvenir; origines: Map<string, string> }) 
 
 /** Vue Mémoire : tout ce que JARVIS sait, par origine, du plus récent au plus ancien, et la recherche telle que le
  * dialogue la fait. Les blocs éditables, le modèle et les tâches de nuit restent en bas. */
-export function VueMemoire({ surChangement }: { surChangement: (m?: string) => void }) {
+/** `demande` : recherche lancée de l'extérieur (JARVIS ou une commande rapide) ; un nouveau jeton la relance. */
+export function VueMemoire({ surChangement, demande }: { surChangement: (m?: string) => void; demande?: { texte: string; jeton: number } | null }) {
   const [origines, setOrigines] = useState<OrigineMemoire[]>([]);
   const [origine, setOrigine] = useState("");
-  const [recherche, setRecherche] = useState("");
+  const [recherche, setRecherche] = useState(demande?.texte ?? "");
+  const jetonDemande = demande?.jeton;
+  useEffect(() => {
+    if (demande) setRecherche(demande.texte);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seul un nouveau jeton (nouvelle demande) relance la recherche
+  }, [jetonDemande]);
   const [souvenirs, setSouvenirs] = useState<Souvenir[] | null>(null);
   const [suite, setSuite] = useState(false);
   const [chargement, setChargement] = useState(false);

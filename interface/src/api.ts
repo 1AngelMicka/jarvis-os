@@ -43,6 +43,15 @@ import type {
   ModeMatin,
   Prereglage,
   ReglagesMatin,
+  ActionPilotage,
+  AutorisationPermanente,
+  CommandeRapide,
+  CommandeRapideEdition,
+  ConflitCommande,
+  InfoPilotage,
+  ModePilotage,
+  RegleProtection,
+  ResultatCommande,
 } from "./types";
 
 export class ErreurApi extends Error {
@@ -146,8 +155,8 @@ export const enregistrerCle = (credential: Record<string, unknown>, nom: string)
   envoyer<{ id: string }>("/v1/cles/enregistrement", { credential, nom });
 export const demanderAction = (d: DemandeAction) => envoyer<ReponseAction>("/v1/actions", d);
 export const optionsApprobation = (id: string) => envoyer<Record<string, unknown>>(`/v1/demandes/${id}/options`);
-export const approuver = (id: string, credential?: Record<string, unknown>) =>
-  envoyer<ReponseAction>(`/v1/demandes/${id}/approuver`, credential ? { credential } : {});
+export const approuver = (id: string, credential?: Record<string, unknown>, toujours = false) =>
+  envoyer<ReponseAction>(`/v1/demandes/${id}/approuver`, { ...(credential ? { credential } : {}), ...(toujours ? { toujours } : {}) });
 export const refuser = (id: string) => envoyer<{ statut: string }>(`/v1/demandes/${id}/refuser`);
 
 // --- Arrêt d'urgence, audit ---
@@ -367,3 +376,29 @@ export const repondreProfil = (questionId: string, texte: string, prive: boolean
   });
 export const retirerReponseProfil = (questionId: string) =>
   appeler<{ retiree: string }>(`/v1/profil/reponses/${encodeURIComponent(questionId)}`, { methode: "DELETE" });
+
+// --- Lot F : pilotage, règles de protection, « toujours autoriser », commandes rapides ---
+export const lirePilotage = () => unSeul("pilotage", () => appeler<InfoPilotage>("/v1/pilotage"));
+export const reglerPilotage = (mode: ModePilotage) => appeler<{ mode: ModePilotage }>("/v1/pilotage", { methode: "PUT", corps: { mode } });
+export const revaliderAction = (action: { type: string } & Record<string, unknown>) =>
+  envoyer<{ action: ActionPilotage }>("/v1/pilotage/valider", action);
+
+export const listerRegles = () => appeler<{ regles: RegleProtection[] }>("/v1/regles");
+export const ajouterRegle = (r: { genre: RegleProtection["genre"]; motif: string; libelle?: string; origine?: RegleProtection["origine"] }) =>
+  envoyer<{ regle: RegleProtection }>("/v1/regles", r);
+export const retirerRegle = (id: string) => envoyer<ReponseAction>(`/v1/regles/${id}/retirer`);
+export const testerMotif = (motif: string, texte: string, contient = false) =>
+  envoyer<{ valide: boolean; correspond: boolean; captures?: Record<string, string>; erreur?: string }>("/v1/motifs/tester", { motif, texte, contient });
+
+export const listerAutorisations = () => appeler<{ autorisations: AutorisationPermanente[] }>("/v1/autorisations");
+export const retirerAutorisation = (action: string) => envoyer<{ retiree: boolean }>(`/v1/autorisations/${encodeURIComponent(action)}/retirer`);
+
+export const listerCommandesRapides = () => appeler<{ commandes: CommandeRapide[] }>("/v1/commandes-rapides");
+export const verifierCommandeRapide = (c: CommandeRapideEdition) =>
+  envoyer<{ valide: boolean; erreur?: string; action?: { libelle: string; niveau: string }; conflits?: ConflitCommande[] }>("/v1/commandes-rapides/verifier", c);
+export const creerCommandeRapide = (c: CommandeRapideEdition) =>
+  envoyer<{ commande: CommandeRapide; conflits: ConflitCommande[] }>("/v1/commandes-rapides", c);
+export const modifierCommandeRapide = (id: string, c: CommandeRapideEdition) =>
+  appeler<{ commande: CommandeRapide; conflits: ConflitCommande[] }>(`/v1/commandes-rapides/${id}`, { methode: "PUT", corps: c });
+export const supprimerCommandeRapide = (id: string) => appeler<{ supprimee: boolean }>(`/v1/commandes-rapides/${id}`, { methode: "DELETE" });
+export const executerCommandeRapide = (phrase: string) => envoyer<ResultatCommande>("/v1/commandes-rapides/executer", { phrase });
