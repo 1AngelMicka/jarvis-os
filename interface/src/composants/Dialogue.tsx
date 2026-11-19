@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { TexteRiche } from "../texte";
 import type { AvisExpert, InfoMoteur, MetaMessage } from "../types";
+import { PiedReponse } from "./PiedReponse";
 
 export interface MessageAffiche {
   cle: string;
@@ -83,6 +84,9 @@ function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
           {m.meta.cout_usd ? <span className="msg-meta">{m.meta.cout_usd.toFixed(4)} $</span> : null}
           {m.meta.interrompu && <span className="msg-meta msg-meta--ambre">interrompue</span>}
         </div>
+      )}
+      {m.role === "jarvis" && !m.enCours && m.meta?.moteur && !m.meta.interrompu && (
+        <PiedReponse meta={m.meta} nomMoteur={moteurs.find((x) => x.id === m.meta?.moteur)?.nom ?? ""} />
       )}
     </article>
   );

@@ -6,6 +6,7 @@ import { VueAccueil } from "./composants/Accueil";
 import { VueAgents } from "./composants/Agents";
 import { VueAteliers } from "./composants/Ateliers";
 import { VueConnecteurs } from "./composants/Connecteurs";
+import { VueCouts } from "./composants/Couts";
 import { ListeDemandes } from "./composants/Demandes";
 import { Console, Fil, type MessageAffiche } from "./composants/Dialogue";
 import { ListeConversations } from "./composants/Historique";
@@ -73,7 +74,7 @@ function Hud() {
   const [alerte, setAlerte] = useState(false);
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
-  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire">("dialogue");
+  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire" | "couts">("dialogue");
   const [conseil, setConseil] = useState(false);
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
   const [annonce, setAnnonce] = useState("");
@@ -346,6 +347,7 @@ function Hud() {
         case "debut": {
           const d = ev.donnees as typeof ev.donnees & { experts?: { id: string }[] };
           if (d.experts) setAvisEnCours({ attendus: d.experts.length, recus: 0 });
+          if (d.avertissement) notifier(d.avertissement); // plafond de dépenses atteint : réponse par une autre IA
           setActive(d.conversation_id);
           setConversations((cs) => {
             const existante = cs.find((c) => c.id === d.conversation_id);
@@ -478,6 +480,16 @@ function Hud() {
             }}
           >
             Connecteurs
+          </button>
+          <button
+            type="button"
+            className="btn btn-discret btn-mini btn-connecteurs"
+            aria-pressed={vue === "couts"}
+            onClick={() => {
+              setVue((v) => (v === "couts" ? "dialogue" : "couts"));
+            }}
+          >
+            Coûts
           </button>
           <button
             type="button"
@@ -696,6 +708,29 @@ function Hud() {
                   suiteAction(r, "Outil appelé.");
                 }}
               />
+            </div>
+          </Panneau>
+        ) : vue === "couts" ? (
+          <Panneau
+            titre="Coûts"
+            className="panneau-scene"
+            ordre={2}
+            id="couts"
+            meta="dépenses, plafonds, abonnement Claude"
+            actions={
+              <button
+                type="button"
+                className="btn btn-mini"
+                onClick={() => {
+                  setVue("dialogue");
+                }}
+              >
+                Retour au dialogue
+              </button>
+            }
+          >
+            <div className="panneau-corps">
+              <VueCouts />
             </div>
           </Panneau>
         ) : vue === "connecteurs" ? (
