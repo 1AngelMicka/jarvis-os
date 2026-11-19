@@ -264,12 +264,22 @@ async def rouvrir(base: Base, ident: UUID) -> dict[str, Any]:
             return actuel
         if await jumeaux(conn, actuel["titre"], sauf=ident):
             raise ErreurChantier("Un chantier ouvert du même sens existe déjà")
-        statut = "en_cours" if 0 < actuel["progression"] < 100 else "a_faire"
+        etapes = [dict(e) for e in actuel["etapes"]]
+        if etapes and all(e["fait"] for e in etapes):
+            etapes[-1]["fait"] = False  # rouvert : la dernière étape reste à refaire (pas « 0 % · 2/2 étapes »)
+        if etapes:
+            progression = progression_des_etapes(etapes)
+        else:
+            progression = 0 if actuel["progression"] >= 100 else actuel["progression"]
+        statut = "en_cours" if progression > 0 else "a_faire"
         await conn.execute(
-            "UPDATE chantiers SET statut = $2, motif = NULL, termine_le = NULL,"
-            " progression = CASE WHEN progression = 100 THEN 0 ELSE progression END, maj_le = now() WHERE id = $1",
+            "UPDATE chantiers SET statut = $2, motif = NULL, termine_le = NULL, progression = $3, etapes = $4,"
+            " etape_courante = $5, maj_le = now() WHERE id = $1",
             ident,
             statut,
+            progression,
+            etapes,
+            _prochaine(etapes),
         )
         return await _exiger(conn, ident)
 

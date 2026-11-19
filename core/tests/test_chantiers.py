@@ -78,6 +78,7 @@ async def test_terminer_abandonne_les_jumeaux(pool: Base) -> None:
     # Rouvrir : possible (aucun jumeau ouvert), puis recréer renvoie le chantier rouvert
     r = await chantiers.rouvrir(pool, UUID(a["id"]))
     assert r["statut"] == "a_faire" and r["termine_le"] is None
+    assert r["progression"] == 0 and r["etapes"] == [{"titre": "Pneu", "fait": False}] and r["etape_courante"] == "Pneu"
     assert (await chantiers.creer(pool, "vélo réparer", "test"))[0]["id"] == a["id"]
     with pytest.raises(chantiers.ErreurChantier):
         await chantiers.rouvrir(pool, jumeau)  # le même sens est déjà ouvert : pas de doublon
@@ -117,7 +118,8 @@ async def test_api_chantiers(systeme: dict[str, Any], pool: Base) -> None:  # no
     assert fait["chantier"]["statut"] == "termine" and fait["doublons_abandonnes"] == 0
     assert (await client.get("/v1/chantiers")).json()["chantiers"] == []
     assert await nb_audit(pool, "chantier.termine") >= 1
-    assert (await client.post(f"/v1/chantiers/{ident}/rouvrir")).json()["statut"] == "a_faire"
+    rouvert = (await client.post(f"/v1/chantiers/{ident}/rouvrir")).json()
+    assert rouvert["statut"] == "en_cours" and rouvert["progression"] == 50 and rouvert["etape_courante"] == "Texte"
 
 
 async def test_api_abandon_jaune_et_suppression_rouge(systeme: dict[str, Any], pool: Base) -> None:  # noqa: F811
