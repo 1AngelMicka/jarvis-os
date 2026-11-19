@@ -204,3 +204,25 @@ def test_decrire_et_docteur(monkeypatch: pytest.MonkeyPatch) -> None:
     assert v.id == "materiel" and v.statut == "info"
     assert "Radeon RX 7900 XTX" in v.detail and "gemma4:12b" in v.detail
     assert "ollama pull" in (v.aide or "")
+
+
+def test_commande_materiel_pour_les_installeurs(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from jarvis2.__main__ import main
+
+    monkeypatch.setattr(materiel, "detecter", lambda: RX_7900_XTX)
+    assert main(["materiel", "--modele", "conversation"]) == 0
+    assert capsys.readouterr().out == "gemma4:12b\t11\t12 à 14 milliards\n"
+    assert main(["materiel", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["type_carte"] == "amd"
+    assert main(["materiel"]) == 0
+    assert "Conversation (Ollama) : gemma4:12b" in capsys.readouterr().out
+
+
+def test_commande_materiel_rien_ne_tient(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    from jarvis2.__main__ import main
+
+    monkeypatch.setattr(materiel, "detecter", lambda: Materiel(2, None, None))
+    assert main(["materiel", "--modele", "conversation"]) == 1
+    assert capsys.readouterr().out == ""

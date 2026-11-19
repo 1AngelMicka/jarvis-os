@@ -21,6 +21,7 @@ from .config_locale import charger as charger_config_locale
 from .db import Base, Executant, migrer, ouvrir_base
 from .importeurs import SOURCES
 from .journal import configurer_journal
+from .materiel import TABLE as TABLE_MATERIEL
 
 journal = logging.getLogger("jarvis2")
 
@@ -287,6 +288,29 @@ def _sauvegarde(p: Parametres, action: str, dossier: Path | None, fichier: Path 
     return 0 if rapport["valide"] else 3
 
 
+def _materiel(en_json: bool, usage: str | None) -> int:
+    """Table matériel → modèle (`materiel.py`), la même que le diagnostic et la page Connecteurs."""
+    import json
+
+    from . import materiel
+
+    description = materiel.decrire()
+    if usage:
+        conseil = next(c for c in description["conseils"] if c["usage"] == usage)["conseille"]
+        if not conseil:
+            return 1
+        print(f"{conseil['modele']}	{conseil['besoin_go']:g}	{conseil['taille']}")
+        return 0
+    if en_json:
+        print(json.dumps(description, ensure_ascii=False, indent=2))
+        return 0
+    print(description["resume"])
+    for c in description["conseils"]:
+        choix = c["conseille"]["modele"] if c["conseille"] else "aucun"
+        print(f"  {c['titre']} : {choix} ({c['raison']})")
+    return 0
+
+
 def _sorties_tolerantes() -> None:
     """Sortie redirigée sous Windows (cp1252) : un caractère hors de la page de code (✔, ⇄) est remplacé au lieu
     de faire planter la commande (`jarvis2 --help > fichier`, `jarvis2 docteur | more`)."""
@@ -340,8 +364,17 @@ def main(argv: list[str] | None = None) -> int:
     sau.add_argument("--dossier", type=Path, default=None, help="creer : dossier de destination (hors du PC)")
     sau.add_argument("--fichier", type=Path, default=None, help="verifier : sauvegarde .jarvis2")
     sau.add_argument("--garder", type=int, default=7, help="creer : nombre de sauvegardes gardées (défaut 7)")
+    mat = sous.add_parser("materiel", help="matériel du PC et modèles conseillés (lecture seule, rien installé)")
+    mat.add_argument("--json", action="store_true", help="résultat en JSON")
+    mat.add_argument(
+        "--modele",
+        choices=[u.id for u in TABLE_MATERIEL],
+        help="une ligne « modèle<TAB>mémoire en Go<TAB>taille » pour cet usage (installeurs) ; code 1 si rien ne tient",
+    )
     sous.add_parser("atelier-mcp", help="(interne) outil d'autorisation des ateliers, lancé par Claude Code")
     args = analyseur.parse_args(argv)
+    if args.commande == "materiel":  # sans paramètres ni journal : lu par les installeurs avant toute configuration
+        return _materiel(args.json, args.modele)
     if args.commande == "atelier-mcp":  # serveur MCP stdio : aucun journal sur la sortie standard
         from .ateliers.mcp_autorisation import main as main_mcp
 
