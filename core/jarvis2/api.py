@@ -40,6 +40,7 @@ from .agents.recherche_web import RechercheWeb
 from .api_accueil import routeur as routeur_accueil
 from .api_agents import routeur as routeur_agents
 from .api_ateliers import routeur as routeur_ateliers
+from .api_chantiers import routeur as routeur_chantiers
 from .api_connecteurs import routeur as routeur_connecteurs
 from .api_medias import routeur as routeur_medias
 from .api_medias import routeur_pages as routeur_creations
@@ -484,6 +485,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_medias)
     app.include_router(routeur_creations)
     app.include_router(routeur_memoire)
+    app.include_router(routeur_chantiers)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():
