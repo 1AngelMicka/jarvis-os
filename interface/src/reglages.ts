@@ -30,7 +30,7 @@ export const CATEGORIES: readonly Categorie[] = [
   { id: "cerveau", nom: "Cerveau & coûts", description: "Vos IA, modèles, dépenses et plafonds" },
   { id: "matin", nom: "Accueil & localisation", description: "Accueil du matin, maison, installation" },
   { id: "memoire", nom: "Mémoire & profil", description: "Blocs toujours donnés à JARVIS, tâches de nuit, profil" },
-  { id: "securite", nom: "Sécurité", description: "Arrêt d'urgence, clés d'accès, journal d'audit" },
+  { id: "securite", nom: "Sécurité", description: "Arrêt d'urgence, clés d'accès, données, audit" },
   { id: "appareils", nom: "Appareils", description: "Appareils autorisés, téléphone, version" },
 ];
 
@@ -147,6 +147,14 @@ export const SECTIONS: readonly Section[] = [
     description: "Empreinte, visage ou code de l'appareil pour approuver les actions 🔴",
     motsCles: ["webauthn", "empreinte", "visage", "approuver", "rouge", "passkey"],
     alias: ["cles"],
+  },
+  {
+    id: "donnees",
+    categorie: "securite",
+    titre: "Où partent mes données",
+    description: "Chaque fonction : service contacté, ce qui part, local ou non, où le couper ; accord images",
+    motsCles: ["confidentialite", "vie privee", "flux", "cloud", "internet", "envoi", "images", "accord", "local", "rgpd"],
+    alias: ["flux", "confidentialite", "vie-privee"],
   },
   {
     id: "audit",

@@ -1,0 +1,67 @@
+/* ---------- « Où partent mes données » (phase 14 · C, point 15) ----------
+   Cartes par défaut (téléphone) ; tableau quand le conteneur est assez large. Uniquement des tokens. */
+
+.flux { display: flex; flex-direction: column; gap: var(--e-4); min-width: 0; }
+.flux-resume { margin: 0; font: 600 var(--t-base)/1.4 var(--f-ui); color: var(--texte-fort); }
+.flux-conteneur { container-type: inline-size; min-width: 0; }
+
+.flux-fonction { margin: 0; font: 600 var(--t-petit)/1.35 var(--f-ui); color: var(--texte-fort); overflow-wrap: anywhere; }
+.flux-etat { font: var(--t-micro)/1.3 var(--f-donnees); color: var(--texte-3); text-transform: var(--casse); letter-spacing: .04em; }
+.flux-detail { display: block; margin: var(--e-1) 0 0; font: var(--t-micro)/1.4 var(--f-donnees); color: var(--texte-3); }
+.flux-liste { margin: 0; padding-left: var(--e-5); display: flex; flex-direction: column; gap: var(--e-1); }
+.flux-liste li { overflow-wrap: anywhere; }
+.flux-rien { margin: 0; color: var(--vert); }
+.flux-jamais { margin: var(--e-2) 0 0; font-size: var(--t-micro); line-height: 1.4; color: var(--texte-3); }
+.flux-images {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2) var(--e-3); margin: var(--e-3) 0 0;
+  padding: var(--e-2) var(--e-3); border: var(--l-fin) dashed rgb(var(--c-ambre) / .5); border-radius: var(--r-1);
+  font-size: var(--t-micro); color: var(--ambre-texte);
+}
+.flux-images[data-accorde] { border-style: solid; border-color: var(--ligne); color: var(--texte-2); }
+.flux-desactiver { overflow-wrap: anywhere; }
+.flux-desactiver a { color: var(--cyan-vif); text-underline-offset: 3px; }
+.flux-desactiver a:focus-visible { outline: var(--l-moyen) solid var(--cyan); outline-offset: 2px; border-radius: var(--r-1); }
+.flux-ou { color: var(--texte-3); }
+
+/* Cartes (téléphone, colonne étroite) */
+.flux-cartes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-3); }
+.flux-carte {
+  display: flex; flex-direction: column; gap: var(--e-2); min-width: 0; padding: var(--e-4);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); background: rgb(var(--c-verre-bas) / .7);
+  font-size: var(--t-mini); line-height: 1.45; color: var(--texte-2);
+}
+.flux-carte[data-etat="inactif"], .flux-table tr[data-etat="inactif"] { opacity: .62; }
+.flux-carte-tete { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--e-2); }
+.flux-carte-tete .flux-fonction { flex: 1 1 12em; }
+.flux-carte-service { margin: 0; overflow-wrap: anywhere; }
+.flux-carte-pied { margin: var(--e-1) 0 0; padding-top: var(--e-2); border-top: var(--l-fin) solid var(--ligne); }
+.flux-carte-libelle { color: var(--texte-3); }
+
+/* Tableau (ordinateur) */
+.flux-table { display: none; width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--t-mini); line-height: 1.45; color: var(--texte-2); }
+.flux-table thead th {
+  padding: var(--e-2) var(--e-3); text-align: left; vertical-align: bottom; border-bottom: var(--l-fin) solid var(--ligne-forte);
+  font: var(--t-micro)/1.3 var(--f-donnees); color: var(--texte-3); text-transform: var(--casse); letter-spacing: .06em;
+}
+.flux-table tbody th, .flux-table td { padding: var(--e-3); text-align: left; vertical-align: top; border-bottom: var(--l-fin) solid var(--ligne); font-weight: inherit; overflow-wrap: anywhere; }
+.flux-table tbody th { display: table-cell; }
+.flux-table tbody th > span { display: block; }
+.flux-table tbody th .flux-service { margin-top: var(--e-1); color: var(--texte-2); }
+.flux-table tbody th .flux-etat { margin-top: var(--e-2); }
+.flux-table thead th:nth-child(1) { width: 30%; }
+.flux-table thead th:nth-child(2) { width: 36%; }
+.flux-table thead th:nth-child(3) { width: 15%; }
+.flux-table thead th:nth-child(4) { width: 19%; }
+.flux-table .badge-co { white-space: normal; display: inline-block; }
+
+@container (min-width: 600px) {
+  .flux-table { display: table; }
+  .flux-cartes { display: none; }
+}
+
+/* Fenêtre d'accord avant d'envoyer une image à un connecteur cloud */
+.palette--accord { border-color: rgb(var(--c-ambre) / .6); }
+.palette--accord .palette-confirmation-titre { color: var(--ambre-texte); }
+.palette--accord .palette-confirmation-texte { display: flex; flex-direction: column; gap: var(--e-3); line-height: 1.5; }
+.palette--accord .palette-confirmation-texte p { margin: 0; }
+.palette--accord .palette-confirmation-texte a { color: var(--cyan-vif); text-underline-offset: 3px; }

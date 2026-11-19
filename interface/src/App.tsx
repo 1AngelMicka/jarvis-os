@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, listerDemandes, resumerConversation, sonderCore } from "./api";
+import { accorderImages, arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, listerDemandes, resumerConversation, sonderCore } from "./api";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
 import { type CibleActivite, PanneauActivite } from "./composants/Activite";
@@ -10,6 +10,7 @@ import { VueConnecteurs } from "./composants/Connecteurs";
 import { VueCouts } from "./composants/Couts";
 import { ListeDemandes } from "./composants/Demandes";
 import { Console, EVENEMENT_JOINDRE, Fil, type MessageAffiche } from "./composants/Dialogue";
+import { FenetreAccordImages } from "./composants/AccordImages";
 import { Aide, type ModePalette, Palette } from "./composants/Palette";
 import { commande as infoCommande, commandeDuRaccourci, type IdCommande, themeDepuis, themeSuivant } from "./commandes";
 import type { ImageJointe } from "./images";
@@ -94,6 +95,8 @@ function Hud() {
   const [erreurActivite, setErreurActivite] = useState<string | null>(null);
   const [cible, setCible] = useState<CibleActivite | null>(null);
   const [palette, setPalette] = useState<{ mode: ModePalette; requete: string } | null>(null);
+  // Image jointe pour un connecteur cloud sans accord : rien n'est parti, la fenêtre d'accord attend la réponse
+  const [accordImages, setAccordImages] = useState<{ connecteur: string; nom: string; texte: string; images: ImageJointe[]; cle: string } | null>(null);
   const [aide, setAide] = useState(false);
   const controleur = useRef<AbortController | null>(null);
   const lecteur = useRef(new LecteurVocal()).current;
@@ -388,8 +391,9 @@ function Hud() {
 
   const envoyer = (texte: string, images: ImageJointe[] = []) => {
     const cleJarvis = nouvelleCle();
+    const cleUtilisateur = nouvelleCle();
     const affichees = images.map(({ id, nom, dataUrl, poids }) => ({ id, nom, dataUrl, poids }));
-    setMessages((ms) => [...ms, { cle: nouvelleCle(), role: "utilisateur", texte, ...(affichees.length ? { images: affichees } : {}) }]);
+    setMessages((ms) => [...ms, { cle: cleUtilisateur, role: "utilisateur", texte, ...(affichees.length ? { images: affichees } : {}) }]);
     setEnCours(true);
     setPremierMorceau(false);
     setAnnonce("");
@@ -439,6 +443,9 @@ function Hud() {
           break;
         case "titre":
           setConversations((cs) => cs.map((c) => (c.id === ev.donnees.conversation_id ? { ...c, titre: ev.donnees.titre, titre_source: "auto" } : c)));
+          break;
+        case "accord_images":
+          setAccordImages({ connecteur: ev.donnees.connecteur, nom: ev.donnees.nom, texte, images, cle: cleUtilisateur });
           break;
         case "erreur":
           setMessages((ms) => [
@@ -1220,6 +1227,32 @@ function Hud() {
           }}
           surUrgence={() => {
             depuisPalette(declencherUrgence);
+          }}
+        />
+      )}
+      {accordImages && (
+        <FenetreAccordImages
+          nom={accordImages.nom}
+          nbImages={accordImages.images.length}
+          surAccepter={() => {
+            const a = accordImages;
+            setAccordImages(null);
+            accorderImages(a.connecteur, true)
+              .then(() => {
+                setMessages((ms) => ms.filter((m) => m.cle !== a.cle)); // renvoyé tel quel, la bulle revient avec l'envoi
+                envoyer(a.texte, a.images);
+              })
+              .catch((e: unknown) => {
+                notifier(e instanceof Error ? e.message : "Accord non enregistré.");
+              });
+          }}
+          surRefuser={() => {
+            const a = accordImages;
+            setAccordImages(null);
+            setMessages((ms) => [
+              ...ms,
+              { cle: nouvelleCle(), role: "erreur", texte: `Message non envoyé : l'image n'est pas partie vers « ${a.nom} ». Choisissez une IA locale ou renvoyez sans image.` },
+            ]);
           }}
         />
       )}
