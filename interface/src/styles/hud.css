@@ -714,6 +714,36 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
 .souvenir-texte[data-replie] { max-height: 7.5em; overflow: hidden; mask-image: linear-gradient(to bottom, #000 60%, transparent); }
 .lien-btn { margin-top: var(--e-2); padding: 0; border: 0; background: none; font: var(--t-mini)/1.4 var(--f-ui); color: var(--cyan-vif); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .memoire-plus { align-self: center; }
+/* Niveaux de confidentialité (lot 14 · C 14) : la pastille est le sélecteur. Public = accent, semi-privé = neutre,
+   privé = ambre (l'ancien badge « privé »). */
+.niveau-select, .niveau-pastille {
+  min-height: 0; padding: var(--e-1) var(--e-3); border: var(--l-fin) solid var(--ligne); border-radius: var(--r-pilule);
+  background-color: transparent; font: var(--t-micro)/1 var(--f-donnees); color: var(--texte-2); white-space: nowrap;
+}
+.niveau-select {
+  appearance: none; -webkit-appearance: none; padding-right: var(--e-6); cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - var(--e-4)) 55%, calc(100% - var(--e-3)) 55%; background-size: var(--e-2) var(--e-2); background-repeat: no-repeat;
+  transition: border-color var(--transition), background-color var(--transition);
+}
+.niveau-select:hover { border-color: var(--ligne-forte); }
+.niveau-select:focus-visible { outline: var(--l-fort) solid var(--cyan-vif); outline-offset: 2px; }
+.niveau-select[aria-busy] { opacity: .7; cursor: progress; }
+.niveau-select option { background: var(--vide-2); color: var(--texte); }
+:is(.niveau-select, .niveau-pastille)[data-niveau="public"] { color: var(--cyan-vif); border-color: rgb(var(--c-cyan) / .5); background-color: rgb(var(--c-cyan) / .08); }
+:is(.niveau-select, .niveau-pastille)[data-niveau="prive"] { color: var(--ambre-texte); border-color: rgb(var(--c-ambre) / .5); background-color: rgb(var(--c-ambre) / .08); }
+@media (pointer: coarse) { .niveau-select { min-height: var(--cible); padding-left: var(--e-4); } }
+
+.souvenir-actions { display: flex; flex-wrap: wrap; gap: 0 var(--e-5); }
+.souvenir-erreur { margin: var(--e-2) 0 0; font-size: var(--t-mini); color: var(--rouge-pale); }
+.souvenir-avis { display: flex; flex-direction: column; gap: var(--e-2); margin-top: var(--e-3); }
+.souvenir-avis-etiquette { font: var(--t-mini)/1.4 var(--f-ui); color: var(--texte-2); }
+.souvenir-versions { list-style: none; margin: var(--e-3) 0 0; padding: var(--e-3) 0 0 var(--e-4); border-top: var(--l-fin) solid var(--ligne-faible); display: flex; flex-direction: column; gap: var(--e-3); }
+.souvenir-version { display: flex; flex-direction: column; gap: var(--e-1); }
+.souvenir-version-date { font: var(--t-micro)/1.3 var(--f-donnees); color: var(--texte-3); font-variant-numeric: tabular-nums; }
+.souvenir-version-texte { margin: 0; font-size: var(--t-mini); line-height: 1.5; color: var(--texte-3); overflow-wrap: anywhere; white-space: pre-wrap; }
+.souvenir-version[data-actuelle] .souvenir-version-texte { color: var(--texte); }
+.memoire-niveaux { margin: 0; font: var(--t-micro)/1.4 var(--f-donnees); color: var(--texte-3); font-variant-numeric: tabular-nums; }
 .memoire-reglages { border-top: var(--l-fin) solid var(--ligne-faible); padding-top: var(--e-4); }
 .memoire-reglages > summary { cursor: pointer; font: var(--t-petit)/1.4 var(--f-ui); color: var(--texte-2); min-height: var(--cible); display: flex; align-items: center; }
 .memoire-reglages[open] > summary { margin-bottom: var(--e-4); color: var(--cyan-vif); }

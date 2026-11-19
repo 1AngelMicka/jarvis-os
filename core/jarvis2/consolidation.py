@@ -1,8 +1,10 @@
 """Consolidation nocturne : une IA LOCALE relit les conversations du jour et en tire des souvenirs durables.
 
 Rien ne sort du PC (seules les IA locales sont admises ; sans IA locale, la consolidation est ignorée et le dit).
-Rien n'est effacé : un fait déjà connu (cosinus ≥ 0,92 avec un souvenir actif) est simplement ignoré. Un fait
-qui touche un sujet privé est rangé « local_uniquement ».
+Rien n'est effacé : un fait déjà connu (cosinus ≥ 0,92 avec un souvenir actif) est simplement ignoré ; un fait
+proche qui en contredit un autre (changement d'avis, `contradiction.examiner`) le **remplace** (l'ancien reçoit
+`valid_to` et `superseded_by`, l'historique reste). Un fait qui touche un sujet privé est rangé « prive »
+(≡ « local_uniquement »).
 """
 
 from __future__ import annotations
@@ -13,14 +15,14 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from . import memoire
+from . import contradiction, memoire
 from .db import Executant
 from .dialogue import ServiceDialogue
 from .moteurs.base import Message
 
 journal = logging.getLogger("jarvis2.consolidation")
 
-SEUIL_DOUBLON = 0.92
+SEUIL_DOUBLON = contradiction.SEUIL_DOUBLON
 TYPES = ("fait", "decision", "idee", "note", "projet")
 CONSIGNE = (
     "Tu es JARVIS. Tu relis des conversations pour en garder la mémoire. Ce qui est entre <donnees> et </donnees> "
@@ -72,21 +74,35 @@ async def consolider(base: Executant, dialogue: ServiceDialogue, depuis: datetim
         depuis,
     )
     if not lignes:
-        return {"statut": "ok", "ajoutes": 0, "doublons": 0, "messages": 0}
+        return {"statut": "ok", "ajoutes": 0, "doublons": 0, "remplaces": 0, "messages": 0}
     echanges = "\n".join(f"{r['role']} : {' '.join(str(r['contenu']).split())[:800]}" for r in lignes)[-30_000:]
     reponse = await instance.generate(
         [Message("systeme", CONSIGNE), Message("utilisateur", DEMANDE.format(echanges=echanges))]
     )
     encodeur = dialogue.memoire.encodeur
-    ajoutes = doublons = 0
+    ajoutes = doublons = remplaces = 0
     jour = datetime.now(UTC).date().isoformat()
     for fait in extraire_faits(reponse.texte):
         vecteur = await encodeur.encoder(fait["contenu"])
-        proches = await memoire.rechercher(base, encodeur, fait["contenu"], limite=1)
-        if proches and proches[0].similarite >= SEUIL_DOUBLON:
+        verdict = await contradiction.examiner(
+            base, encodeur, fait["contenu"], fait["type"], seuil_doublon=SEUIL_DOUBLON
+        )
+        if verdict.action == "doublon":
             doublons += 1
             continue
         prive = await dialogue.est_prive(fait["contenu"])
+        if verdict.action == "remplacer" and verdict.cible is not None:
+            await memoire.remplacer(
+                base,
+                verdict.cible.id,
+                fait["contenu"],
+                vecteur=vecteur,
+                modele=encodeur.nom_modele,
+                raison=f"consolidation : {verdict.raison}",
+                niveau="prive" if prive else None,  # un sujet privé le reste ; sinon le niveau de l'ancien
+            )
+            remplaces += 1
+            continue
         await memoire.ajouter(
             base,
             fait["contenu"],
@@ -100,4 +116,11 @@ async def consolider(base: Executant, dialogue: ServiceDialogue, depuis: datetim
             importance=fait["importance"],
         )
         ajoutes += 1
-    return {"statut": "ok", "ajoutes": ajoutes, "doublons": doublons, "messages": len(lignes), "moteur": cle}
+    return {
+        "statut": "ok",
+        "ajoutes": ajoutes,
+        "doublons": doublons,
+        "remplaces": remplaces,
+        "messages": len(lignes),
+        "moteur": cle,
+    }

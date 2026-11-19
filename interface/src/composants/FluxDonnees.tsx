@@ -8,8 +8,9 @@ import "../styles/donnees.css";
 
 import { accorderImages, lireFluxDonnees } from "../api";
 import { adresse, resoudre } from "../reglages";
-import { DESTINATIONS, ETATS, type Filtre, FILTRES, filtrerFlux, phraseResume } from "../donnees";
-import type { CarteFlux, FluxDonnee } from "../types";
+import { DESTINATIONS, ETATS, type Filtre, FILTRES, filtrerFlux, lignesMemoire, phraseMemoire, phraseResume } from "../donnees";
+import { lireMemoireFlux } from "../niveaux";
+import type { CarteFlux, FluxDonnee, MemoireFlux } from "../types";
 
 function dateCourte(iso: string): string {
   const d = new Date(iso);
@@ -74,6 +75,47 @@ function AccordImages({ f, surChanger }: { f: FluxDonnee; surChanger: (accorde: 
   );
 }
 
+/** Ce que chaque niveau de mémoire laisse partir vers le cloud, avec les nombres réels, et la porte de rappel. */
+function NiveauxMemoire({ m }: { m: MemoireFlux }) {
+  const lignes = lignesMemoire(m);
+  return (
+    <section className="flux-memoire" aria-labelledby="flux-memoire-titre">
+      <h4 className="flux-memoire-titre" id="flux-memoire-titre">
+        Mémoire
+      </h4>
+      <p className="flux-memoire-resume">{phraseMemoire(m.niveaux)}</p>
+      {lignes.length > 0 && (
+        <ul className="flux-memoire-niveaux">
+          {lignes.map((l) => (
+            <li key={l.niveau} className="flux-memoire-niveau" data-niveau={l.niveau}>
+              <div className="flux-memoire-tete">
+                <span className="niveau-pastille" data-niveau={l.niveau}>
+                  {l.nom}
+                </span>
+                <span className="flux-memoire-nombre">
+                  {l.nombre.toLocaleString("fr-FR")} souvenir{l.nombre > 1 ? "s" : ""}
+                </span>
+              </div>
+              {l.libelle.toLowerCase() !== l.nom.toLowerCase() && <p className="flux-memoire-libelle">{l.libelle}</p>}
+              <p className="flux-memoire-cloud">
+                <span className="flux-carte-libelle">Vers le cloud : </span>
+                {l.vers_cloud}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {m.porte_rappel && (
+        <p className="flux-memoire-porte">
+          <span className="flux-carte-libelle">Porte de rappel : </span>
+          {m.porte_rappel}
+        </p>
+      )}
+      <p className="flux-jamais">Le niveau de chaque souvenir et de chaque bloc se change dans la vue Mémoire.</p>
+    </section>
+  );
+}
+
 export function FluxDonnees({ surNotifier }: { surNotifier: (message: string) => void }) {
   const [carte, setCarte] = useState<CarteFlux | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -120,6 +162,8 @@ export function FluxDonnees({ surNotifier }: { surNotifier: (message: string) =>
   if (!carte) return <div className="squelette squelette--ligne" aria-busy="true" />;
 
   const liste = filtrerFlux(carte.flux, filtre);
+  // Absente avec un Core antérieur au lot 14 · C 14 : la section ne s'affiche pas.
+  const memoire = lireMemoireFlux(carte.memoire);
   const r = carte.resume;
   return (
     <div className="flux">
@@ -216,6 +260,7 @@ export function FluxDonnees({ surNotifier }: { surNotifier: (message: string) =>
         </ul>
         {!liste.length && <p className="couts-vide">Aucune fonction dans ce filtre.</p>}
       </div>
+      {memoire && <NiveauxMemoire m={memoire} />}
     </div>
   );
 }

@@ -238,7 +238,8 @@ async def test_nouveautes_au_debut_d_une_conversation(
     )
     service.titre_auto = False
     _ = [ev async for ev in service.repondre("Bonjour")]  # une première conversation
-    await memoire.ajouter(pool, "Rapport : les tomates anciennes se sèment en mars", origine="mission")
+    await memoire.ajouter(pool, "Rapport : les tomates anciennes se sèment en mars", origine="mission", niveau="public")
+    await memoire.ajouter(pool, "Le voisin rentre de vacances jeudi", origine="conversation")  # semi-privé
     await memoire.ajouter(
         pool, "Code secret du coffre : 9921", origine="utilisateur", confidentialite="local_uniquement"
     )
@@ -246,6 +247,9 @@ async def test_nouveautes_au_debut_d_une_conversation(
     consignes = capteur.recus[0].contenu
     assert "Nouveautés de ta mémoire" in consignes and "tomates anciennes se sèment" in consignes
     assert ("9921" in consignes) is (not externe)  # rien de privé vers une IA externe
+    debut = consignes.index("Nouveautés de ta mémoire")
+    # Nouveautés vers une IA externe : seulement les souvenirs « public »
+    assert ("voisin rentre" in consignes[debut:]) is (not externe)
     # Dans la même conversation, les nouveautés ne sont pas répétées
     conv = uuid.UUID(evs[0].donnees["conversation_id"])
     _ = [ev async for ev in service.repondre("Et encore ?", conversation_id=conv)]

@@ -359,12 +359,18 @@ export interface ServeurMcp {
 }
 
 // --- Mémoire v2 (phase 8) ---
+/** Niveau de confidentialité d'un souvenir ou d'un bloc (lot 14 · C 14). `prive` ⇔ `confidentialite = local_uniquement`. */
+export type Niveau = "public" | "semi_prive" | "prive";
+export type CompteursNiveaux = Record<Niveau, number>;
+
 export interface BlocMemoire {
   label: string;
   content: string;
   version: number;
   char_limit: number;
   confidentialite: "normal" | "local_uniquement";
+  /** Absent avec un Core antérieur au lot 14 · C 14 : déduit de `confidentialite`. */
+  niveau?: Niveau;
   maj_le: string;
 }
 
@@ -373,6 +379,8 @@ export interface EtatMemoire {
   modele_actif: string | null;
   bascule: { cible: string | null; faits: number; restants: number; erreur: string | null } | null;
   sans_vecteur: number;
+  /** Compteurs par niveau (Core ≥ lot 14 · C 14). */
+  niveaux?: CompteursNiveaux;
   taches: { id: string; nom: string; planification: string; derniere: { debut: string; statut: string; resultat: string | null; erreur: string | null } | null }[];
 }
 
@@ -527,11 +535,20 @@ export interface Souvenir {
   tags: string[];
   source: string | null;
   confidentialite: "normal" | "local_uniquement";
+  /** Absent avec un Core antérieur au lot 14 · C 14 : déduit de `confidentialite`. */
+  niveau?: Niveau;
+  /** A une version antérieure (changement d'avis). */
+  remplace?: boolean;
   origine: string;
   cree_le: string;
   maj_le: string;
   importance: number;
   acces: number;
+}
+/** Une version d'un souvenir : `valid_to` est la fin de validité (null pour la version actuelle). */
+export interface VersionSouvenir extends Souvenir {
+  valid_to: string | null;
+  superseded_by: string | null;
 }
 export interface OrigineMemoire {
   id: string;
@@ -646,6 +663,20 @@ export interface CarteFlux {
   genere_le: string;
   resume: { flux: number; locaux: number; sortants_actifs: number; internet_actifs: number; connecteurs_inactifs: number };
   flux: FluxDonnee[];
+  /** Ce que chaque niveau de mémoire laisse partir (Core ≥ lot 14 · C 14 ; absent avant). */
+  memoire?: MemoireFlux;
+}
+
+export interface RegleNiveau {
+  niveau: Niveau;
+  libelle: string;
+  vers_cloud: string;
+}
+
+export interface MemoireFlux {
+  niveaux: CompteursNiveaux;
+  regles: RegleNiveau[];
+  porte_rappel: string;
 }
 
 // --- Lot F : pilotage de l'interface, règles de protection, commandes rapides, « toujours autoriser » ---

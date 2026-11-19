@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DESTINATIONS, filtrerFlux, phraseResume } from "./donnees";
+import { DESTINATIONS, filtrerFlux, lignesMemoire, phraseMemoire, phraseResume } from "./donnees";
 import type { FluxDonnee } from "./types";
 
 function flux(id: string, destination: FluxDonnee["destination"]): FluxDonnee {
@@ -39,5 +39,32 @@ describe("où partent mes données", () => {
   it("Internet est signalé, le PC rassure", () => {
     expect(DESTINATIONS.internet.ton).toBe("attention");
     expect(DESTINATIONS.pc.ton).toBe("ok");
+  });
+});
+
+describe("section Mémoire", () => {
+  it("synthèse des niveaux, vide, singulier et pluriel", () => {
+    expect(phraseMemoire({ public: 0, semi_prive: 0, prive: 0 })).toBe("Aucun souvenir pour l'instant.");
+    expect(phraseMemoire({ public: 1, semi_prive: 1, prive: 0 })).toBe(
+      "Sur 2 souvenirs, 1 peut partir vers une IA externe, 1 seulement s'il est utile au message, 0 jamais.",
+    );
+    expect(phraseMemoire({ public: 12, semi_prive: 340, prive: 8 })).toBe(
+      "Sur 360 souvenirs, 12 peuvent partir vers une IA externe, 340 seulement s'ils sont utiles au message, 8 jamais.",
+    );
+  });
+
+  it("une ligne par règle, avec le nombre de son niveau", () => {
+    const lignes = lignesMemoire({
+      niveaux: { public: 2, semi_prive: 30, prive: 4 },
+      regles: [
+        { niveau: "public", libelle: "Public", vers_cloud: "Partout." },
+        { niveau: "prive", libelle: "Privé", vers_cloud: "Jamais." },
+      ],
+      porte_rappel: "",
+    });
+    expect(lignes).toEqual([
+      { niveau: "public", nom: "public", nombre: 2, libelle: "Public", vers_cloud: "Partout." },
+      { niveau: "prive", nom: "privé", nombre: 4, libelle: "Privé", vers_cloud: "Jamais." },
+    ]);
   });
 });

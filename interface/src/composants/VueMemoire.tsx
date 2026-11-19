@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { listerOrigines, listerSouvenirs } from "../api";
+import { changerNiveauSouvenir, lireEtatMemoire, listerOrigines, listerSouvenirs, listerVersionsSouvenir, remplacerSouvenir } from "../api";
+import { avecNiveau, avecRemplacement, LIBELLES_NIVEAU, lireCompteurs, niveauSouvenir, phraseCompteurs, versionsOrdonnees } from "../niveaux";
 import { TexteRiche } from "../texte";
-import type { OrigineMemoire, Souvenir } from "../types";
+import type { CompteursNiveaux, Niveau, OrigineMemoire, Souvenir, VersionSouvenir } from "../types";
 import { SectionMemoire } from "./Memoire";
+import { SelecteurNiveau } from "./Niveau";
 import { VueProfil } from "./VueProfil";
 
 const JOUR = 86_400_000;
 const DATE = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 const DATE_ANNEE = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 const HEURE = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const DATE_VERSION = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+function messageErreur(e: unknown, defaut: string): string {
+  return e instanceof Error ? e.message : defaut;
+}
 
 const NOMS_TYPE: Record<string, string> = { note: "note", idee: "idée", decision: "décision", fait: "fait", projet: "projet" };
 
@@ -21,19 +28,87 @@ function jourDe(date: Date, maintenant: Date): string {
   return date.getFullYear() === maintenant.getFullYear() ? DATE.format(date) : DATE_ANNEE.format(date);
 }
 
-function Carte({ s, origines }: { s: Souvenir; origines: Map<string, string> }) {
-  const [ouvert, setOuvert] = useState(false);
-  const long = s.contenu.length > 280;
+/** Historique d'un souvenir remplacé : les anciennes versions barrées, avec la date où elles ont cessé d'être vraies. */
+function Versions({ id }: { id: string }) {
+  const [versions, setVersions] = useState<VersionSouvenir[] | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  useEffect(() => {
+    listerVersionsSouvenir(id)
+      .then((r) => {
+        setVersions(versionsOrdonnees(r.versions));
+      })
+      .catch((e: unknown) => {
+        setErreur(messageErreur(e, "Historique illisible."));
+      });
+  }, [id]);
+  if (erreur)
+    return (
+      <p className="souvenir-erreur" role="alert">
+        {erreur}
+      </p>
+    );
+  if (!versions) return <div className="squelette squelette--ligne" aria-busy="true" aria-label="Chargement des versions" />;
   return (
-    <li className="souvenir" data-origine={s.origine}>
+    <ol className="souvenir-versions" aria-label="Versions de ce souvenir, de la plus ancienne à l'actuelle">
+      {versions.map((v) => (
+        <li key={v.id} className="souvenir-version" data-actuelle={v.valid_to === null || undefined}>
+          {v.valid_to === null ? (
+            <span className="souvenir-version-date">actuelle · depuis le {DATE_VERSION.format(new Date(v.cree_le))}</span>
+          ) : (
+            <span className="souvenir-version-date">
+              valable jusqu'au <time dateTime={v.valid_to}>{DATE_VERSION.format(new Date(v.valid_to))}</time>
+            </span>
+          )}
+          {v.valid_to === null ? <p className="souvenir-version-texte">{v.contenu}</p> : <del className="souvenir-version-texte">{v.contenu}</del>}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function Carte({
+  s,
+  origines,
+  surNiveau,
+  surRemplace,
+}: {
+  s: Souvenir;
+  origines: Map<string, string>;
+  surNiveau: (s: Souvenir, n: Niveau) => Promise<void>;
+  surRemplace: (s: Souvenir, contenu: string) => Promise<void>;
+}) {
+  const [ouvert, setOuvert] = useState(false);
+  const [avis, setAvis] = useState<string | null>(null);
+  const [envoi, setEnvoi] = useState(false);
+  const [occupe, setOccupe] = useState(false);
+  const [versions, setVersions] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const long = s.contenu.length > 280;
+  const niveau = niveauSouvenir(s);
+  const idAvis = `avis-${s.id}`;
+  const nouveauTexte = avis?.trim() ?? "";
+  const inchange = !nouveauTexte || nouveauTexte === s.contenu.trim();
+  return (
+    <li className="souvenir" data-origine={s.origine} data-niveau={niveau}>
       <div className="souvenir-tete">
         <span className="souvenir-origine">{origines.get(s.origine) ?? s.origine}</span>
         <span className="souvenir-type">{NOMS_TYPE[s.type] ?? s.type}</span>
-        {s.confidentialite === "local_uniquement" && (
-          <span className="badge-co" data-ton="attention" title="Ne part jamais vers une IA externe">
-            privé
-          </span>
-        )}
+        <SelecteurNiveau
+          niveau={niveau}
+          etiquette="Niveau de confidentialité du souvenir"
+          occupe={occupe}
+          surChoisir={(n) => {
+            setOccupe(true);
+            setErreur(null);
+            surNiveau(s, n)
+              .catch((e: unknown) => {
+                setErreur(messageErreur(e, "Niveau inchangé."));
+              })
+              .finally(() => {
+                setOccupe(false);
+              });
+          }}
+        />
         {s.tags.includes("noyau") && <span className="badge-co">noyau</span>}
         <time className="souvenir-heure" dateTime={s.cree_le}>
           {HEURE.format(new Date(s.cree_le))}
@@ -42,18 +117,99 @@ function Carte({ s, origines }: { s: Souvenir; origines: Map<string, string> }) 
       <div className="souvenir-texte" data-replie={long && !ouvert ? "" : undefined}>
         <TexteRiche source={s.contenu} />
       </div>
-      {long && (
-        <button
-          type="button"
-          className="lien-btn"
-          aria-expanded={ouvert}
-          onClick={() => {
-            setOuvert((o) => !o);
+      {erreur && (
+        <p className="souvenir-erreur" role="alert">
+          {erreur}
+        </p>
+      )}
+      {avis !== null && (
+        <form
+          className="souvenir-avis"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (inchange) return;
+            setEnvoi(true);
+            setErreur(null);
+            surRemplace(s, nouveauTexte).catch((err: unknown) => {
+              setErreur(messageErreur(err, "Remplacement impossible."));
+              setEnvoi(false);
+            });
           }}
         >
-          {ouvert ? "Réduire" : "Lire la suite"}
-        </button>
+          <label className="souvenir-avis-etiquette" htmlFor={idAvis}>
+            Ce qui est vrai maintenant (l'ancienne version reste dans l'historique)
+          </label>
+          <textarea
+            id={idAvis}
+            className="bloc-texte"
+            rows={3}
+            value={avis}
+            autoFocus
+            onChange={(e) => {
+              setAvis(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.stopPropagation();
+                setAvis(null);
+              }
+            }}
+          />
+          <div className="carte-co-actions">
+            <button type="submit" className="btn btn-mini" disabled={envoi || inchange}>
+              {envoi ? "Remplacement…" : "Remplacer"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-discret btn-mini"
+              disabled={envoi}
+              onClick={() => {
+                setAvis(null);
+              }}
+            >
+              Annuler
+            </button>
+          </div>
+        </form>
       )}
+      <div className="souvenir-actions">
+        {long && (
+          <button
+            type="button"
+            className="lien-btn"
+            aria-expanded={ouvert}
+            onClick={() => {
+              setOuvert((o) => !o);
+            }}
+          >
+            {ouvert ? "Réduire" : "Lire la suite"}
+          </button>
+        )}
+        {avis === null && (
+          <button
+            type="button"
+            className="lien-btn"
+            onClick={() => {
+              setAvis(s.contenu);
+            }}
+          >
+            J'ai changé d'avis
+          </button>
+        )}
+        {s.remplace && (
+          <button
+            type="button"
+            className="lien-btn"
+            aria-expanded={versions}
+            onClick={() => {
+              setVersions((v) => !v);
+            }}
+          >
+            {versions ? "Masquer les versions" : "Versions"}
+          </button>
+        )}
+      </div>
+      {versions && <Versions id={s.id} />}
     </li>
   );
 }
@@ -75,6 +231,7 @@ export function VueMemoire({ surChangement, demande }: { surChangement: (m?: str
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [profil, setProfil] = useState(false);
+  const [compteurs, setCompteurs] = useState<CompteursNiveaux | null>(null);
   const texte = recherche.trim();
 
   useEffect(() => {
@@ -84,6 +241,13 @@ export function VueMemoire({ surChangement, demande }: { surChangement: (m?: str
       })
       .catch(() => {
         /* les filtres attendront : la liste dit déjà l'erreur */
+      });
+    lireEtatMemoire()
+      .then((e) => {
+        setCompteurs(lireCompteurs(e.niveaux));
+      })
+      .catch(() => {
+        /* compteurs facultatifs (ancien Core) : rien à afficher */
       });
   }, []);
 
@@ -112,6 +276,27 @@ export function VueMemoire({ surChangement, demande }: { surChangement: (m?: str
       window.clearTimeout(minuterie);
     };
   }, [charger, texte]);
+
+  /** Mise à jour optimiste du niveau ; retour à l'ancien niveau si le Core refuse (l'erreur remonte à la carte). */
+  const changerNiveau = (s: Souvenir, n: Niveau) => {
+    const ancien = niveauSouvenir(s);
+    setSouvenirs((liste) => (liste ? avecNiveau(liste, s.id, n) : liste));
+    return changerNiveauSouvenir(s.id, n)
+      .then((r) => {
+        setSouvenirs((liste) => (liste ? liste.map((x) => (x.id === s.id ? { ...x, ...r.souvenir } : x)) : liste));
+        setCompteurs((c) => (c && ancien !== n ? { ...c, [ancien]: Math.max(0, c[ancien] - 1), [n]: c[n] + 1 } : c));
+        surChangement(`Souvenir passé en ${LIBELLES_NIVEAU[n].nom}.`);
+      })
+      .catch((e: unknown) => {
+        setSouvenirs((liste) => (liste ? avecNiveau(liste, s.id, ancien) : liste));
+        throw e;
+      });
+  };
+  const remplacer = (s: Souvenir, contenu: string) =>
+    remplacerSouvenir(s.id, contenu).then((r) => {
+      setSouvenirs((liste) => (liste ? avecRemplacement(liste, s.id, r.nouveau) : liste));
+      surChangement("Souvenir mis à jour : l'ancienne version est gardée dans l'historique.");
+    });
 
   const noms = new Map(origines.map((o) => [o.id, o.nom]));
   const total = origines.reduce((n, o) => n + o.nombre, 0);
@@ -188,6 +373,11 @@ export function VueMemoire({ surChangement, demande }: { surChangement: (m?: str
             </button>
           ))}
         </div>
+        {compteurs && (
+          <p className="memoire-niveaux" title="Public : peut partir vers une IA externe · semi-privé : seulement s'il est utile au message · privé : jamais">
+            {phraseCompteurs(compteurs)}
+          </p>
+        )}
       </div>
 
       {erreur && (
@@ -213,7 +403,7 @@ export function VueMemoire({ surChangement, demande }: { surChangement: (m?: str
               <h3 className="hist-groupe-titre">{jour}</h3>
               <ul className="souvenirs">
                 {liste.map((s) => (
-                  <Carte key={s.id} s={s} origines={noms} />
+                  <Carte key={s.id} s={s} origines={noms} surNiveau={changerNiveau} surRemplace={remplacer} />
                 ))}
               </ul>
             </section>

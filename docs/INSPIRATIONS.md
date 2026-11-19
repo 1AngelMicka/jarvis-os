@@ -65,7 +65,7 @@ Le détail de chaque point est dans [PLAN.md](PLAN.md) : phase 13 (lots), phase 
 | Contrôle du PC (volume, luminosité, fenêtres, média), modes qui changent vraiment Windows, OCR d'abord | ASD | Lot J |
 | Actions vérifiées en relisant l'état | jarvis799 (idée) | Lot J |
 | Téléphone : Web Push, « Partager vers JARVIS », appel de décision 🔴 oui / non | — | Lot M |
-| Masquage des secrets étendu (Luhn, clés connues, JWT…), niveaux de confidentialité, fait remplacé quand on change d'avis | OpenJarvis | Phase 14 · C |
+| Masquage des secrets étendu (Luhn, clés connues, JWT…), niveaux de confidentialité, porte de rappel sans LLM, fait remplacé quand on change d'avis | OpenJarvis (idée, réimplémentée) | Phase 14 · C |
 | Page « Où partent mes données » | — | Phase 14 · C |
 | Orbe de particules (shader, grille spatiale, 5 états, réagit à la voix) ; HUD séparé du fil audio | — , hasibjaan (idée) | Lot P |
 | Widgets générés filtrés (DOMPurify, liste fermée) | DonJyde | Phase 14 · D |
