@@ -40,6 +40,15 @@ FournisseurCle = Callable[[], str | None]
 Tarifs = Mapping[str, tuple[float, float]]  # modèle -> ($ / million de jetons en entrée, en sortie)
 
 
+def contenu_openai(m: Message) -> str | list[dict[str, Any]]:
+    """Texte seul, ou parties texte + images (format vision de `/chat/completions`)."""
+    if not m.images:
+        return m.contenu
+    parties: list[dict[str, Any]] = [{"type": "text", "text": m.contenu}]
+    parties += [{"type": "image_url", "image_url": {"url": i.data_url()}} for i in m.images]
+    return parties
+
+
 def cout(tarifs: Tarifs, modele: str, usage: Usage) -> float | None:
     prix = tarifs.get(modele)
     if prix is None:
@@ -78,11 +87,13 @@ class MoteurCompatibleOpenAI(Moteur):
         entetes: Mapping[str, str] | None = None,
         cout_fourni: bool = False,
         actif_par_defaut: bool = True,
+        vision: bool = True,
         delai: float = 300.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.id, self.nom, self.famille = id, nom, famille
         self.actif_par_defaut = actif_par_defaut
+        self.vision = vision  # selon le modèle : un modèle sans vision fait répondre une erreur claire au fournisseur
         self.externe = famille != "local"
         self.url = url.rstrip("/")
         self._cle = cle
@@ -121,7 +132,7 @@ class MoteurCompatibleOpenAI(Moteur):
         modele = await self._modele(options)
         corps: dict[str, Any] = {
             "model": modele,
-            "messages": [{"role": ROLES[m.role], "content": m.contenu} for m in messages],
+            "messages": [{"role": ROLES[m.role], "content": contenu_openai(m)} for m in messages],
             "stream": True,
             "stream_options": {"include_usage": True},
         }
@@ -137,6 +148,11 @@ class MoteurCompatibleOpenAI(Moteur):
             ) as rep:
                 if rep.status_code != 200:
                     corps_erreur = (await rep.aread()).decode("utf-8", "replace")
+                    if rep.status_code in (400, 404, 422) and any(m.images for m in messages):
+                        raise ErreurMoteur(
+                            f"{self.nom} : le modèle « {modele} » refuse les images "
+                            f"({message_erreur(rep.status_code, corps_erreur)}) : choisissez un modèle de vision"
+                        )
                     raise ErreurMoteur(f"{self.nom} : {message_erreur(rep.status_code, corps_erreur)}")
                 async for ligne in rep.aiter_lines():
                     if not ligne.startswith("data:"):

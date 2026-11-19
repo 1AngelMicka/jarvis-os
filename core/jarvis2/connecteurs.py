@@ -128,12 +128,19 @@ def construire_catalogue(
                 tarifs=tarifs,
                 installation_url=cle_url,
                 cout_fourni=cout_fourni,
+                vision=bool(reg.get("vision", True)),
             ),
             ident,
             cle_url,
         )
     # Modèles locaux
-    ajouter(ollama.MoteurOllama(url=p.ollama_url, modele=locale.connecteur("ollama").get("modele")))
+    ajouter(
+        ollama.MoteurOllama(
+            url=p.ollama_url,
+            modele=locale.connecteur("ollama").get("modele"),
+            modele_vision=locale.connecteur("ollama").get("modele_vision"),
+        )
+    )
     locaux = {
         "lmstudio": ("LM Studio (local)", "http://127.0.0.1:1234/v1", "https://lmstudio.ai/download"),
         "llamacpp": ("llama.cpp (local)", "http://127.0.0.1:8080/v1", "https://github.com/ggml-org/llama.cpp"),
@@ -150,6 +157,7 @@ def construire_catalogue(
                 None,
                 modele=reg.get("modele"),
                 installation_url=installation,
+                vision=bool(reg.get("vision", True)),
                 # Détecté sur un port connu, mais n'importe quel programme peut l'occuper : l'utilisateur l'active
                 actif_par_defaut=False,
             )
@@ -167,6 +175,7 @@ def construire_catalogue(
                 coffre.fournisseur(nom_cle) if nom_cle else None,
                 modele=c.get("modele"),
                 tarifs=tarifs,
+                vision=bool(c.get("vision", True)),
             ),
             nom_cle,
         )
@@ -264,8 +273,12 @@ class Connecteurs:
             for (i, d), s in zip(definitions, sorties, strict=True)
         ]
 
-    async def router(self, local: bool = False) -> str | None:
-        return choisir(await self.etats(tous=False), self.prefere, local=local)
+    async def router(self, local: bool = False, images: bool = False) -> str | None:
+        """`images` : seuls les connecteurs qui savent lire les images jointes sont candidats."""
+        etats = await self.etats(tous=False)
+        if images:
+            etats = [e for e in etats if self.definitions[e.id].moteur.interne.vision]
+        return choisir(etats, self.prefere, local=local)
 
     async def decrire(self, tous: bool = True) -> list[dict[str, Any]]:
         """Cartes de la page Connecteurs (aucune clé : seulement « enregistrée » et un aperçu)."""
