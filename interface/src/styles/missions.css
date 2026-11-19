@@ -106,4 +106,4 @@
 
 /* Réglage « Étapes en parallèle » */
 .mission-reglage { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-3); font-size: var(--t-mini); color: var(--texte-2); }
-.mission-reglage .select { min-height: var(--cible); padding: 0 var(--e-3); }
+.mission-reglage .select { min-height: var(--cible); }

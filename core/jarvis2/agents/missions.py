@@ -625,10 +625,13 @@ class ServiceMissions:
         )
         if statut.endswith(" 0"):
             raise ConflitMission("Ce plan est déjà en cours d'exécution")
+        etapes = list((await self.obtenir(ident) or {}).get("etapes") or [])
+        etapes.append({"nom": "exécution", "le": datetime.now(UTC).isoformat()})
         await self.base.execute(
-            "UPDATE missions SET statut = 'en_cours', erreur = NULL, progression = $2 WHERE id = $1",
+            "UPDATE missions SET statut = 'en_cours', erreur = NULL, progression = $2, etapes = $3 WHERE id = $1",
             ident,
             self._pourcentage(lu),
+            etapes,
         )
         self._en_fond(ident, self.executer_projet(ident))
         return ident
