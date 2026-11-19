@@ -145,3 +145,33 @@ async def echanger_jumelage(conn: Connexion, code: str, nom: str) -> tuple[Appar
         appareil, jeton = await creer(conn, nom, ligne["type"], ligne["cree_par"])
         await conn.execute("UPDATE jumelages SET appareil = $1 WHERE code_hash = $2", appareil.id, empreinte(code))
     return appareil, jeton
+
+
+# --- Limite de tentatives au jumelage --------------------------------------------------------------------------
+# Un code vaut 256 bits : il ne se devine pas. La limite coupe court aux essais en rafale (et les rend visibles
+# dans l'audit) : 5 échecs par source, ou 20 au total, en 15 minutes bloquent l'échange. Créer un nouveau code
+# depuis un appareil autorisé lève le blocage (c'est l'utilisateur qui est là).
+FENETRE_TENTATIVES = timedelta(minutes=15)
+ECHECS_PAR_SOURCE = 5
+ECHECS_GLOBAUX = 20
+
+
+async def jumelage_bloque(conn: Executant, source: str) -> bool:
+    depuis = datetime.now(UTC) - FENETRE_TENTATIVES
+    await conn.execute("DELETE FROM tentatives_jumelage WHERE le < $1", depuis)
+    total = await conn.fetchval("SELECT count(*) FROM tentatives_jumelage WHERE le >= $1", depuis)
+    par_source = await conn.fetchval(
+        "SELECT count(*) FROM tentatives_jumelage WHERE le >= $1 AND source = $2", depuis, source[:100]
+    )
+    return int(total) >= ECHECS_GLOBAUX or int(par_source) >= ECHECS_PAR_SOURCE
+
+
+async def noter_echec_jumelage(conn: Executant, source: str) -> None:
+    await conn.execute("INSERT INTO tentatives_jumelage (source) VALUES ($1)", source[:100])
+
+
+async def effacer_tentatives(conn: Executant, source: str | None = None) -> None:
+    if source is None:
+        await conn.execute("DELETE FROM tentatives_jumelage")
+    else:
+        await conn.execute("DELETE FROM tentatives_jumelage WHERE source = $1", source[:100])

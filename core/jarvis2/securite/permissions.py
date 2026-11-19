@@ -32,7 +32,11 @@ journal = logging.getLogger("jarvis2.permissions")
 
 Niveau = Literal["vert", "jaune", "rouge"]
 DUREE_DEMANDE = timedelta(minutes=30)
+DELAI_REPORT = timedelta(minutes=15)  # « plus tard » : rappel poussé au téléphone 15 minutes après
+REPORTS_MAX = 3
 EMOJI = {"vert": "🟢", "jaune": "🟡", "rouge": "🔴"}
+
+INTERDITS = ("deverrouill", "unlock")  # noms d'action refusés par le registre
 
 Executeur = Callable[[Connexion, dict[str, Any]], Awaitable[dict[str, Any]]]
 
@@ -77,6 +81,9 @@ class Registre:
         self.actions: dict[str, Action] = {}
 
     def ajouter(self, action: Action) -> None:
+        # Jamais de déverrouillage (session du PC, téléphone) : ni à distance ni sur place, aucune action ne le fait
+        if any(m in action.nom.lower() for m in INTERDITS):
+            raise ValueError(f"Action interdite par conception : {action.nom}")
         if action.nom in self.actions:
             raise ValueError(f"Action déjà déclarée : {action.nom}")
         self.actions[action.nom] = action
@@ -105,12 +112,14 @@ class Demande:
     expire_le: str
     resultat: dict[str, Any] | None
     toujours_possible: bool = False  # la case « Toujours autoriser » peut être proposée (🟡 autorisable)
+    rappel_le: str | None = None  # « plus tard » : heure du rappel
+    reports: int = 0
 
     def en_dict(self) -> dict[str, Any]:
         return {**self.__dict__, "id": str(self.id)}
 
 
-COLONNES = "id, action, niveau, resume, parametres, statut, demandeur, cree_le, expire_le, resultat"
+COLONNES = "id, action, niveau, resume, parametres, statut, demandeur, cree_le, expire_le, resultat, rappel_le, reports"
 
 
 def _demande(r: Ligne) -> Demande:
@@ -125,6 +134,8 @@ def _demande(r: Ligne) -> Demande:
         r["cree_le"].isoformat(),
         r["expire_le"].isoformat(),
         r["resultat"],
+        rappel_le=r["rappel_le"].isoformat() if r["rappel_le"] else None,
+        reports=r["reports"],
     )
 
 
@@ -132,6 +143,8 @@ class Approbations:
     def __init__(self, pool: Base, registre: Registre) -> None:
         self.pool = pool
         self.registre = registre
+        # Prévenu de chaque nouvelle demande (notification poussée au téléphone) ; jamais bloquant
+        self.apres_demande: Callable[[Demande], Awaitable[Any]] | None = None
 
     async def _executer(
         self, conn: Connexion, action: Action, params: dict[str, Any], acteur: str, demande: UUID | None
@@ -211,7 +224,7 @@ class Approbations:
                 datetime.now(UTC) + DUREE_DEMANDE,
             )
             assert ligne is not None
-            demande = self._completer(_demande(ligne))
+            demande = self.completer(_demande(ligne))
             await audit.journaliser(
                 conn,
                 acteur=appareil.acteur,
@@ -224,6 +237,11 @@ class Approbations:
                     **({"regle": str(a_demander.id)} if a_demander is not None else {}),
                 },
             )
+        if self.apres_demande is not None:
+            try:
+                await self.apres_demande(demande)
+            except Exception:  # une notification ratée ne fait jamais échouer la demande
+                journal.exception("Notification de la demande %s", demande.id)
         return {
             "statut": "en_attente",
             "demande": demande.en_dict(),
@@ -272,9 +290,9 @@ class Approbations:
             statut,
             limite,
         )
-        return [self._completer(_demande(r)) for r in lignes]
+        return [self.completer(_demande(r)) for r in lignes]
 
-    def _completer(self, d: Demande) -> Demande:
+    def completer(self, d: Demande) -> Demande:
         action = self.registre.actions.get(d.action)
         possible = action is not None and d.niveau == "jaune" and action.peut_etre_toujours_autorisee
         return replace(d, toujours_possible=possible)
@@ -282,6 +300,46 @@ class Approbations:
     async def obtenir(self, demande_id: UUID) -> Demande | None:
         ligne = await self.pool.fetchrow(f"SELECT {COLONNES} FROM demandes WHERE id = $1", demande_id)
         return _demande(ligne) if ligne else None
+
+    async def reporter(self, demande_id: UUID, appareil: Appareil) -> Demande:
+        """« Plus tard » : la demande reste en attente ; rappel dans 15 minutes (3 fois au plus). Ne décide rien."""
+        async with self.pool.acquire() as conn, conn.transaction():
+            ligne = await conn.fetchrow(f"SELECT {COLONNES} FROM demandes WHERE id = $1 FOR UPDATE", demande_id)
+            if ligne is None:
+                raise ErreurAction("Demande introuvable")
+            demande = _demande(ligne)
+            if demande.statut != "en_attente" or datetime.fromisoformat(demande.expire_le) < datetime.now(UTC):
+                raise ErreurAction("Demande déjà traitée ou expirée")
+            if demande.reports >= REPORTS_MAX:
+                raise ErreurAction(f"Déjà reportée {REPORTS_MAX} fois : décidez maintenant (oui ou non)")
+            rappel = datetime.now(UTC) + DELAI_REPORT
+            expire = max(datetime.fromisoformat(demande.expire_le), rappel + DELAI_REPORT)
+            ligne = await conn.fetchrow(
+                "UPDATE demandes SET rappel_le = $2, expire_le = $3, reports = reports + 1 WHERE id = $1"
+                f" RETURNING {COLONNES}",
+                demande_id,
+                rappel,
+                expire,
+            )
+            assert ligne is not None
+            await audit.journaliser(
+                conn,
+                acteur=appareil.acteur,
+                action="demande.reportee",
+                niveau=demande.niveau,  # type: ignore[arg-type]
+                cible=str(demande_id),
+                details={"action": demande.action, "rappel_le": rappel.isoformat()},
+            )
+        return self.completer(_demande(ligne))
+
+    async def rappels_dus(self) -> list[Demande]:
+        """Demandes reportées dont le rappel est dû (le rappel est consommé : un seul envoi)."""
+        lignes = await self.pool.fetch(
+            f"UPDATE demandes SET rappel_le = NULL WHERE statut = 'en_attente' AND rappel_le IS NOT NULL"
+            f" AND rappel_le <= $1 AND expire_le > $1 RETURNING {COLONNES}",
+            datetime.now(UTC),
+        )
+        return [self.completer(_demande(r)) for r in lignes]
 
     async def decider(
         self, demande_id: UUID, appareil: Appareil, approuver: bool, methode: str, toujours: bool = False

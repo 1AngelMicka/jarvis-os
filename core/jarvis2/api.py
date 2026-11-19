@@ -43,6 +43,8 @@ from .agents.sources_scientifiques import SourcesScientifiques
 from .api_accueil import routeur as routeur_accueil
 from .api_agents import routeur as routeur_agents
 from .api_ateliers import routeur as routeur_ateliers
+from .api_bureau import routeur as routeur_bureau
+from .api_bureau import routeur_public as routeur_fichiers_uniques
 from .api_chantiers import routeur as routeur_chantiers
 from .api_connaissances import routeur as routeur_connaissances
 from .api_connecteurs import routeur as routeur_connecteurs
@@ -77,6 +79,7 @@ from .moteurs.base import ErreurMoteur, Options
 from .moteurs.telemetrie import EnregistreurBase, MoteurInstrumente
 from .nuit import taches_memoire
 from .pilotage import ServicePilotage
+from .push import ServicePush
 from .securite import appareils
 from .securite.actions import creer_registre
 from .securite.coffre import Coffre
@@ -127,12 +130,14 @@ class Contexte:
     meteo: ServiceMeteo = field(default_factory=ServiceMeteo)
     matin_locale: dict[str, Any] = field(default_factory=dict)  # [matin] de la configuration locale (privé)
     approbations: Approbations = field(init=False)
+    _taches_push: set[asyncio.Task[int]] = field(default_factory=set, init=False, repr=False)
     conseil: ServiceConseil = field(init=False)
     connaissances: ServiceConnaissances = field(init=False)
     missions: ServiceMissions = field(init=False)
     planificateur: Planificateur | None = field(init=False)
     pilotage: ServicePilotage = field(init=False)
     commandes: ServiceCommandes = field(init=False)
+    push: ServicePush = field(init=False)  # notifications Web Push (clés VAPID dans le dossier des données)
 
     def __post_init__(self) -> None:
         self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp, self.ateliers, self.maison))
@@ -162,6 +167,16 @@ class Contexte:
             else None
         )
         self.service.ce_qui_tourne = self.ce_qui_tourne
+        self.push = ServicePush(self.pool, self.dossier_donnees)
+        self.approbations.apres_demande = self.notifier_demande
+
+    async def notifier_demande(self, demande: Any) -> None:
+        """Nouvelle demande 🟡🔴 : appel de décision poussé aux téléphones abonnés (en tâche de fond)."""
+        action = self.approbations.registre.actions.get(demande.action)
+        description = action.description if action else demande.action
+        tache = asyncio.create_task(self.push.notifier_demande(demande, description))
+        self._taches_push.add(tache)
+        tache.add_done_callback(self._taches_push.discard)
 
     async def ce_qui_tourne(self) -> str:
         """Résumé compact, à chaque échange : ateliers, sessions Claude Code veillées, missions en cours."""
@@ -209,6 +224,7 @@ ECRITURES_EN_URGENCE = (
     "/v1/appareils/",
     "/v1/autorisations/",
     "/v1/regles",
+    "/v1/protocole",  # vérifier un lien n'écrit rien (ouvre une vue au plus)
 )
 
 
@@ -361,6 +377,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         taches.append(asyncio.create_task(detecter_tailscale(ctx, parametres.port, autorisees)))
         if ctx.veille is not None:  # veille des sessions Claude Code : ne lit rien tant qu'elle est désactivée
             taches.append(asyncio.create_task(ctx.veille.boucle()))
+        if ctx.push.disponible:  # rappels des demandes reportées (« plus tard »)
+            taches.append(asyncio.create_task(ctx.push.boucle(ctx.approbations)))
         if ctx.planificateur is not None:  # recettes planifiées et tâches de nuit de la mémoire
             taches.append(asyncio.create_task(ctx.planificateur.boucle()))
         if contexte is None:
@@ -582,7 +600,9 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             flux(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
         )
 
+    app.include_router(routeur_bureau)  # avant la sécurité : /v1/demandes/{id} (GET) et …/reporter
     app.include_router(routeur_securite)
+    app.include_router(routeur_fichiers_uniques)  # /f/{code} : avant l'interface montée sur « / »
     app.include_router(routeur_connecteurs)
     app.include_router(routeur_maison)
     app.include_router(routeur_accueil)
