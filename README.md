@@ -1,118 +1,275 @@
+English | [Français](README.fr.md)
+
 # JARVIS 2
 
-Assistant personnel local d'abord : mémoire à long terme, conversation en flux avec les IA de votre choix, interface HUD. Connecteurs : vos comptes par les programmes officiels (Claude Code, OpenAI Codex, Google Antigravity avec avertissement), vos clés d'API (Anthropic, OpenAI, Gemini, OpenRouter, tout service compatible OpenAI), vos modèles locaux (Ollama, LM Studio, llama.cpp, vLLM) ; routeur automatique et conseil multi-IA.
+A local-first personal assistant: long-term memory, streaming conversation with the AI of your choice, and a HUD interface, with nothing irreversible or external done without your approval.
 
-Plan : [docs/PLAN.md](docs/PLAN.md) · décisions : [docs/DECISIONS.md](docs/DECISIONS.md) · design : [interface/DESIGN.md](interface/DESIGN.md).
+[![CI](https://github.com/1AngelMicka/jarvis-os/actions/workflows/ci.yml/badge.svg)](https://github.com/1AngelMicka/jarvis-os/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/github/v/tag/1AngelMicka/jarvis-os?sort=semver&label=version)](https://github.com/1AngelMicka/jarvis-os/tags)
 
-> **Statut : en développement (0.8.0).** Les phases 1 à 10 du plan sont faites (socle, dialogue, mémoire, sécurité, connecteurs d'IA, installation, agents, mémoire v2, ateliers Claude Code, voix et vision). L'application de bureau et ses installeurs sont construits par GitHub Actions, pas encore signés ; la sauvegarde chiffrée est prête. Captures d'écran à venir.
+## Install
 
-## Installer (sans Docker ni Node)
+Windows (PowerShell):
 
-Windows :
+```powershell
+irm https://raw.githubusercontent.com/1AngelMicka/jarvis-os/main/install.ps1 | iex
+```
+
+macOS, Linux:
+
+```sh
+curl -LsSf https://raw.githubusercontent.com/1AngelMicka/jarvis-os/main/install.sh | sh -s --
+```
+
+No Docker, no Node. Details and options [below](#installation-details) and in [docs/INSTALLATION.md](docs/INSTALLATION.md); if something goes wrong: [docs/DEPANNAGE.md](docs/DEPANNAGE.md).
+
+> **Status: in development (0.8.0).** Phases 1 to 10 of the plan are done (foundation, dialogue, memory, security, AI connectors, installation, agents, memory v2, Claude Code workshops, voice and vision). The desktop app and its installers are built by GitHub Actions and are not signed yet; encrypted backup is ready. The interface is in French for now; an English translation is on the roadmap.
+
+## Screenshots
+
+<!-- Images to be provided: docs/images/demo.gif, docs/images/theme-*.png (one per theme), docs/images/mobile.png. They are not in the repository yet. -->
+
+- [Demo (GIF)](docs/images/demo.gif)
+- Themes: [JARVIS](docs/images/theme-jarvis.png) · [Studio nocturne](docs/images/theme-studio.png) · [Atelier clair](docs/images/theme-atelier.png) · [Console épurée](docs/images/theme-console.png) · [Présence](docs/images/theme-presence.png)
+- [On a phone](docs/images/mobile.png)
+
+## What JARVIS 2 does
+
+**Conversation with the AI of your choice**
+- Streaming replies, stored history, titles and dated summaries of each conversation.
+- Connectors: your accounts through the providers' official programs (Claude Code, OpenAI Codex, Google Antigravity with a warning), your API keys (Anthropic, OpenAI, Gemini, OpenRouter, any OpenAI-compatible service), your local models (Ollama, LM Studio, llama.cpp, vLLM).
+- Automatic router, and a multi-AI council: several connectors answer in parallel, then one writes the synthesis.
+- Costs per connector (day, month), spending caps, Claude Code subscription gauges; each reply shows the engine that answered.
+
+**Memory**
+- Long-term memory with hybrid search, editable memory blocks always given to the model, and three privacy levels (public, semi-private, private).
+- Nightly consolidation by a **local** AI, forgetting by archiving, deterministic detection of a change of mind (the old fact is replaced), versions and export.
+- A recall gate without an LLM decides whether a message needs memory at all.
+- Knowledge by domain (concept map, notes, review questions), a guided profile questionnaire, tracked tasks without duplicates.
+- Import from JARVIS v1 (read-only).
+
+**Agents and workshops**
+- Scheduled recipes, background missions (research with cited web and scientific sources, brainstorm, review) whose report goes into memory, MCP tools.
+- Claude Code workshops: each one works in its own git worktree and branch, and JARVIS decides on every tool it asks to use; pause, resume, close.
+- Read-only watch of your own Claude Code sessions.
+- Continuous improvement: a suggestion becomes a workshop, then a tested preview, then a deployment request you approve, with a way back.
+
+**Voice and vision**
+- Local transcription (Whisper int8, Silero VAD, hallucination filters, circuit breaker), "Dis Jarvis" wake word in two stages (the second one is a local intent judge), barge-in, end-of-turn detection, global hold-to-talk dictation in the desktop app.
+- Owner voice recognition (off by default).
+- Text-to-speech: browser voice, Piper (local neural voice) or ElevenLabs (online, with your key).
+- Screen or image described on request only, with OCR first.
+
+**Your PC and home**
+- Windows PC control: volume, brightness, windows, media, lock, shutdown, power plan, notification banners and dark mode, game mode; live CPU, RAM, GPU and VRAM readings.
+- Optional home connectors: Philips Hue (local bridge API) and OBS Studio.
+- Quick commands without any AI: a recognised phrase triggers a declared action, editable by you.
+
+**Security**
+- Permission levels: 🟢 read (free), 🟡 change (you approve; "always allow" is possible), 🔴 destroy, money, publish, send (explicit confirmation, with a passkey).
+- Append-only audit log chained with SHA-256 hashes, emergency stop, local vault for API keys, secret and personal-data filter on everything sent to an external provider.
+- Per-turn injection barrier (after reading untrusted content, no more actions in that turn) and a detector for replies that claim an action that never happened.
+- A "Where does my data go" page generated from your actual configuration (see below).
+
+**Everywhere**
+- Phone: installable web app, Web Push notifications, "Share to JARVIS", reachable through Tailscale.
+- Desktop app (own window, tray icon, `jarvis://` links), headless home-server mode, morning greeting with weather, sandboxed generated pages, five themes.
+- Encrypted backup verified by a real restore; SQLite by default, PostgreSQL + pgvector optional.
+
+## Runs locally / What leaves your machine
+
+The in-app page "Où partent mes données" (Where does my data go) builds this map from **your** configuration and shows what is active. Summary of the rules in the code:
+
+| Function | Where | What is sent | When |
+|---|---|---|---|
+| Memory (storage, embeddings, search) | 🟢 Your PC | Nothing | Always local |
+| Dictation, hands-free voice, wake word | 🟢 Your PC | Nothing (Whisper and the intent judge run locally) | Always local |
+| Read aloud | 🟢 Your PC | Nothing (browser voice or Piper) | Default |
+| Interface | 🟢 Your PC | Nothing: no external font, script or image | Always |
+| Local AI (Ollama, LM Studio, llama.cpp, vLLM) | 🟢 Your PC, or 🟡 your network, depending on the address you set | Your messages, only when you write to it | When you use it |
+| Screen description | Ollama vision model (your PC by default) | One screenshot per request | Only when you press "Écran" |
+| Cloud AI connectors (Claude Code, Codex, Antigravity, Anthropic, OpenAI, Gemini, OpenRouter, declared endpoints) | 🔴 Internet | Your messages and recent history, JARVIS instructions and the memory relevant to the message, titles, summaries, council and missions routed to it; attached images (some connectors ask for a separate consent first); for Claude Code workshops, the code of the projects you opened to workshops | Only connectors you enabled, installed and gave a key to (when one is needed). **Never**: private memories and answers built on them; secrets and personal data are masked before sending |
+| Web search (your SearXNG instance) | 🔴 Internet, through the search engines it queries | Mission search queries, never for a private subject | Only if you declared an instance |
+| Scientific sources (OpenAlex, arXiv, PubMed, Europe PMC) | 🔴 Internet | Mission search queries, never for a private subject | Research missions; `scientifique = false` turns it off |
+| Morning weather (Open-Meteo, no account) | 🔴 Internet | Home coordinates rounded to about 1 km; the city name once, to find them | Only if you chose a location |
+| ElevenLabs voice | 🔴 Internet | Text of each sentence read aloud, secrets and personal data masked; sentences on a private subject are read by a local voice | Only with your key and if you chose this voice |
+| Model downloads (Hugging Face, public files) | 🔴 Internet | Only the file request (your IP address, as for any download) | Only when you click "Télécharger" |
+| Phone through Tailscale | 🟡 Your private network | All phone–PC traffic, end-to-end encrypted; Tailscale only sees your device list | Only if you set up `tailscale serve` |
+| Core open to the local network | 🟡 Your network | Exchanges with paired devices (one token per device) | Only if `JARVIS2_OUVERTURE_RESEAU` is set |
+| MCP tools | Depends on the program (it may itself reach the Internet) | Parameters of each tool call, after your 🟡 approval | Only servers you declared and enabled |
+
+Memory privacy levels, towards an external AI:
+
+| Level | Sent to an external AI |
+|---|---|
+| Public | Everywhere: core memory, blocks, what's new, memories found relevant |
+| Semi-private | Only when found relevant to the message |
+| Private (`local_uniquement`) | Never: stays on your PC |
+
+In every case, excluded subjects are removed and secrets masked first. Per-call measurements (latency, tokens, cost) stay in your local database; there is no telemetry.
+
+## Hardware
+
+JARVIS 2 runs on Windows, macOS and Linux (PC control is Windows only). `jarvis2 materiel` shows what it detects and the models it suggests; it is read-only and installs, downloads and starts nothing.
+
+**Without a GPU, or without any local model**: everything works with a cloud connector or your Claude Code subscription. Memory (embeddings) runs on the CPU in any case, and transcription falls back to the CPU; local conversation models then run on the CPU too, slowly, capped at the 7–9 billion parameter tier.
+
+**Detection**: RAM from the system; NVIDIA through `nvidia-smi`; AMD through `rocm-smi`, otherwise the Windows registry or `/sys/class/drm` on Linux; Apple Silicon (unified memory, Metal); Intel graphics through Vulkan. Below 4 GB of VRAM (integrated graphics), the card is ignored and the CPU is used.
+
+**AMD**: cards supported by ROCm (Radeon RX 6800 and above, RX 7000, RX 9000, Radeon Pro W6800 / W7000, Instinct) use ROCm; other AMD cards use Vulkan, which is experimental in Ollama. For transcription, an AMD card is used when the installed CTranslate2 build supports ROCm; otherwise Whisper runs on the CPU. Nothing assumes an NVIDIA card.
+
+**How a model is suggested**: usable memory is the card's VRAM (with GPU acceleration and at least 4 GB), 70 % of unified memory on Apple Silicon, or otherwise half the RAM. JARVIS takes the largest tier that fits, then goes **one tier down** to keep room for long context and other programs; the maximum is shown for reference.
+
+| Use | Memory needed (4-bit quantisation, context included) → size, suggested model |
+|---|---|
+| Conversation (Ollama) | 3 GB → 1–2B `qwen3.5:2b` · 5 GB → 3–4B `qwen3.5:4b` · 8 GB → 7–9B `qwen3.5:9b` · 11 GB → 12–14B `gemma4:12b` · 21 GB → 24–32B `qwen3.5:27b` · 44 GB → 70B `llama3.3:70b` |
+| Vision (Ollama) | 3 GB → 2B `qwen3.5:2b` · 8 GB → 7B `qwen2.5vl:7b` · 22 GB → 32B `qwen2.5vl:32b` (on CPU: 2B at most) |
+| Memory embeddings (RAM, CPU) | 2 GB → multilingual MiniLM, 384 dimensions (default, about 220 MB downloaded once) · 8 GB → `BAAI/bge-m3` |
+| Transcription, Whisper (RAM) | 2 GB → tiny · 4 GB → base · 8 GB → small · 16 GB → medium · 32 GB → large-v3 |
+
+Model names are examples to check in the Ollama catalogue. Ollama is never started automatically: the install script only offers it (box unchecked by default), and JARVIS starts it only on your explicit request and stops only the Ollama it started.
+
+## How it compares
+
+JARVIS 2 takes ideas from several personal-assistant projects. **None is installed or required**: each idea kept is reimplemented, and code is reused only from projects with a permissive licence, credited in [NOTICE](NOTICE). The table lists what JARVIS 2 takes from each one; some of these ideas are already in, others are on the [plan](docs/PLAN.md). Full list and licences: [docs/INSPIRATIONS.md](docs/INSPIRATIONS.md).
+
+| Project | Licence | What JARVIS 2 takes from it |
+|---|---|---|
+| OpenJarvis | Apache-2.0 | Installer resume and a single hardware → model table; subscription gauges and reply footer; skills with trust and confinement; extended secret masking, privacy levels, recall gate (ideas, reimplemented); install presets |
+| TopMyster/jarvis | MIT | pipx entry point |
+| ASDprogrammer521/jarvis | MIT | Per-turn injection barrier, approval bound to the exact plan, undo stack; PC control and modes that really change Windows |
+| lancejames221b/jarvis | MIT | Follow-up without wake word, active / standby states; owner voice recognition, closed for 🟡🔴 when unavailable |
+| akshayaggarwal99/jarvis | MIT | Robust transcription; global dictation on Windows |
+| sosoj92/jarvis | MIT | French hallucination filter; "always allow" for 🟡, never 🔴 remotely without a key |
+| b1-loop | MIT | Barge-in; step-by-step latency measurement |
+| microsoft/JARVIS (HuggingGPT) | MIT | Brainstorm → spec → plan → execution; missions as a graph |
+| DonJyde/jarvis | MIT | Filtered generated widgets |
+| livekit-rtc | Apache-2.0 | Echo cancellation (possible dependency) |
+| Dodaios | Apache-2.0 | End of turn, early transcription (idea) |
+| isair/jarvis | Non-commercial | Two-stage wake word (idea only) |
+| NeyorDEV/jarvis | GPL | Persistent MCP, tools chosen by meaning (idea only) |
+| amanimran786/jarvis-ai | AGPL | Workshops in a real sandbox (taken the other way round: refuse when unavailable) |
+| Jarvis.sh | No clear licence | Quick commands without an LLM (idea only, without `eval`) |
+| jarvis799 | No clear licence | Actions verified by re-reading the state (idea only) |
+| hasibjaan | No clear licence | HUD separated from the audio thread (idea only) |
+
+JARVIS 2's own focus: local first, your own accounts through the providers' official programs, permissions and audit built before any access is given, and a data-flow map generated from the real configuration.
+
+## Installation details
+
+The one-line commands above fetch the script from this repository; by default it installs the latest release. With a local wheel:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1 --source <jarvis2-x.y.z-py3-none-any.whl>
 ```
 
-macOS, Linux :
-
 ```sh
 sh install.sh --source <jarvis2-x.y.z-py3-none-any.whl>
 ```
 
-Le script installe ce qui manque (uv, par winget sous Windows et Homebrew sous macOS s'ils sont là, sinon par le script officiel d'Astral, après confirmation), puis JARVIS 2 (`uv tool install`, Python 3.13 géré par uv), ajoute la commande `jarvis2` au PATH (sous Windows, le PATH de la session est relu depuis le registre : pas besoin de rouvrir le terminal), prépare la base SQLite et le modèle d'embeddings (environ 220 Mo, une seule fois), et lance `jarvis2` : l'interface s'ouvre dans le navigateur, sur `http://localhost:8765`.
+The script installs what is missing (uv, through winget on Windows and Homebrew on macOS when present, otherwise Astral's official script, after confirmation), then JARVIS 2 (`uv tool install`, Python 3.13 managed by uv), adds the `jarvis2` command to the PATH (on Windows, the session PATH is re-read from the registry: no need to reopen the terminal), prepares the SQLite database and the embeddings model (about 220 MB, once), and starts `jarvis2`: the interface opens in the browser at `http://localhost:8765`.
 
-- **Ollama et un premier modèle** sont seulement **proposés**, par une case à cocher décochée par défaut ; le modèle est choisi pour votre PC par la table matériel → modèle de JARVIS (`jarvis2 materiel`). Sans réponse possible (CI, `--oui`), rien n'est coché. Le script ne démarre jamais Ollama.
-- **Reprise** : chaque étape est notée dans `installation.etat` (dossier de configuration) ; après une coupure, relancer le script reprend là où il s'était arrêté (`--recommencer` pour tout refaire).
-- **Bilan honnête** à la fin : ce qui est fait, refusé, en échec, et ce qui reste à faire.
-- Options communes aux deux scripts : `--oui` (ne rien demander), `--avec-ollama` / `--sans-ollama`, `--essai` (à blanc : affiche ce qui serait fait, n'exécute rien), `--sans-demarrer`, `--sans-modifier-path`, `--recommencer`. Codes de sortie : 0 installé, 1 une étape a échoué (relancer reprend), 2 option invalide, 3 outil indispensable refusé.
+- **Ollama and a first model** are only **offered**, through a checkbox unchecked by default; the model is chosen for your PC by the hardware → model table (`jarvis2 materiel`). Without anyone to answer (CI, `--oui`), nothing is checked. The script never starts Ollama.
+- **Resume**: each step is recorded in `installation.etat` (configuration folder); after an interruption, running the script again resumes where it stopped (`--recommencer` to redo everything).
+- **Honest summary** at the end: what was done, refused, failed, and what remains to do.
+- Options shared by both scripts: `--oui` (ask nothing), `--avec-ollama` / `--sans-ollama`, `--essai` (dry run: shows what would be done, runs nothing), `--sans-demarrer`, `--sans-modifier-path`, `--recommencer`. Exit codes: 0 installed, 1 a step failed (running again resumes), 2 invalid option, 3 required tool refused.
 
-Avec [pipx](https://pipx.pypa.io) plutôt que les scripts (même roue, interface incluse) :
+With [pipx](https://pipx.pypa.io) instead of the scripts (same wheel, interface included):
 
 ```sh
 pipx install --python 3.13 jarvis2-x.y.z-py3-none-any.whl
-jarvis2 docteur --reparer   # base SQLite et modèle d'embeddings, une seule fois
+jarvis2 docteur --reparer   # SQLite database and embeddings model, once
 jarvis2
 ```
 
-Au premier lancement, le navigateur du PC s'associe d'un clic, puis l'**assistant d'installation** vérifie tout (avec des boutons « Réparer »), aide à choisir une IA et à associer le téléphone. Il reste accessible depuis le panneau État (« Installation »).
+On first launch, the PC's browser pairs in one click, then the **setup assistant** checks everything (with "Réparer" buttons), helps you choose an AI and pair your phone. It stays available from the Status panel ("Installation").
 
-Commandes utiles : `jarvis2` (démarrer et ouvrir l'interface), `jarvis2 docteur` (diagnostic ; `--json`, `--reparer`), `jarvis2 materiel` (matériel du PC et modèles conseillés, lecture seule), `jarvis2 jumeler` (lien d'association d'un appareil), `jarvis2 verifier-audit`, `jarvis2 lever-urgence` (secours si la clé d'accès est perdue), `jarvis2 serveur --sans-ecran` (serveur domestique sans écran : voir [docs/SERVEUR.md](docs/SERVEUR.md)).
+Useful commands: `jarvis2` (start and open the interface), `jarvis2 docteur` (diagnosis; `--json`, `--reparer`), `jarvis2 materiel` (PC hardware and suggested models, read-only), `jarvis2 jumeler` (pairing link for a device), `jarvis2 verifier-audit`, `jarvis2 lever-urgence` (recovery if the passkey is lost), `jarvis2 serveur --sans-ecran` (headless home server: see [docs/SERVEUR.md](docs/SERVEUR.md)).
 
-Facultatif, détecté mais jamais installé par JARVIS :
+Optional, detected but never installed by JARVIS:
 
-- [Claude Code](https://code.claude.com), connecté à **votre** compte (`claude /login`), pour utiliser votre abonnement Claude. Un avertissement (usage personnel) est à lire et à cocher une fois.
-- [Ollama](https://ollama.com) pour des modèles locaux (le script d'installation le propose, case décochée ; JARVIS lui-même ne l'installe ni ne le démarre jamais seul).
-- [Tailscale](https://tailscale.com/download) pour le téléphone (voir ci-dessous).
+- [Claude Code](https://code.claude.com), signed in to **your** account (`claude /login`), to use your Claude subscription. A warning (personal use) must be read and ticked once.
+- [Ollama](https://ollama.com) for local models (the install script offers it, unchecked; JARVIS itself never installs or starts it on its own).
+- [Tailscale](https://tailscale.com/download) for the phone (see below).
 
-## Application de bureau
+## Desktop app
 
-Les installeurs (Windows `.exe`/`.msi`, macOS `.dmg`, Linux `.deb`/`.AppImage`) sont joints à chaque version publiée. L'application ouvre l'interface dans sa propre fenêtre, lance le Core s'il ne tourne pas, se range dans la zone de notification (Ctrl+Maj+J, ou Ctrl+Alt+J si le premier est déjà pris, la ramène). Elle s'appuie sur le Core installé par le script ci-dessus.
+The installers (Windows `.exe`/`.msi`, macOS `.dmg`, Linux `.deb`/`.AppImage`) are attached to each published release. The app opens the interface in its own window, starts the Core if it is not running, and sits in the notification area (Ctrl+Shift+J, or Ctrl+Alt+J if the first is taken, brings it back). It relies on the Core installed by the script above.
 
-Les installeurs ne sont pas encore signés :
+The installers are not signed yet:
 
-- **Windows** : SmartScreen affiche « Windows a protégé votre ordinateur ». Cliquez sur « Informations complémentaires » puis « Exécuter quand même ».
-- **macOS** : Gatekeeper refuse d'ouvrir l'application. Après l'avoir copiée dans Applications, lancez une fois `xattr -dr com.apple.quarantine "/Applications/JARVIS 2.app"`.
+- **Windows**: SmartScreen shows "Windows protected your PC". Click "More info", then "Run anyway".
+- **macOS**: Gatekeeper refuses to open the app. After copying it to Applications, run once `xattr -dr com.apple.quarantine "/Applications/JARVIS 2.app"`.
 
-Ne téléchargez les installeurs que depuis la page des versions de ce dépôt.
+Only download the installers from this repository's releases page.
 
-## Sauvegarde
+## Backup
 
 ```powershell
-jarvis2 sauvegarde creer --dossier D:\Sauvegardes\JARVIS      # chiffrée par votre phrase de passe ; gardez-la hors du PC
-jarvis2 sauvegarde verifier --fichier D:\Sauvegardes\JARVIS\jarvis2-AAAAMMJJ-HHMMSS.jarvis2
+jarvis2 sauvegarde creer --dossier D:\Backups\JARVIS      # encrypted with your passphrase; keep it off the PC
+jarvis2 sauvegarde verifier --fichier D:\Backups\JARVIS\jarvis2-YYYYMMDD-HHMMSS.jarvis2
 ```
 
-La vérification restaure la sauvegarde dans une base temporaire et contrôle les lignes et la chaîne d'audit. Sans la phrase de passe, la sauvegarde est illisible : notez-la ailleurs que sur ce PC.
+Verification restores the backup into a temporary database and checks the rows and the audit chain. Without the passphrase, the backup is unreadable: write it down somewhere other than this PC.
 
-## Téléphone
+## Phone
 
-JARVIS n'écoute que sur le PC. Pour le joindre depuis le téléphone, même hors de chez vous :
+JARVIS only listens on the PC. To reach it from your phone, even away from home:
 
-1. Installez Tailscale sur le PC et sur le téléphone, avec le même compte.
-2. Sur le PC, une seule fois : `tailscale serve --bg 8765`. JARVIS est alors joignable à `https://<nom-du-pc>.<réseau>.ts.net`, sur votre réseau privé seulement.
-3. Dans l'assistant (étape Téléphone) ou l'onglet Sécurité : « Associer un téléphone », puis scannez le QR. Sur le téléphone, « Ajouter à l'écran d'accueil » installe JARVIS comme une application.
+1. Install Tailscale on the PC and the phone, with the same account.
+2. On the PC, once: `tailscale serve --bg 8765`. JARVIS is then reachable at `https://<pc-name>.<network>.ts.net`, on your private network only.
+3. In the setup assistant (Phone step) or the Security tab: "Associer un téléphone" (pair a phone), then scan the QR code. On the phone, "Add to Home Screen" installs JARVIS as an app.
 
-## Stockage
+## Storage
 
-Par défaut, un fichier SQLite dans le dossier des données (`%LOCALAPPDATA%\JARVIS2` ou `~/.local/share/jarvis2`, déplaçable par `JARVIS2_DOSSIER_DONNEES`). PostgreSQL + pgvector reste possible (`JARVIS2_STOCKAGE=postgres`, voir `docker-compose.yml`). Passer de l'un à l'autre : `jarvis2 stockage copier --vers sqlite` (ou `--vers postgres`), vers un stockage vide ; la copie est vérifiée (nombres de lignes, chaîne d'audit).
+By default, an SQLite file in the data folder (`%LOCALAPPDATA%\JARVIS2` or `~/.local/share/jarvis2`, movable with `JARVIS2_DOSSIER_DONNEES`). PostgreSQL + pgvector remains possible (`JARVIS2_STOCKAGE=postgres`, see `docker-compose.yml`). To switch: `jarvis2 stockage copier --vers sqlite` (or `--vers postgres`), into an empty store; the copy is verified (row counts, audit chain).
 
-Configuration personnelle (sujets exclus, exclusions d'import, connecteurs, tarifs) : copier `config.exemple.toml` vers `%APPDATA%\JARVIS2\config.toml` (Windows) ou `~/.config/jarvis2/config.toml`. Réglages du Core (port, stockage…) : `.env.example`.
+Personal configuration (excluded subjects, import exclusions, connectors, prices): copy `config.exemple.toml` to `%APPDATA%\JARVIS2\config.toml` (Windows) or `~/.config/jarvis2/config.toml`. Core settings (port, storage…): `.env.example`.
 
-## Développement
+## Importing data
 
-Prérequis : [uv](https://docs.astral.sh/uv/), Node 22+ (interface). Docker seulement pour PostgreSQL.
+From JARVIS v1 (`pg_dump -Fc` backup, PostgreSQL storage): see [docs/DECISIONS.md](docs/DECISIONS.md#imports--sources-génériques-lecture-seule-exclusions-locales), then `jarvis2 stockage copier --vers sqlite` if you want to move to SQLite.
+
+## AI accounts and provider terms
+
+JARVIS is not affiliated with any AI provider. With an account (rather than an API key), it calls the provider's **official program**, installed and signed in by you, without modifying it, and never reads your credentials. Your use remains subject to each provider's terms:
+
+- **Claude Code** (Claude subscription): personal subscription, for your own use, no commercial use or use for other people. The warning must be ticked once.
+- **OpenAI Codex** (ChatGPT account): according to OpenAI's terms.
+- **Google Antigravity**: its terms forbid access through third-party software and accounts have been suspended for this use. This connector is off by default, carries a permanent "risk" badge, is never chosen automatically, and the Gemini API key is recommended instead.
+
+When in doubt, an API key (billed per use) or a local model is always possible.
+
+## Development
+
+Requirements: [uv](https://docs.astral.sh/uv/), Node 22+ (interface). Docker only for PostgreSQL.
 
 ```powershell
-cd core; uv sync; uv run python -m jarvis2 serveur   # Core (SQLite par défaut) : http://127.0.0.1:8765
-cd interface; npm install; npm run dev                # interface de développement : http://127.0.0.1:5174
+cd core; uv sync; uv run python -m jarvis2 serveur   # Core (SQLite by default): http://127.0.0.1:8765
+cd interface; npm install; npm run dev                # development interface: http://127.0.0.1:5174
 ```
 
-Avec PostgreSQL : `uv run --python 3.13 infra/creer_env.py` (`.env` avec mots de passe générés), `docker compose up -d`, `cd core; uv run python -m jarvis2 migrer`.
+With PostgreSQL: `uv run --python 3.13 infra/creer_env.py` (`.env` with generated passwords), `docker compose up -d`, `cd core; uv run python -m jarvis2 migrer`.
 
-Pour servir l'interface compilée par le Core : `npm run build` dans `interface`, puis ouvrir **http://localhost:8765** (le nom `localhost`, pas l'adresse IP : les clés d'accès l'exigent). Construire le paquet installable : `npm run build` puis `cd core; uv build --wheel` (l'interface est incluse dans la roue ; sans interface compilée, la roue est construite sans elle, avec un avertissement, et le Core affiche une page d'explication). Installer directement le dépôt : `pipx install --python 3.13 ./core` après `npm run build`.
+To serve the built interface from the Core: `npm run build` in `interface`, then open **http://localhost:8765** (the name `localhost`, not the IP address: passkeys require it). To build the installable package: `npm run build`, then `cd core; uv build --wheel` (the interface is included in the wheel; without a built interface, the wheel is built without it, with a warning, and the Core shows an explanation page). To install straight from the repository: `pipx install --python 3.13 ./core` after `npm run build`.
 
-## Importer des données
-
-Depuis JARVIS v1 (sauvegarde `pg_dump -Fc`, stockage PostgreSQL) : voir [docs/DECISIONS.md](docs/DECISIONS.md#imports--sources-génériques-lecture-seule-exclusions-locales), puis `jarvis2 stockage copier --vers sqlite` si vous voulez passer à SQLite.
-
-## Comptes d'IA et conditions des fournisseurs
-
-JARVIS n'est affilié à aucun fournisseur d'IA. Avec un compte (plutôt qu'une clé d'API), il appelle le **programme officiel** du fournisseur, installé et connecté par vous, sans le modifier, et ne lit jamais vos identifiants. Votre usage reste soumis aux conditions de chaque fournisseur :
-
-- **Claude Code** (abonnement Claude) : abonnement personnel, pour votre propre usage, pas d'usage commercial ni pour d'autres personnes. L'avertissement est à cocher une fois.
-- **OpenAI Codex** (compte ChatGPT) : selon les conditions d'OpenAI.
-- **Google Antigravity** : ses conditions interdisent l'accès par un logiciel tiers et des comptes ont été suspendus pour cet usage. Ce connecteur est désactivé par défaut, porte un badge « risque » permanent, n'est jamais choisi automatiquement, et la clé d'API Gemini est recommandée à la place.
-
-En cas de doute, une clé d'API (facturée à l'usage) ou un modèle local est toujours possible.
-
-## Licence
-
-[Apache 2.0](LICENSE).
-
-## Vérifier
+Checks:
 
 ```powershell
-cd core; uv run pytest; uv run ruff check .; uv run mypy   # tests sur SQLite, et sur PostgreSQL si Docker tourne
+cd core; uv run pytest; uv run ruff check .; uv run mypy   # tests on SQLite, and on PostgreSQL if Docker is running
 cd interface; npm run verifier
 ```
+
+Code comments, documentation and commit messages are in French. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) · [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## Documentation
+
+- [Installation](docs/INSTALLATION.md) · [Troubleshooting](docs/DEPANNAGE.md) · [FAQ](docs/FAQ.md)
+- [Architecture](docs/ARCHITECTURE.md) · [Security and permissions](docs/SECURITE.md) · [Writing a skill, command or recipe](docs/EXTENSIONS.md) · [Home server](docs/SERVEUR.md)
+- [Roadmap](docs/FEUILLE_DE_ROUTE.md) · [Plan](docs/PLAN.md) · [Decisions](docs/DECISIONS.md) · [Inspirations](docs/INSPIRATIONS.md) · [Interface design](interface/DESIGN.md)
+- [Changelog](CHANGELOG.md) · [Reporting a vulnerability](SECURITY.md)
+
+## License
+
+[Apache 2.0](LICENSE). Third-party notices: [NOTICE](NOTICE).
