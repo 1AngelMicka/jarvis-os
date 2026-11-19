@@ -1357,6 +1357,7 @@ function Hud() {
                 surAction={(r) => {
                   suiteAction(r, "Outil appelé.");
                 }}
+                surOuvrirDemandes={montrerDemandes}
               />
             </div>
           </Panneau>

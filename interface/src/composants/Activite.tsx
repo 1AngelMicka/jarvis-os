@@ -19,7 +19,7 @@ const STATUT_MISSION: Record<string, { texte: string; ton?: "ok" | "attention" |
   echec: { texte: "Échec", ton: "risque" },
   annulee: { texte: "Annulée" },
 };
-const TYPE_MISSION: Record<string, string> = { recherche: "Recherche", brainstorm: "Brainstorm", revue: "Revue" };
+const TYPE_MISSION: Record<string, string> = { recherche: "Recherche", brainstorm: "Brainstorm", revue: "Revue", projet: "Projet" };
 const STATUT_ATELIER: Record<string, string> = { pret: "Prêt", en_cours: "Au travail", arrete: "En pause", erreur: "Erreur" };
 const DATE = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 

@@ -214,6 +214,7 @@ class Contexte:
         self.missions = ServiceMissions(
             self.pool, self.service, self.recherche, self.urgence, self.scientifique, self.connaissances
         )
+        self.missions.approbations = self.approbations  # chaque étape d'un projet est approuvée
         taches = (
             taches_memoire(self.pool, self.service, self.dossier_donnees / "memoire-md", self.connaissances)
             if self.dossier_donnees is not None and self.memoire is not None

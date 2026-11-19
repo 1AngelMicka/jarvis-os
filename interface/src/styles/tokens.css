@@ -166,6 +166,8 @@
   --vignette: 64px;          /* miniature d'une image jointe (saisie) */
   --vignette-fil: 112px;     /* miniature d'une image jointe (fil du dialogue) */
   --largeur-palette: 640px;  /* palette de commandes, aide */
+  --colonne-graphe: 220px;   /* colonne (niveau) du graphe d'une mission projet */
+  --saisie-plan: 160px;      /* hauteur minimale des zones spec et plan d'une mission projet */
   --sa-haut: env(safe-area-inset-top, 0px);
   --sa-bas: env(safe-area-inset-bottom, 0px);
   --sa-gauche: env(safe-area-inset-left, 0px);

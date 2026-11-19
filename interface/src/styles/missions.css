@@ -1,0 +1,109 @@
+/* ---------- Missions « projet » (lot 14 · B 10) : spec et plan à valider, graphe d'étapes en colonnes ---------- */
+
+/* Une mission projet occupe toute la largeur de la liste (le graphe a besoin de place) */
+.carte-co.carte-co--projet { grid-column: 1 / -1; min-width: 0; }
+
+.graphe-validation { container-type: inline-size; }
+.graphe-validation, .graphe-execution { display: flex; flex-direction: column; gap: var(--e-4); min-width: 0; }
+.graphe-attente { font-style: italic; }
+
+/* Zones de saisie : côte à côte sur un panneau large, empilées sinon */
+.graphe-champs { display: grid; gap: var(--e-4); grid-template-columns: minmax(0, 1fr); }
+.graphe-champ { display: flex; flex-direction: column; gap: var(--e-2); min-width: 0; }
+.graphe-etiquette { font: 600 var(--t-mini)/1.3 var(--f-ui); color: var(--texte-2); text-transform: var(--casse); letter-spacing: .04em; }
+.graphe-saisie {
+  width: 100%; min-height: var(--saisie-plan); padding: var(--e-3) var(--e-4); resize: vertical;
+  font-size: var(--t-corps); line-height: 1.45;
+}
+.graphe-saisie--mono { font: var(--t-petit)/1.5 var(--f-mono); }
+.graphe-champ code { font: var(--t-micro)/1.4 var(--f-mono); color: var(--texte); }
+@container (min-width: 760px) { .graphe-champs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (pointer: coarse) { .graphe-saisie { font-size: var(--t-base); } }
+
+.graphe-erreurs {
+  margin: 0; padding: var(--e-3) var(--e-4) var(--e-3) var(--e-7); border-radius: var(--r-2);
+  border: var(--l-fin) solid rgb(var(--c-rouge) / .5); background: rgb(var(--c-rouge) / .08);
+  font-size: var(--t-mini); line-height: 1.45; color: var(--rouge-clair);
+}
+.graphe-repli {
+  margin: 0; padding: var(--e-3) var(--e-4); border-radius: var(--r-2);
+  border: var(--l-fin) solid rgb(var(--c-ambre) / .5); background: rgb(var(--c-ambre) / .08);
+  font-size: var(--t-mini); line-height: 1.45; color: var(--ambre-texte);
+}
+.graphe-sous-titre { margin: 0; font: 600 var(--t-mini)/1.3 var(--f-ui); color: var(--texte-2); text-transform: var(--casse); letter-spacing: .04em; }
+
+/* Blocs repliables : brainstorm, spec et plan */
+.graphe-replie { display: flex; flex-direction: column; gap: var(--e-3); min-width: 0; }
+.graphe-replie > summary {
+  display: inline-flex; align-items: center; gap: var(--e-2); min-height: var(--cible); width: fit-content;
+  cursor: pointer; list-style: none; border-radius: var(--r-1);
+  font: 600 var(--t-mini)/1.3 var(--f-ui); color: var(--texte-2); text-transform: var(--casse); letter-spacing: .04em;
+}
+.graphe-replie > summary::-webkit-details-marker { display: none; }
+.graphe-replie > summary::before {
+  content: ""; width: 0; height: 0;
+  border-left: calc(var(--e-1) * 2) solid currentcolor; border-block: calc(var(--e-1) * 2) solid transparent;
+  transition: transform var(--transition);
+}
+.graphe-replie[open] > summary::before { transform: rotate(90deg); }
+.graphe-replie > summary:hover { color: var(--cyan-vif); }
+.graphe-replie > summary:focus-visible { outline: var(--l-moyen) solid var(--cyan); outline-offset: 2px; }
+.graphe-plan-brut {
+  margin: 0; padding: var(--e-4); overflow-x: auto; border-radius: var(--r-2);
+  border: var(--l-fin) solid var(--ligne-faible); background: rgb(var(--c-creux) / .5);
+  font: var(--t-petit)/1.5 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+/* Avancement : « N / M cases cochées » */
+.graphe-avancement { display: flex; flex-direction: column; gap: var(--e-2); }
+.graphe-avancement-texte { margin: 0; font: var(--t-mini)/1.3 var(--f-donnees); color: var(--texte-2); font-variant-numeric: tabular-nums; }
+
+/* Graphe : colonnes empilées sur un panneau étroit, une colonne par niveau sur un panneau large */
+.graphe { container-type: inline-size; min-width: 0; }
+.graphe-colonnes { display: flex; flex-direction: column; gap: var(--e-4); }
+@container (min-width: 560px) {
+  .graphe-colonnes {
+    display: grid; grid-template-columns: repeat(var(--niveaux, 1), minmax(var(--colonne-graphe), 1fr));
+    align-items: start; overflow-x: auto; padding-bottom: var(--e-2);
+  }
+}
+.graphe-colonne { display: flex; flex-direction: column; gap: var(--e-3); min-width: 0; }
+.graphe-colonne-titre {
+  margin: 0; padding-bottom: var(--e-2); border-bottom: var(--l-fin) solid var(--ligne-faible);
+  font: 600 var(--t-micro)/1.3 var(--f-ui); color: var(--texte-3); text-transform: var(--casse); letter-spacing: .06em;
+}
+.graphe-etapes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-3); }
+
+.etape-graphe {
+  display: flex; flex-direction: column; gap: var(--e-2); min-width: 0; padding: var(--e-3) var(--e-4);
+  border: var(--l-fin) solid var(--ligne-faible); border-left: var(--l-fort) solid var(--ligne);
+  border-radius: var(--r-2); background: rgb(var(--c-creux) / .4); overflow-wrap: anywhere;
+}
+.etape-graphe[data-statut="faite"] { border-left-color: var(--vert); }
+.etape-graphe[data-statut="en_cours"], .etape-graphe[data-statut="attente_approbation"] { border-left-color: var(--ambre); }
+.etape-graphe[data-statut="echec"], .etape-graphe[data-statut="refusee"] { border-left-color: var(--rouge); }
+.etape-graphe[data-statut="sautee"] { opacity: .7; border-style: dashed; }
+.etape-graphe-tete { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2); }
+.etape-graphe-id { font: 600 var(--t-mini)/1.2 var(--f-mono); color: var(--cyan-vif); }
+.etape-graphe-titre { flex: 1 1 auto; min-width: 0; margin: 0; font: 600 var(--t-petit)/1.35 var(--f-ui); color: var(--texte-fort); }
+.etape-graphe-ligne, .etape-graphe-detail { margin: 0; font: var(--t-mini)/1.4 var(--f-donnees); color: var(--texte-2); }
+.etape-graphe-detail { white-space: pre-line; }
+.etape-graphe-raison { color: var(--texte-3); }
+.etape-graphe-attente { margin: 0; font-size: var(--t-mini); line-height: 1.4; color: var(--ambre-texte); }
+.etape-graphe-extrait {
+  margin: 0; padding: var(--e-2) var(--e-3); border-left: var(--l-moyen) solid var(--ligne);
+  font-size: var(--t-mini); line-height: 1.45; color: var(--texte-2); white-space: pre-line;
+}
+.etape-graphe-erreur { margin: 0; font-size: var(--t-mini); line-height: 1.4; color: var(--rouge-clair); }
+
+/* Lien vers la file d'approbations (un bouton qui se lit comme un lien) */
+.graphe-lien {
+  padding: 0; border: 0; background: none; cursor: pointer; font: inherit; color: var(--cyan-vif);
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.graphe-lien:hover { color: var(--texte-fort); }
+.graphe-lien:focus-visible { outline: var(--l-moyen) solid var(--cyan); outline-offset: 2px; border-radius: var(--r-1); }
+
+/* Réglage « Étapes en parallèle » */
+.mission-reglage { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-3); font-size: var(--t-mini); color: var(--texte-2); }
+.mission-reglage .select { min-height: var(--cible); }
