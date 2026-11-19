@@ -148,6 +148,8 @@ export interface Etat {
   urgence: EtatUrgence;
   demandes: Demande[];
   cles_acces: number;
+  /** Serveur sans écran : capture, clics et contrôle de l'écran refusés par le Core. */
+  sans_ecran?: boolean;
 }
 
 export interface MetaMessage {

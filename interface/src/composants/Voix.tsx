@@ -7,14 +7,16 @@ interface Props {
   lecteur: LecteurVocal;
   enCours: boolean;
   bloquee: boolean;
+  /** Serveur sans écran : le Core refuse les captures, le bouton le dit au lieu de disparaître. */
+  sansEcran: boolean;
   surEnvoyer: (texte: string) => void;
   surDescription: (texte: string) => void;
   surNotifier: (message: string) => void;
 }
 
 /** Commandes de voix et de vision de la console : dictée, mains libres (« Jarvis, … »), lecture à voix haute,
- *  description de l'écran sur demande. Tout est transcrit et décrit sur le PC. */
-export function CommandesVoix({ lecteur, enCours, bloquee, surEnvoyer, surDescription, surNotifier }: Props) {
+ *  description de l'écran sur demande (indisponible en mode sans écran). Tout est transcrit et décrit sur le PC. */
+export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer, surDescription, surNotifier }: Props) {
   const [dictee, setDictee] = useState(false);
   const [mainsLibres, setMainsLibres] = useState(false);
   const [parole, setParole] = useState(lecteur.actif);
@@ -178,7 +180,17 @@ export function CommandesVoix({ lecteur, enCours, bloquee, surEnvoyer, surDescri
           Voix
         </button>
       )}
-      {partage && (
+      {sansEcran ? (
+        <button
+          type="button"
+          className="segment-btn"
+          disabled
+          aria-label="Écran : indisponible en mode sans écran"
+          title="Indisponible en mode sans écran : ce Core tourne sur un serveur sans écran"
+        >
+          Sans écran
+        </button>
+      ) : partage && (
         <button
           type="button"
           className="segment-btn"

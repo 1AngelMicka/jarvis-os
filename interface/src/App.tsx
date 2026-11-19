@@ -732,6 +732,13 @@ function Hud() {
                 <span className="etat-valeur">{etat.memoire.total.toLocaleString("fr-FR")} souvenirs</span>
               </li>
             )}
+            {etat?.sans_ecran && (
+              <li className="etat-item" title="Capture, clics et contrôle de l'écran : indisponibles en mode sans écran. La voix passe par le micro de ce navigateur.">
+                <span className="point-etat" aria-hidden="true" />
+                <span className="etat-nom">Écran</span>
+                <span className="etat-valeur">mode sans écran</span>
+              </li>
+            )}
             {moteurs.map((m) => (
               <li className="etat-item" key={m.id} title={m.detail}>
                 <span className="point-etat" data-ok={m.disponible} aria-hidden="true" />
@@ -999,6 +1006,7 @@ function Hud() {
                       lecteur={lecteur}
                       enCours={enCours}
                       bloquee={urgence}
+                      sansEcran={etat?.sans_ecran === true}
                       surEnvoyer={envoyer}
                       surNotifier={notifier}
                       surDescription={(texte) => {
