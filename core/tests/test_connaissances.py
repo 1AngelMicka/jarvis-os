@@ -299,6 +299,7 @@ async def test_sans_ia_l_extraction_est_reportee_puis_reprise(pool: Base, tmp_pa
     missions, savoir, _ = await preparer(pool, tmp_path, {"cle": moteur})
     ident = await connaissances.creer(pool, "Potager", mots_cles=["tomate"])
     m = await missions.lancer("recherche", "Tomates anciennes", "appareil:test", attendre=True)
+    await savoir.patienter()  # l'extraction lancée par la mission doit être finie avant de la remettre en attente
     await pool.execute("UPDATE extractions_domaines SET statut = 'en_attente'")
     moteur.dispo = False  # plus aucune IA
     assert (await savoir.extraire(ident))["statut"] == "reporte"
