@@ -1,7 +1,8 @@
-"""Connecteurs maison facultatifs : Philips Hue (API locale du pont) et OBS Studio (WebSocket v5).
+"""Connecteurs maison facultatifs : Philips Hue (API locale du pont), OBS Studio (WebSocket v5), Home Assistant.
 
 Désactivés par défaut. Une fois activés par l'utilisateur, leurs commandes sont des actions du registre
-(🟢 état, 🟡 lumières / scènes / enregistrement, 🔴 démarrer un direct), soumises à la file d'approbations, au
+(🟢 état, 🟡 lumières / scènes / enregistrement / prises / média, 🔴 démarrer un direct, serrures, alarme, portail ;
+pour Home Assistant, le 🔴 exige en plus la voix du propriétaire), soumises à la file d'approbations, au
 journal d'audit et à l'arrêt d'urgence. Un connecteur désactivé n'expose aucune action.
 """
 
@@ -19,6 +20,7 @@ from ..securite import audit
 from ..securite.appareils import Appareil
 from ..securite.coffre import Coffre
 from ..securite.permissions import ErreurAction
+from .home_assistant import ErreurHomeAssistant, ServiceHomeAssistant
 from .hue import ErreurHue, PontHue, adresse_locale, decouvrir_en_ligne, decouvrir_mdns
 from .obs import PORT_DEFAUT, ClientOBS, ErreurOBS
 
@@ -43,15 +45,24 @@ class GestionnaireMaison:
     transport_hue: httpx.AsyncBaseTransport | None = None  # tests : faux pont
     decouvreur_local: Decouvreur = decouvrir_mdns
     transport_en_ligne: httpx.AsyncBaseTransport | None = None
+    transport_ha: httpx.AsyncBaseTransport | None = None  # tests : faux Home Assistant
+    proprietaire: Any = None  # ServiceProprietaire, branché par le Contexte (garde des actions 🔴 de Home Assistant)
+    ha: ServiceHomeAssistant = field(init=False)
     _reglages: dict[str, Ligne] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.ha = ServiceHomeAssistant(self.pool, self.coffre, self.transport_ha)
 
     async def charger(self, conn: Executant | None = None) -> None:
         lignes = await (conn or self.pool).fetch("SELECT id, actif, adresse FROM connecteurs_maison")
         self._reglages = {r["id"]: r for r in lignes}
+        await self.ha.charger()
 
     # --- État --------------------------------------------------------------------------------------------
 
     def actif(self, ident: str) -> bool:
+        if ident == "home_assistant":
+            return self.ha.actif
         r = self._reglages.get(ident)
         return bool(r and r["actif"])
 
@@ -77,6 +88,31 @@ class GestionnaireMaison:
             }
             for i in NOMS
         ]
+
+    def decrire_ha(self) -> dict[str, Any]:
+        return {**self.ha.decrire(), "outils": [o for o in OUTILS if o["connecteur"] == "home_assistant"]}
+
+    async def garder_rouge(self, etape: str) -> None:
+        """Action 🔴 de Home Assistant (serrure, alarme, portail) : en plus de la clé d'accès, la voix du propriétaire.
+        Reconnaissance désactivée ou indisponible : refus. À la demande, une phrase du propriétaire reconnue dans les
+        2 dernières minutes est exigée (la demande se dit à voix haute) ; à l'exécution, la reconnaissance doit
+        toujours être disponible."""
+        p = self.proprietaire
+        etat = await p.etat() if p is not None else None
+        raison: str | None = None
+        if etat is None or not etat["actif"] or not etat["disponible"]:
+            raison = (
+                "la reconnaissance du propriétaire est indisponible (activez-la et enregistrez votre voix dans"
+                " Voix & écoute)"
+            )
+        elif etape == "demande" and p.derniere_reconnue() is None:
+            raison = "dites la demande à voix haute : la voix du propriétaire doit être reconnue (2 dernières minutes)"
+        if raison is None:
+            return
+        await audit.journaliser(
+            self.pool, acteur="maison", action="maison.rouge_refusee", niveau="rouge", details={"etape": etape}
+        )
+        raise ErreurAction(f"Action 🔴 refusée : {raison}")
 
     def outils_actifs(self) -> list[dict[str, Any]]:
         """Outils proposables au dialogue : seulement ceux des connecteurs activés (et configurés)."""
@@ -189,7 +225,7 @@ class GestionnaireMaison:
         self._verifier(ident)
         try:
             etat = await (self.pont().etat() if ident == "hue" else self.obs().etat())
-        except (ErreurHue, ErreurOBS) as exc:
+        except (ErreurHue, ErreurOBS, ErreurHomeAssistant) as exc:
             return {"disponible": False, "detail": str(exc)}
         except ErreurAction as exc:
             return {"disponible": False, "detail": str(exc)}
@@ -279,5 +315,59 @@ OUTILS: list[dict[str, Any]] = [
         "niveau": "rouge",
         "description": "Démarrer un direct OBS (publication : confirmation par clé d'accès)",
         "parametres": {},
+    },
+    # --- Home Assistant : niveau décidé par le domaine (voir home_assistant.DOMAINES) ---------------------------
+    {
+        "nom": "ha.etat",
+        "connecteur": "home_assistant",
+        "niveau": "vert",
+        "description": "Lire l'état de la maison (Home Assistant)",
+        "parametres": {},
+    },
+    {
+        "nom": "ha.lumiere",
+        "connecteur": "home_assistant",
+        "niveau": "jaune",
+        "description": "Allumer, éteindre ou régler une lumière (Home Assistant)",
+        "parametres": {"entite": "light.…", "allumer": "true | false", "luminosite": "1 à 100 (facultatif)"},
+    },
+    {
+        "nom": "ha.prise",
+        "connecteur": "home_assistant",
+        "niveau": "jaune",
+        "description": "Allumer ou éteindre une prise (Home Assistant)",
+        "parametres": {"entite": "switch.…", "allumer": "true | false"},
+    },
+    {
+        "nom": "ha.media",
+        "connecteur": "home_assistant",
+        "niveau": "jaune",
+        "description": "Lecture, pause, piste suivante ou volume d'un lecteur (Home Assistant)",
+        "parametres": {
+            "entite": "media_player.…",
+            "commande": "lecture | pause | suivant | volume",
+            "volume": "0 à 100",
+        },
+    },
+    {
+        "nom": "ha.serrure",
+        "connecteur": "home_assistant",
+        "niveau": "rouge",
+        "description": "Verrouiller ou ouvrir une serrure (clé d'accès + voix du propriétaire)",
+        "parametres": {"entite": "lock.…", "operation": "verrouiller | ouvrir"},
+    },
+    {
+        "nom": "ha.alarme",
+        "connecteur": "home_assistant",
+        "niveau": "rouge",
+        "description": "Armer ou désarmer l'alarme (clé d'accès + voix du propriétaire)",
+        "parametres": {"entite": "alarm_control_panel.…", "mode": "absent | present | nuit | desarmer"},
+    },
+    {
+        "nom": "ha.portail",
+        "connecteur": "home_assistant",
+        "niveau": "rouge",
+        "description": "Ouvrir ou fermer un portail ou une porte de garage (clé d'accès + voix du propriétaire)",
+        "parametres": {"entite": "cover.…", "operation": "ouvrir | fermer"},
     },
 ]

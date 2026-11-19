@@ -70,6 +70,7 @@ Le détail de chaque point est dans [PLAN.md](PLAN.md) : phase 13 (lots), phase 
 | Orbe de particules (shader, grille spatiale, 5 états, réagit à la voix) ; HUD séparé du fil audio | — , hasibjaan (idée) | Lot P |
 | Widgets générés filtrés (DOMPurify, liste fermée) | DonJyde | Phase 14 · D |
 | Hue, OBS, Home Assistant (Wyoming, MCP de HA, satellites), mode sans écran | — | Phase 14 · D |
+| Home Assistant piloté par son serveur MCP, satellites Wyoming (éveil sur l'appareil, minuteurs, plafond de volume), profils par voix | Home Assistant, protocole Wyoming (idées, protocoles publics réimplémentés ; ni la bibliothèque `wyoming` ni wyoming-satellite) | Phase 14 · D 18 |
 | Préréglages à l'installation (chat, code, recherche, matin) | OpenJarvis | Lot L |
 
 ## À éviter

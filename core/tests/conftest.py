@@ -53,7 +53,7 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
             " fichiers_atelier, evenements_atelier, ateliers, memoire_vecteurs, domaines, fiches_concepts,"
             " questions_controle, extractions_domaines, journal_domaines, regles_protection, commandes_rapides,"
             " autorisations_permanentes, connecteurs_maison, abonnements_push, partages, liens_fichiers,"
-            " tentatives_jumelage, ameliorations"
+            " tentatives_jumelage, ameliorations, satellites_maison, profils_voix"
             " RESTART IDENTITY CASCADE"
         )
         # Le journal d'audit est en ajout seul, même pour les tests : on ne le vide jamais (assertions relatives).
@@ -92,6 +92,14 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
         await conn.execute(  # lot 14 · B 11 : routes par défaut, aucune rétrogradation
             """UPDATE etat_systeme SET valeur = '{"routes": {}, "classifieur": null, "retablies": {},"""
             """ "actives": {}, "historique": []}' WHERE cle = 'routage'"""
+        )
+        await conn.execute(  # lot 14-D18 : Home Assistant et serveur Wyoming désactivés
+            """UPDATE etat_systeme SET valeur = '{"actif": false, "adresse": null, "mode": "mcp"}'"""
+            " WHERE cle = 'home_assistant'"
+        )
+        await conn.execute(
+            """UPDATE etat_systeme SET valeur = '{"actif": false, "hote": "127.0.0.1", "port": 10300, "clients": []}'"""
+            " WHERE cle = 'wyoming'"
         )
     finally:
         await conn.close()

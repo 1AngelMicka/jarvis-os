@@ -162,6 +162,9 @@ async def test_flux_depuis_la_configuration_reelle(systeme: dict[str, Any]) -> N
     assert flux["telechargements"]["etat"] == "sur_accord"
     assert flux["telephone"]["etat"] == "inactif"
     assert flux["interface"]["local"] is True
+    # Maison (lot 14-D18) : serveur Wyoming désactivé par défaut, sur ce PC
+    assert flux["wyoming"]["etat"] == "inactif" and flux["wyoming"]["destination"] == "pc"
+    assert flux["wyoming"]["desactiver"]["reglage"] == "connecteurs"
     # Aucun secret, aucune adresse, aucun lieu, aucun chemin
     texte = json.dumps(corps, ensure_ascii=False)
     for interdit in (

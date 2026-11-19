@@ -13,8 +13,13 @@ import type {
   Appareil,
   CarteFlux,
   Connecteur,
+  CarteHomeAssistant,
   ConnecteurMaison,
+  EtatWyoming,
   OutilMaison,
+  PieceMaison,
+  ProfilVoix,
+  Satellite,
   Demande,
   DemandeDetaillee,
   EtatPush,
@@ -217,7 +222,35 @@ export const lireControlePC = () => unSeul("pc-etat", () => appeler<EtatControle
 
 // --- Connecteurs maison facultatifs : réglages ici, commandes par /v1/actions (file d'approbations) ---
 export const listerMaison = () =>
-  appeler<{ connecteurs: ConnecteurMaison[]; outils_actifs: OutilMaison[] }>("/v1/maison");
+  appeler<{ connecteurs: ConnecteurMaison[]; home_assistant: CarteHomeAssistant; outils_actifs: OutilMaison[] }>("/v1/maison");
+
+// Home Assistant : réglages (jetons et code d'alarme vont au coffre, jamais renvoyés), OAuth + PKCE
+export const lireHomeAssistant = () => appeler<CarteHomeAssistant>("/v1/maison/home-assistant");
+export const configurerHomeAssistant = (r: { adresse?: string; mode?: "mcp" | "rest"; jeton?: string; code_alarme?: string }) =>
+  appeler<CarteHomeAssistant>("/v1/maison/home-assistant", { methode: "PUT", corps: r });
+export const activerHomeAssistant = (actif: boolean) => envoyer<{ ok: boolean }>("/v1/maison/home-assistant/activer", { actif });
+export const testerHomeAssistant = () => envoyer<{ disponible: boolean; detail: string }>("/v1/maison/home-assistant/tester");
+export const oublierHomeAssistant = () => appeler<{ ok: boolean }>("/v1/maison/home-assistant", { methode: "DELETE" });
+export const connecterHomeAssistant = () => envoyer<{ url: string }>("/v1/maison/home-assistant/oauth");
+// Wyoming, satellites, pièces, profils
+export const lireWyoming = () => appeler<EtatWyoming>("/v1/maison/wyoming");
+export const reglerWyoming = (r: { actif?: boolean; hote?: string; port?: number; clients?: string[] }) =>
+  appeler<EtatWyoming>("/v1/maison/wyoming", { methode: "PUT", corps: r });
+export const listerSatellites = () => appeler<{ satellites: Satellite[]; connectes: string[] }>("/v1/maison/satellites");
+export const ajouterSatellite = (nom: string, piece: string, volume_max: number) =>
+  envoyer<{ satellite: Satellite; cle: string }>("/v1/maison/satellites", { nom, piece, volume_max });
+export const modifierSatellite = (id: string, r: { nom?: string; piece?: string; volume_max?: number; actif?: boolean }) =>
+  appeler<{ satellite: Satellite }>(`/v1/maison/satellites/${encodeURIComponent(id)}`, { methode: "PUT", corps: r });
+export const retirerSatellite = (id: string) => appeler<{ ok: boolean }>(`/v1/maison/satellites/${encodeURIComponent(id)}`, { methode: "DELETE" });
+export const listerPieces = () => appeler<{ pieces: PieceMaison[] }>("/v1/maison/pieces");
+export const listerProfils = () =>
+  appeler<{ profils: ProfilVoix[]; reconnaissance: { actif: boolean; disponible: boolean } }>("/v1/maison/profils");
+export const ajouterProfil = (nom: string, volume_max: number) => envoyer<{ profil: ProfilVoix }>("/v1/maison/profils", { nom, volume_max });
+export const modifierProfil = (id: string, r: { nom?: string; volume_max?: number }) =>
+  appeler<{ profil: ProfilVoix }>(`/v1/maison/profils/${encodeURIComponent(id)}`, { methode: "PUT", corps: r });
+export const retirerProfil = (id: string) => appeler<{ ok: boolean }>(`/v1/maison/profils/${encodeURIComponent(id)}`, { methode: "DELETE" });
+export const inscrireVoixProfil = (id: string, audio: Blob) =>
+  envoyerAudio<{ empreinte: { id: string } }>(`/v1/maison/profils/${encodeURIComponent(id)}/voix`, audio);
 export const activerMaison = (id: string, actif: boolean) => envoyer<{ ok: boolean }>(`/v1/maison/${id}/activer`, { actif });
 export const testerMaison = (id: string) => envoyer<{ disponible: boolean; detail: string }>(`/v1/maison/${id}/tester`);
 export const oublierMaison = (id: string) => appeler<{ ok: boolean }>(`/v1/maison/${id}`, { methode: "DELETE" });
