@@ -212,6 +212,24 @@ def verifier_telephone(ts: EtatTailscale | None, port: int) -> Verification:
     return Verification("telephone", titre, "ok", f"Joignable depuis vos appareils : {ts.adresse}")
 
 
+def verifier_materiel() -> Verification:
+    """Matériel détecté et modèles locaux conseillés (une seule table : `materiel.TABLE`). Rien n'est installé."""
+    from . import materiel
+
+    m = materiel.detecter()
+    conseils = [
+        f"{c['titre']} : {c['conseille']['modele']}" for c in materiel.conseiller(m) if c["conseille"] is not None
+    ]
+    detail = materiel.resume(m) + (" — conseillé : " + " ; ".join(conseils) if conseils else "")
+    return Verification(
+        "materiel",
+        "Matériel et modèles locaux",
+        "info",
+        detail,
+        aide="Les modèles Ollama se téléchargent à la main (ollama pull <modèle>) ; JARVIS n'installe rien.",
+    )
+
+
 async def verifier_audit(base: Executant | None) -> Verification | None:
     if base is None:
         return None
@@ -232,8 +250,11 @@ async def diagnostiquer(
     chargement_modele: str | None = None,
     urgence_active: bool = False,
 ) -> list[Verification]:
-    stockage, cerveaux, journal_audit = await asyncio.gather(
-        verifier_stockage(p, base), verifier_cerveaux(connecteurs), verifier_audit(base)
+    stockage, cerveaux, journal_audit, materiel = await asyncio.gather(
+        verifier_stockage(p, base),
+        verifier_cerveaux(connecteurs),
+        verifier_audit(base),
+        asyncio.to_thread(verifier_materiel),
     )
     resultats: list[Verification] = [
         verifier_python(),
@@ -242,6 +263,7 @@ async def diagnostiquer(
         verifier_interface(p.dossier_interface),
         verifier_modele(p.dossier_modeles, p.modele_embeddings, chargement_modele),
         *cerveaux,
+        materiel,
         verifier_reseau(p),
         verifier_telephone(tailscale, p.port),
     ]

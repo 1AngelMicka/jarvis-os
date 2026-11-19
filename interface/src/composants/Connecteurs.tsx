@@ -257,17 +257,30 @@ function Carte({ c, surChangement }: CarteProps) {
 function Recommandations({ m }: { m: Materiel }) {
   return (
     <div className="materiel">
-      <p className="sec-texte">
-        Ce PC : {m.ram_go ? `${String(m.ram_go)} Go de mémoire` : "mémoire inconnue"}
-        {m.vram_go ? ` · ${m.carte ?? "carte graphique"} (${String(m.vram_go)} Go)` : " · pas de carte graphique adaptée détectée"}
-      </p>
+      <p className="sec-texte">Ce PC : {m.resume}</p>
       <ul className="materiel-liste">
-        {m.recommandations.map((r) => (
-          <li key={r.taille}>
-            <b>{r.taille}</b> sur {r.ou} — {r.raison} (ex. {r.exemples.join(", ")})
+        {m.conseils.map((c) => (
+          <li key={c.usage}>
+            <b>{c.titre}</b>
+            {c.conseille ? (
+              <>
+                {" "}
+                : <code>{c.conseille.modele}</code>
+                {c.conseille.taille !== c.conseille.modele && ` (${c.conseille.taille})`} sur {c.ou}
+                {c.maximum && c.maximum.modele !== c.conseille.modele && (
+                  <>
+                    {" "}
+                    — au plus <code>{c.maximum.modele}</code>, sans marge
+                  </>
+                )}
+              </>
+            ) : (
+              <> : {c.raison}</>
+            )}
           </li>
         ))}
       </ul>
+      <p className="materiel-note">Conseils seulement : JARVIS ne télécharge aucun modèle (ollama pull, à faire vous-même).</p>
     </div>
   );
 }
