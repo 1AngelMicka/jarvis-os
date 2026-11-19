@@ -99,6 +99,8 @@ async function appeler<T>(chemin: string, init: { methode?: string; corps?: unkn
 const envoyer = <T>(chemin: string, corps: unknown = {}) => appeler<T>(chemin, { methode: "POST", corps });
 
 export const lireEtat = () => unSeul("etat", () => appeler<Etat>("/v1/etat"));
+/** Le Core répond-il ? (route publique, légère : surveillance de la connexion) */
+export const sonderCore = () => appeler<{ statut: string }>("/v1/sante");
 export const lireConversation = (id: string) =>
   unSeul(`conversation:${id}`, () => appeler<DetailConversation>(`/v1/conversations/${encodeURIComponent(id)}`));
 

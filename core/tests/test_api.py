@@ -103,6 +103,13 @@ async def test_entetes_de_securite_hors_api(client: httpx.AsyncClient) -> None:
     assert "content-security-policy" not in (await client.get("/v1/sante")).headers
 
 
+async def test_cache_de_l_interface(client: httpx.AsyncClient) -> None:
+    """Après une mise à jour, la page est revalidée (sinon l'ancienne interface reste) ; les fichiers à empreinte
+    sont gardés."""
+    assert (await client.get("/")).headers["cache-control"] == "no-cache"
+    assert "immutable" in (await client.get("/assets/inexistant.js")).headers["cache-control"]
+
+
 async def test_origine_inconnue_refusee(client: httpx.AsyncClient) -> None:
     rep = await client.post("/v1/dialogue", json={"message": "x"}, headers={"Origin": "https://malveillant.example"})
     assert rep.status_code == 403

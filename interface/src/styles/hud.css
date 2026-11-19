@@ -320,6 +320,12 @@ html[data-animations="reduites"] .noyau-couche, html[data-animations="reduites"]
   border-top: var(--l-fin) solid var(--ligne-faible); background: linear-gradient(0deg, rgb(var(--c-creux) / .5), transparent);
 }
 .console-reglages { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-3); }
+.console-voix { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-3); }
+.console-voix:empty { display: none; }
+@media (max-width: 560px) {
+  .console-voix { flex-basis: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--e-2); }
+  .console-voix .segment-btn { justify-content: center; padding-inline: var(--e-2); }
+}
 .reglage-compact { display: inline-flex; min-width: 0; }
 .console-alerte { margin: 0; font-size: var(--t-mini); color: var(--ambre-texte); }
 .saisie { display: flex; align-items: flex-end; gap: var(--e-3); }
@@ -548,6 +554,13 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
   .btn-mini, .segment-btn, .select { min-height: var(--cible); }
   .icone-btn, .icone-btn.petit { width: var(--cible); height: var(--cible); }
 }
+.barre-nav { display: flex; align-items: center; gap: var(--e-4); }
+/* Téléphone : les vues forment une rangée d'onglets pleine largeur sous la marque, au lieu d'un retour à la ligne au hasard */
+@media (max-width: 560px) {
+  .barre { padding-bottom: var(--e-2); row-gap: var(--e-2); }
+  .barre-nav { order: 10; flex-basis: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--e-2); }
+  .barre-nav .btn { justify-content: center; }
+}
 @media (max-width: 420px) {
   .barre-etat-texte { display: none; }
   .msg { max-width: 94%; }
@@ -589,6 +602,7 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
   background: rgb(var(--c-creux) / .7); font: var(--t-mini)/1.5 var(--f-mono); color: var(--cyan-vif);
   user-select: all; overflow-wrap: anywhere;
 }
+.verif-commande--bloc { display: block; width: fit-content; max-width: 100%; }
 
 /* --- Sélecteur de thème ------------------------------------------------------------------------------------ */
 .selecteur-theme { display: inline-flex; align-items: center; gap: var(--e-3); min-width: 0; }
@@ -618,3 +632,15 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
 /* --- Créations (bac à sable) ------------------------------------------------------------------------------- */
 .creation-titre { width: 100%; min-height: 36px; padding: 0 var(--e-4); border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); background: rgb(var(--c-creux) / .7); color: var(--texte); }
 .creation-cadre { display: block; width: 100%; height: min(70vh, 560px); border: var(--l-fin) solid var(--ligne-forte); border-radius: var(--r-2); background: var(--mix-clair); }
+
+/* Téléphone : les quatre étapes de l'assistant en grille régulière (après leurs règles de base) */
+@media (max-width: 560px) {
+  .etapes { display: grid; grid-template-columns: repeat(2, 1fr); }
+  .etape-btn { width: 100%; }
+}
+
+/* Téléphone étroit : les trois onglets du panneau latéral tiennent sans défilement caché */
+@media (max-width: 420px) {
+  .onglets { gap: 0; }
+  .onglet { flex: 1 1 auto; justify-content: center; padding: 0 var(--e-2); font-size: var(--t-mini); letter-spacing: 0; }
+}

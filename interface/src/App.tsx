@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat } from "./api";
+import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat, sonderCore } from "./api";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
 import { VueAgents } from "./composants/Agents";
@@ -120,6 +120,32 @@ function Hud() {
         /* Core injoignable : l'écran d'erreur du dialogue le dit déjà */
       });
   }, [charger]);
+
+  // Surveillance de la connexion : l'état « Core en ligne / hors ligne » suit la réalité (toutes les 15 s, et dès que la
+  // fenêtre revient au premier plan) ; au retour du Core, tout est rechargé.
+  const horsLigne = erreurEtat !== null;
+  useEffect(() => {
+    const sonder = () => {
+      sonderCore()
+        .then(() => {
+          if (horsLigne) charger(false);
+        })
+        .catch(() => {
+          if (!horsLigne) setErreurEtat("Core injoignable.");
+        });
+    };
+    const minuterie = window.setInterval(sonder, 15000);
+    const auRetour = () => {
+      if (document.visibilityState === "visible") sonder();
+    };
+    document.addEventListener("visibilitychange", auRetour);
+    window.addEventListener("online", sonder);
+    return () => {
+      window.clearInterval(minuterie);
+      document.removeEventListener("visibilitychange", auRetour);
+      window.removeEventListener("online", sonder);
+    };
+  }, [horsLigne, charger]);
 
   const rafraichir = useCallback(
     (message?: string) => {
@@ -371,36 +397,38 @@ function Hud() {
           <span className="point-etat" data-ok={erreurEtat ? false : etat ? !urgence : undefined} aria-hidden="true" />
           <span className="barre-etat-texte">{erreurEtat ? "Core hors ligne" : etat ? (urgence ? "Arrêt d'urgence" : "Core en ligne") : "Connexion…"}</span>
         </div>
-        <button
-          type="button"
-          className="btn btn-discret btn-mini btn-connecteurs"
-          aria-pressed={vue === "connecteurs"}
-          onClick={() => {
-            setVue((v) => (v === "connecteurs" ? "dialogue" : "connecteurs"));
-          }}
-        >
-          Connecteurs
-        </button>
-        <button
-          type="button"
-          className="btn btn-discret btn-mini btn-connecteurs"
-          aria-pressed={vue === "agents"}
-          onClick={() => {
-            setVue((v) => (v === "agents" ? "dialogue" : "agents"));
-          }}
-        >
-          Agents
-        </button>
-        <button
-          type="button"
-          className="btn btn-discret btn-mini btn-connecteurs"
-          aria-pressed={vue === "ateliers"}
-          onClick={() => {
-            setVue((v) => (v === "ateliers" ? "dialogue" : "ateliers"));
-          }}
-        >
-          Ateliers
-        </button>
+        <nav className="barre-nav" aria-label="Vues">
+          <button
+            type="button"
+            className="btn btn-discret btn-mini btn-connecteurs"
+            aria-pressed={vue === "connecteurs"}
+            onClick={() => {
+              setVue((v) => (v === "connecteurs" ? "dialogue" : "connecteurs"));
+            }}
+          >
+            Connecteurs
+          </button>
+          <button
+            type="button"
+            className="btn btn-discret btn-mini btn-connecteurs"
+            aria-pressed={vue === "agents"}
+            onClick={() => {
+              setVue((v) => (v === "agents" ? "dialogue" : "agents"));
+            }}
+          >
+            Agents
+          </button>
+          <button
+            type="button"
+            className="btn btn-discret btn-mini btn-connecteurs"
+            aria-pressed={vue === "ateliers"}
+            onClick={() => {
+              setVue((v) => (v === "ateliers" ? "dialogue" : "ateliers"));
+            }}
+          >
+            Ateliers
+          </button>
+        </nav>
         <SelecteurTheme className="selecteur-theme--barre" />
         {!urgence && etat && (
           <button type="button" className="btn btn-rouge btn-mini btn-urgence" onClick={declencherUrgence} title="Tout arrêter tout de suite">

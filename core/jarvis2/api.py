@@ -331,6 +331,12 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             reponse.headers["Content-Security-Policy"] = CSP
             reponse.headers["X-Content-Type-Options"] = "nosniff"
             reponse.headers["Referrer-Policy"] = "no-referrer"
+            # Fichiers compilés à empreinte : immuables. Le reste (index.html, sw.js, manifeste) : revalidé à
+            # chaque fois, sinon le navigateur garde l'ancienne interface après une mise à jour de JARVIS.
+            if chemin.startswith("/assets/"):
+                reponse.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            else:
+                reponse.headers.setdefault("Cache-Control", "no-cache")
         return reponse
 
     def ctx(request: Request) -> Contexte:

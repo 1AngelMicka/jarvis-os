@@ -129,7 +129,7 @@ export function CommandesVoix({ lecteur, enCours, bloquee, surEnvoyer, surDescri
   };
 
   return (
-    <>
+    <div className="console-voix" role="group" aria-label="Voix et écran">
       {micro && (
         <button
           type="button"
@@ -178,6 +178,6 @@ export function CommandesVoix({ lecteur, enCours, bloquee, surEnvoyer, surDescri
           {ecran ? "Description…" : "Écran"}
         </button>
       )}
-    </>
+    </div>
   );
 }

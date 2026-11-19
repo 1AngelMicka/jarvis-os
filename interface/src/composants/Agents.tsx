@@ -191,10 +191,10 @@ function Recettes({ surChangement, surOuvrir }: { surChangement: (m?: string) =>
         Recettes planifiées
       </h3>
       <p className="sec-texte">
-        Une recette est un fichier YAML (nom, planification cron, consigne, livraison) dans{" "}
-        <code className="verif-commande">{donnees?.dossier ?? "recettes/"}</code>. JARVIS la lance à l'heure dite, jamais pendant l'arrêt
-        d'urgence.
+        Une recette est un fichier YAML (nom, planification cron, consigne, livraison). JARVIS la lance à l'heure dite, jamais pendant
+        l'arrêt d'urgence. Dossier des recettes :
       </p>
+      <code className="verif-commande verif-commande--bloc">{donnees?.dossier ?? "recettes/"}</code>
       {erreur && <p className="securite-erreur">{erreur}</p>}
       {donnees?.erreurs.map((e) => (
         <p key={e} className="carte-co-message">
