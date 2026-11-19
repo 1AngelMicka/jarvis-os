@@ -1,8 +1,6 @@
 import { useEffect, useId, useState } from "react";
 
-import { appliquerTheme, estTheme, lireTheme, type Theme, THEMES } from "../theme";
-
-const EVENEMENT = "jarvis2:theme";
+import { choisirTheme, estTheme, EVENEMENT_THEME as EVENEMENT, lireTheme, type Theme, THEMES } from "../theme";
 
 /** Choix du thème ; plusieurs sélecteurs à l'écran restent d'accord (événement de fenêtre). */
 export function SelecteurTheme({ className, libelleVisible = false }: { className?: string; libelleVisible?: boolean }) {
@@ -32,9 +30,8 @@ export function SelecteurTheme({ className, libelleVisible = false }: { classNam
         onChange={(e) => {
           const t = e.target.value;
           if (!estTheme(t)) return;
-          appliquerTheme(t, true);
+          choisirTheme(t);
           setTheme(t);
-          window.dispatchEvent(new CustomEvent(EVENEMENT, { detail: t }));
         }}
       >
         {THEMES.map((t) => (

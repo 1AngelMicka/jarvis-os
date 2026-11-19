@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { decrireImage, transcrireAudio } from "../api";
-import { capturerEcran, EcouteMainsLibres, Enregistreur, type LecteurVocal } from "../voix";
+import { capturerEcran, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, type LecteurVocal } from "../voix";
 
 interface Props {
   lecteur: LecteurVocal;
@@ -40,6 +40,17 @@ export function CommandesVoix({ lecteur, enCours, bloquee, surEnvoyer, surDescri
     if (!actif) lecteur.arreter();
     setParole(actif);
   };
+
+  // Ctrl+M, « /silence » ou la palette coupent la voix : le bouton suit
+  useEffect(() => {
+    const couper = () => {
+      setParole(false);
+    };
+    window.addEventListener(EVENEMENT_SILENCE, couper);
+    return () => {
+      window.removeEventListener(EVENEMENT_SILENCE, couper);
+    };
+  }, []);
 
   const traiterPhrase = (audio: Blob) => {
     transcrireAudio(audio)

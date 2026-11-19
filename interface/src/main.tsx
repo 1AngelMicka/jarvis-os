@@ -5,6 +5,7 @@ import { App } from "./App";
 import { appliquerTheme, lireTheme } from "./theme";
 import "./styles/tokens.css";
 import "./styles/hud.css";
+import "./styles/dialogue-avance.css";
 import "./styles/themes.css";
 
 const racine = document.getElementById("racine");
