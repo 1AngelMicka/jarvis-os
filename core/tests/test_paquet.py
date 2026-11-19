@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import sys
 import tomllib
 from pathlib import Path
 
@@ -48,3 +50,13 @@ async def test_interface_livree_servie(monkeypatch: pytest.MonkeyPatch, tmp_path
     async with _client(monkeypatch, tmp_path) as client:
         rep = await client.get("/")
     assert rep.status_code == 200 and "HUD" in rep.text
+
+
+def test_aide_sortie_cp1252(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows, sortie redirigée : page de code cp1252, sans ⇄ ni ✔. L'aide ne doit pas planter."""
+    tampon = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(tampon, encoding="cp1252"))
+    with pytest.raises(SystemExit) as fin:
+        main(["--help"])
+    sys.stdout.flush()
+    assert fin.value.code == 0 and b"docteur" in tampon.getvalue()

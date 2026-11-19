@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import io
 import logging
 import sys
 from collections.abc import AsyncIterator
@@ -269,7 +270,17 @@ def _sauvegarde(p: Parametres, action: str, dossier: Path | None, fichier: Path 
     return 0 if rapport["valide"] else 3
 
 
+def _sorties_tolerantes() -> None:
+    """Sortie redirigée sous Windows (cp1252) : un caractère hors de la page de code (✔, ⇄) est remplacé au lieu
+    de faire planter la commande (`jarvis2 --help > fichier`, `jarvis2 docteur | more`)."""
+    for flux in (sys.stdout, sys.stderr):
+        encodage = (getattr(flux, "encoding", None) or "").lower().replace("-", "")
+        if encodage != "utf8" and isinstance(flux, io.TextIOWrapper):
+            flux.reconfigure(errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _sorties_tolerantes()
     analyseur = argparse.ArgumentParser(prog="jarvis2", description="JARVIS 2 — Core")
     sous = analyseur.add_subparsers(dest="commande")
     m = sous.add_parser("migrer", help="appliquer les migrations")
