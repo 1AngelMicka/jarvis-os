@@ -65,6 +65,12 @@ class Action:
     def peut_etre_toujours_autorisee(self) -> bool:
         return self.niveau == "jaune" and self.autorisable
 
+    # Action facultative (connecteur maison…) : proposée et exécutable seulement quand elle renvoie True
+    disponible: Callable[[], bool] | None = None
+
+    def est_disponible(self) -> bool:
+        return self.disponible is None or self.disponible()
+
 
 class Registre:
     def __init__(self) -> None:
@@ -80,6 +86,10 @@ class Registre:
             return self.actions[nom]
         except KeyError as exc:
             raise ErreurAction(f"Action inconnue : « {nom} »") from exc
+
+    def disponibles(self) -> list[Action]:
+        """Actions proposables maintenant (celles d'un connecteur désactivé n'apparaissent pas)."""
+        return [a for a in self.actions.values() if a.est_disponible()]
 
 
 @dataclass(frozen=True)
@@ -169,6 +179,8 @@ class Approbations:
         """🟢 : exécute ; 🟡 / 🔴 : crée une demande en attente (🟡 « toujours autorisée » : exécutée).
         Une règle « interdire » refuse ; une règle « demander » impose la demande."""
         action = self.registre.get(nom)
+        if not action.est_disponible():
+            raise ErreurAction(f"Action indisponible : « {nom} » (connecteur désactivé)")
         async with self.pool.acquire() as conn:
             resume = action.resumer(params)
             interdit, a_demander = await regles.verifier(conn, action.nom, resume, params)
@@ -333,6 +345,8 @@ class Approbations:
             try:
                 # Règle ajoutée depuis la demande : elle prime sur l'approbation (la demande passe en échec)
                 await self._interdite(conn, action, demande.parametres, appareil.acteur)
+                if not action.est_disponible():
+                    raise ErreurAction(f"Action indisponible : « {action.nom} » (connecteur désactivé)")
                 resultat = await self._executer(conn, action, demande.parametres, appareil.acteur, demande_id)
             except ErreurAction as exc:
                 await conn.execute(

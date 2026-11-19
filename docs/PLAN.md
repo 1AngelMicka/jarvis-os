@@ -169,7 +169,7 @@ Les meilleures idées des autres assistants personnels (voir [INSPIRATIONS.md](I
 
 **D. Maison et extensions**
 16. Widgets générés à la demande dans le HUD (météo, minuteur, liste) : fragment filtré par DOMPurify avec liste fermée de balises, attributs, classes et adresses ; phrase d'attente dès qu'un outil long démarre.
-17. Connecteurs facultatifs 🟡 : Philips Hue (API locale du pont), OBS (WebSocket).
+17. Connecteurs facultatifs 🟡 : Philips Hue (API locale du pont), OBS (WebSocket). ✅ Fait : désactivés par défaut, activés dans Connecteurs → Maison ; Hue (découverte mDNS, service en ligne sur accord, appairage par bouton, clé dans le coffre) : 🟢 état, 🟡 allumer, éteindre, luminosité, couleur, scènes ; OBS WebSocket v5 (adresse, mot de passe dans le coffre) : 🟢 état, 🟡 scène, enregistrement, 🔴 démarrer un direct ; file d'approbations, audit, arrêt d'urgence ; actions absentes tant que le connecteur est désactivé.
 18. Home Assistant, le PC restant le cerveau :
     - transcription et synthèse exposées en Wyoming ;
     - pilotage par le serveur MCP de Home Assistant (transport MCP HTTP + OAuth/PKCE ; repli : API REST avec jeton dans le coffre) ;

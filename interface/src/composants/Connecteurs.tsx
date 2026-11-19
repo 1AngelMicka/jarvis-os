@@ -11,6 +11,7 @@ import {
   testerConnecteur,
 } from "../api";
 import type { Connecteur, Materiel } from "../types";
+import { SectionMaison } from "./Maison";
 
 const FAMILLES: { id: Connecteur["famille"]; titre: string; texte: string }[] = [
   {
@@ -341,6 +342,7 @@ export function VueConnecteurs({ surChangement, familles }: { surChangement: (me
           </ul>
         </section>
       ))}
+      {!familles && <SectionMaison surChangement={surChangement} />}
     </div>
   );
 }

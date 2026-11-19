@@ -638,3 +638,22 @@ export interface ResultatCommande {
   resultat?: ReponseAction;
   erreur?: string;
 }
+
+// --- Connecteurs maison facultatifs (Hue, OBS) ---
+export interface OutilMaison {
+  nom: string;
+  connecteur: "hue" | "obs";
+  niveau: "vert" | "jaune" | "rouge";
+  description: string;
+  parametres: Record<string, string>;
+}
+
+export interface ConnecteurMaison {
+  id: "hue" | "obs";
+  nom: string;
+  description: string;
+  actif: boolean;
+  adresse: string | null;
+  secret_enregistre: boolean;
+  outils: OutilMaison[];
+}

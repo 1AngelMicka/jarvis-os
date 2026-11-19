@@ -532,6 +532,7 @@ html.en-urgence[data-theme="atelier"] { --c-cyan: 178 34 34; --c-cyan-vif: 120 1
 .badge-co[data-ton="attention"] { color: var(--ambre-texte); border-color: rgb(var(--c-ambre) / .5); background: rgb(var(--c-ambre) / .08); }
 .badge-co[data-ton="risque"] { color: var(--rouge-clair); border-color: var(--rouge); background: rgb(var(--c-rouge) / .14); }
 .carte-co-detail { margin: 0; font: var(--t-mini)/1.4 var(--f-donnees); color: var(--texte-3); overflow-wrap: anywhere; }
+.carte-co-outils { list-style: none; padding: 0; display: grid; gap: var(--e-1); }
 .carte-co-cle { display: flex; flex-wrap: wrap; gap: var(--e-2); }
 .carte-co-cle input {
   flex: 1 1 160px; min-width: 0; min-height: 32px; padding: 0 var(--e-3); font: var(--t-mini)/1 var(--f-mono);

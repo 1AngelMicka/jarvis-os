@@ -47,6 +47,7 @@ from .api_chantiers import routeur as routeur_chantiers
 from .api_connaissances import routeur as routeur_connaissances
 from .api_connecteurs import routeur as routeur_connecteurs
 from .api_donnees import routeur as routeur_donnees
+from .api_maison import routeur as routeur_maison
 from .api_matin import routeur as routeur_matin
 from .api_medias import routeur as routeur_medias
 from .api_medias import routeur_pages as routeur_creations
@@ -68,6 +69,7 @@ from .conversations import DepotConversations
 from .db import Base, ErreurBaseOuReseau, ouvrir_base, version_schema
 from .dialogue import AccordImagesRequis, ServiceDialogue, SourceMemoire
 from .embeddings import EncodeurFastEmbed
+from .maison import GestionnaireMaison
 from .matin import ServiceMeteo
 from .memoire import Expurgateur, ReglagesRecherche
 from .memoire_v2 import EtatBascule, basculer, modele_actif, modele_majoritaire
@@ -110,6 +112,7 @@ class Contexte:
     tailscale: EtatTailscale | None = None
     chargement_modele: str | None = None  # None, « absent », « en_cours », « termine », « erreur »
     mcp: GestionnaireMCP | None = None
+    maison: GestionnaireMaison | None = None  # Hue, OBS : connecteurs facultatifs, désactivés par défaut
     recherche: RechercheWeb = field(default_factory=lambda: RechercheWeb(None))
     scientifique: SourcesScientifiques | None = None  # bases scientifiques publiques des missions de recherche
     dossier_recettes: Path | None = None
@@ -132,13 +135,13 @@ class Contexte:
     commandes: ServiceCommandes = field(init=False)
 
     def __post_init__(self) -> None:
-        self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp, self.ateliers))
+        self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp, self.ateliers, self.maison))
         self.conseil = ServiceConseil(self.service)
         expurgateur = self.memoire.reglages.expurgateur if self.memoire is not None else None
         ateliers = self.ateliers
         self.pilotage = ServicePilotage(
             self.pool,
-            lambda: self.approbations.registre.actions,
+            lambda: {a.nom: a for a in self.approbations.registre.disponibles()},
             (lambda: {i: p.nom for i, p in ateliers.projets.items()}) if ateliers is not None else dict,
             (lambda t: not expurgateur.mentionne(t)) if expurgateur is not None else None,
         )
@@ -241,6 +244,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
         memoire,
         connecteurs=connecteurs,
         mcp=GestionnaireMCP.depuis_config(locale.serveurs_mcp),
+        maison=GestionnaireMaison(pool, coffre),
         recherche=RechercheWeb(locale.searxng),
         scientifique=SourcesScientifiques() if locale.scientifique else None,
         dossier_recettes=chemin_config().parent / "recettes",
@@ -346,6 +350,8 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         await ctx.urgence.charger(ctx.pool)
         if ctx.connecteurs is not None:
             await ctx.connecteurs.charger()
+        if ctx.maison is not None:
+            await ctx.maison.charger()
         if ctx.urgence.actif:
             journal.warning("Arrêt d'urgence ACTIF (depuis %s) : écritures refusées", ctx.urgence.depuis)
         app.state.parametres = parametres
@@ -578,6 +584,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
 
     app.include_router(routeur_securite)
     app.include_router(routeur_connecteurs)
+    app.include_router(routeur_maison)
     app.include_router(routeur_accueil)
     app.include_router(routeur_agents)
     app.include_router(routeur_ateliers)

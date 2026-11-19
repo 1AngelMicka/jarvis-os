@@ -13,6 +13,8 @@ import type {
   Appareil,
   CarteFlux,
   Connecteur,
+  ConnecteurMaison,
+  OutilMaison,
   Demande,
   Materiel,
   DemandeAction,
@@ -189,6 +191,18 @@ export const accorderImages = (id: string, accorde: boolean) =>
   appeler<{ ok: boolean }>(`/v1/connecteurs/${encodeURIComponent(id)}/images`, { methode: "PUT", corps: { accorde } });
 export const lireFluxDonnees = () => unSeul("flux-donnees", () => appeler<CarteFlux>("/v1/donnees/flux"));
 export const lireMateriel = () => unSeul("materiel", () => appeler<Materiel>("/v1/materiel"));
+
+// --- Connecteurs maison facultatifs : réglages ici, commandes par /v1/actions (file d'approbations) ---
+export const listerMaison = () =>
+  appeler<{ connecteurs: ConnecteurMaison[]; outils_actifs: OutilMaison[] }>("/v1/maison");
+export const activerMaison = (id: string, actif: boolean) => envoyer<{ ok: boolean }>(`/v1/maison/${id}/activer`, { actif });
+export const testerMaison = (id: string) => envoyer<{ disponible: boolean; detail: string }>(`/v1/maison/${id}/tester`);
+export const oublierMaison = (id: string) => appeler<{ ok: boolean }>(`/v1/maison/${id}`, { methode: "DELETE" });
+/** `en_ligne` : accord coché par l'utilisateur pour interroger le service de découverte de Signify. */
+export const decouvrirHue = (en_ligne: boolean) => envoyer<{ ponts: string[] }>("/v1/maison/hue/decouvrir", { en_ligne });
+export const appairerHue = (adresse: string) => envoyer<{ ok: boolean }>("/v1/maison/hue/appairer", { adresse });
+export const configurerObs = (adresse: string, mot_de_passe?: string) =>
+  appeler<{ ok: boolean }>("/v1/maison/obs", { methode: "PUT", corps: { adresse, ...(mot_de_passe !== undefined ? { mot_de_passe } : {}) } });
 
 // --- Premier lancement : assistant, diagnostic, téléphone ---
 export const lireAccueil = () => unSeul("accueil", () => appeler<EtatAccueil>("/v1/accueil"));
