@@ -4,6 +4,7 @@ import { listerOrigines, listerSouvenirs } from "../api";
 import { TexteRiche } from "../texte";
 import type { OrigineMemoire, Souvenir } from "../types";
 import { SectionMemoire } from "./Memoire";
+import { VueProfil } from "./VueProfil";
 
 const JOUR = 86_400_000;
 const DATE = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -67,6 +68,7 @@ export function VueMemoire({ surChangement }: { surChangement: (m?: string) => v
   const [suite, setSuite] = useState(false);
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [profil, setProfil] = useState(false);
   const texte = recherche.trim();
 
   useEffect(() => {
@@ -114,8 +116,30 @@ export function VueMemoire({ surChangement }: { surChangement: (m?: string) => v
     jours.set(j, [...(jours.get(j) ?? []), s]);
   }
 
+  if (profil)
+    return (
+      <VueProfil
+        surRetour={() => {
+          setProfil(false);
+          void charger();
+        }}
+      />
+    );
+
   return (
     <div className="memoire-vue">
+      <div className="memoire-profil">
+        <p className="memoire-profil-texte">Aidez JARVIS à vous connaître : un questionnaire guidé, par sections, à l'écrit ou à voix haute.</p>
+        <button
+          type="button"
+          className="btn btn-mini"
+          onClick={() => {
+            setProfil(true);
+          }}
+        >
+          Profil guidé
+        </button>
+      </div>
       <div className="memoire-outils">
         <label className="hist-recherche memoire-recherche">
           <span className="visuellement-cache">Chercher dans la mémoire</span>
