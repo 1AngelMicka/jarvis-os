@@ -31,6 +31,7 @@ export type VuePilotable =
   | "connaissances"
   | "agents"
   | "ateliers"
+  | "ameliorations"
   | "connecteurs"
   | "couts"
   | "reglages"
@@ -59,6 +60,8 @@ export function libelleBouton(a: ActionPilotage, deja: boolean): string {
       return "Lancer la mission";
     case "proposer_atelier":
       return "Ouvrir l'atelier";
+    case "proposer_amelioration":
+      return "Garder la suggestion";
     case "demander_action":
       return a.niveau === "rouge" ? "Demander (clé d'accès)" : "Demander l'accord";
     case "ajouter_regle":

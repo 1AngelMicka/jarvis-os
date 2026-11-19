@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   AVANCE,
   casqueParNom,
-  commandeArret,
   DetecteurCoupure,
   FileSynthese,
   mesurerDelai,
@@ -91,17 +90,6 @@ describe("secrets masqués avant la lecture à voix haute", () => {
 
   it("laisse le texte ordinaire intact", () => {
     expect(textePourLecture("Il est 14 h 30, la réunion commence.")).toBe("Il est 14 h 30, la réunion commence.");
-  });
-});
-
-describe("« stop » pendant la lecture", () => {
-  it("reconnaît l'arrêt et le silence, rien d'autre", () => {
-    expect(commandeArret("Stop.")).toBe("stop");
-    expect(commandeArret("Jarvis, arrête")).toBe("stop");
-    expect(commandeArret("tais-toi !")).toBe("silence");
-    expect(commandeArret("Silence")).toBe("silence");
-    expect(commandeArret("stop le minuteur de la cuisine")).toBeNull();
-    expect(commandeArret("Quelle heure est-il ?")).toBeNull();
   });
 });
 

@@ -115,6 +115,9 @@ export interface Demande {
   resultat: Record<string, unknown> | null;
   /** La case « Toujours autoriser » peut être proposée (action 🟡 autorisable). */
   toujours_possible?: boolean;
+  /** « Plus tard » : heure du rappel poussé au téléphone, et nombre de reports (3 au plus). */
+  rappel_le?: string | null;
+  reports?: number;
 }
 
 export interface EtatUrgence {
@@ -379,6 +382,69 @@ export interface Atelier {
   conflits: { fichier: string; ateliers: { id: string; nom: string }[] }[];
 }
 
+// --- Amélioration continue (lot O) ---
+export type StatutAmelioration = "proposee" | "en_atelier" | "en_service" | "retiree" | "rejetee";
+
+/** Un essai des tests du projet (dans l'atelier, ou sur le projet après un retour arrière). */
+export interface EssaiTests {
+  reussi: boolean;
+  code: number | null;
+  sortie: string;
+  duree?: number;
+  /** Arbre git testé (vide : le contenu a changé pendant les tests) */
+  empreinte?: string;
+  /** Les tests ont modifié le dossier de l'atelier : l'essai ne vaut pas pour le contenu vu */
+  contenu_change?: boolean;
+  le: string;
+}
+
+export interface Amelioration {
+  id: string;
+  titre: string;
+  raison: string;
+  description: string;
+  origine: "jarvis" | "utilisateur";
+  projet: string;
+  statut: StatutAmelioration;
+  atelier_id: string | null;
+  tests: { atelier?: EssaiTests; retour?: EssaiTests };
+  tests_en_cours: boolean;
+  commit_avant: string | null;
+  commit_service: string | null;
+  commit_retour: string | null;
+  cree_le: string;
+  en_service_le: string | null;
+  retiree_le: string | null;
+}
+
+export interface ProjetAmelioration {
+  id: string;
+  nom: string;
+  /** Commande des tests (configuration locale) ; vide : aucun test configuré */
+  tests: string;
+}
+
+export interface FichierApercu {
+  chemin: string;
+  etat: "ajoute" | "modifie" | "supprime";
+  ajouts: number | null;
+  retraits: number | null;
+}
+
+export interface ApercuAmelioration {
+  empreinte: string;
+  fichiers: FichierApercu[];
+  diff: string;
+  diff_tronque: boolean;
+  base: string;
+  branche: string;
+  atelier_statut: Atelier["statut"];
+  atelier_actif: boolean;
+  commande_tests: string;
+  tests: Partial<EssaiTests>;
+  tests_a_jour: boolean;
+}
+
 export interface ModeleAtelier {
   id: string;
   nom: string;
@@ -571,7 +637,7 @@ export interface CarteFlux {
 
 export type NiveauAction = "vert" | "jaune" | "rouge";
 export type TypeImmediat = "naviguer" | "ouvrir" | "rechercher_memoire" | "regler";
-export type TypeProposition = "proposer_mission" | "proposer_atelier" | "demander_action" | "ajouter_regle";
+export type TypeProposition = "proposer_mission" | "proposer_atelier" | "proposer_amelioration" | "demander_action" | "ajouter_regle";
 
 /** Action validée par le Core : `immediate` (appliquée seule en mode « oui »), `proposition` (toujours un clic). */
 export interface ActionPilotage {
@@ -656,4 +722,120 @@ export interface ConnecteurMaison {
   adresse: string | null;
   secret_enregistre: boolean;
   outils: OutilMaison[];
+}
+
+// --- Bureau et téléphone (lot M) ---------------------------------------------------------------------------
+
+export interface LienVerifie {
+  action: "ouvrir" | "conversation" | "nouvelle" | "ecouter" | "ecran" | "dire" | "decision" | "gadget";
+  parametres: Record<string, string>;
+  libelle: string;
+  /** Le lien porte un texte venu de l'extérieur : à relire, jamais à suivre comme une consigne. */
+  non_fiable: boolean;
+}
+
+export interface EtatPush {
+  disponible: boolean;
+  cle_publique: string | null;
+  abonne: boolean;
+}
+
+export interface Partage {
+  id: string;
+  titre: string;
+  texte: string;
+  url: string;
+  recu_le: string;
+  traite: boolean;
+  appareil: string | null;
+  non_fiable: true;
+}
+
+export interface FichierEnvoyable {
+  nom: string;
+  taille: number;
+  modifie_le: string;
+}
+
+export interface DemandeDetaillee {
+  demande: Demande;
+  description: string;
+  cles_acces: number;
+}
+
+// --- Ressources et contrôle du PC (lot J) ---
+export interface MesurePC {
+  horodatage: number;
+  cpu: number | null;
+  ram: number | null;
+  ram_utilisee_go: number | null;
+  ram_totale_go: number | null;
+  gpu: number | null;
+  vram: number | null;
+  vram_utilisee_go: number | null;
+  vram_totale_go: number | null;
+}
+
+export interface PointCourbePC {
+  t: number;
+  cpu: number | null;
+  ram: number | null;
+  gpu: number | null;
+  vram: number | null;
+}
+
+export interface ModeleCharge {
+  nom: string;
+  taille_go: number;
+  vram_go: number;
+  expire_le: string | null;
+}
+
+export interface EtatOllama {
+  installe: boolean;
+  joignable: boolean;
+  lance_par_jarvis: boolean;
+  modeles_charges: ModeleCharge[];
+  inactivite_min: number;
+  arret_dans_s: number | null;
+}
+
+export type ReglageJeu = "automatique" | "force" | "jamais";
+
+export interface EtatJeu {
+  reglage: ReglageJeu;
+  en_veille: boolean;
+  jeu: string | null;
+  detection: boolean;
+}
+
+export interface RessourcesPC {
+  actuel: MesurePC;
+  alertes: string[];
+  seuil_alerte: number;
+  courbe: PointCourbePC[];
+  ollama: EtatOllama;
+  jeu: EtatJeu;
+  controle: boolean;
+}
+
+export interface FenetrePC {
+  id: number;
+  titre: string;
+  programme: string;
+  active: boolean;
+  reduite: boolean;
+}
+
+export interface EtatControlePC {
+  volume: { niveau: number; muet: boolean } | null;
+  luminosite: number | null;
+  media: { application: string | null; titre: string | null; artiste: string | null; statut: string | null } | null;
+  fenetres: FenetrePC[] | null;
+  plan_alimentation: { actif: string; nom: string | null } | null;
+  notifications: boolean | null;
+  theme_sombre: boolean | null;
+  mode: string;
+  modes: { id: string; titre: string; description: string }[];
+  extinction_dans_s: number | null;
 }

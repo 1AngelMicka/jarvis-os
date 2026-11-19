@@ -16,7 +16,14 @@ import type {
   ConnecteurMaison,
   OutilMaison,
   Demande,
+  DemandeDetaillee,
+  EtatPush,
+  FichierEnvoyable,
+  LienVerifie,
+  Partage,
+  EtatControlePC,
   Materiel,
+  RessourcesPC,
   DemandeAction,
   DemandeDialogue,
   DetailConversation,
@@ -26,11 +33,14 @@ import type {
   Jumelage,
   Telechargement,
   Verification,
+  Amelioration,
+  ApercuAmelioration,
   Atelier,
   AttenteOutil,
   EvenementAtelier,
   EtatVeille,
   ModeleAtelier,
+  ProjetAmelioration,
   ReglagesVeille,
   BlocMemoire,
   EtatMemoire,
@@ -161,9 +171,17 @@ export const enregistrerCle = (credential: Record<string, unknown>, nom: string)
   envoyer<{ id: string }>("/v1/cles/enregistrement", { credential, nom });
 export const demanderAction = (d: DemandeAction) => envoyer<ReponseAction>("/v1/actions", d);
 export const optionsApprobation = (id: string) => envoyer<Record<string, unknown>>(`/v1/demandes/${id}/options`);
+/** Émis après la décision sur une demande : les vues concernées (améliorations…) relisent leur état. */
+export const EVENEMENT_DEMANDE_DECIDEE = "jarvis2:demande-decidee";
+const signalerDecision = <T>(r: T): T => {
+  window.dispatchEvent(new CustomEvent(EVENEMENT_DEMANDE_DECIDEE));
+  return r;
+};
 export const approuver = (id: string, credential?: Record<string, unknown>, toujours = false) =>
-  envoyer<ReponseAction>(`/v1/demandes/${id}/approuver`, { ...(credential ? { credential } : {}), ...(toujours ? { toujours } : {}) });
-export const refuser = (id: string) => envoyer<{ statut: string }>(`/v1/demandes/${id}/refuser`);
+  envoyer<ReponseAction>(`/v1/demandes/${id}/approuver`, { ...(credential ? { credential } : {}), ...(toujours ? { toujours } : {}) }).then(
+    signalerDecision,
+  );
+export const refuser = (id: string) => envoyer<{ statut: string }>(`/v1/demandes/${id}/refuser`).then(signalerDecision);
 
 // --- Arrêt d'urgence, audit ---
 export const arreterUrgence = () => envoyer<{ reponses_interrompues: number }>("/v1/urgence/arreter");
@@ -191,6 +209,9 @@ export const accorderImages = (id: string, accorde: boolean) =>
   appeler<{ ok: boolean }>(`/v1/connecteurs/${encodeURIComponent(id)}/images`, { methode: "PUT", corps: { accorde } });
 export const lireFluxDonnees = () => unSeul("flux-donnees", () => appeler<CarteFlux>("/v1/donnees/flux"));
 export const lireMateriel = () => unSeul("materiel", () => appeler<Materiel>("/v1/materiel"));
+// Ressources et contrôle du PC (lot J) : lecture ici, toute action par /v1/actions (file d'approbations)
+export const lireRessourcesPC = () => unSeul("pc-ressources", () => appeler<RessourcesPC>("/v1/pc/ressources"));
+export const lireControlePC = () => unSeul("pc-etat", () => appeler<EtatControlePC>("/v1/pc/etat"));
 
 // --- Connecteurs maison facultatifs : réglages ici, commandes par /v1/actions (file d'approbations) ---
 export const listerMaison = () =>
@@ -336,6 +357,23 @@ export const consigneAtelier = (id: string, consigne: string, reprendre = false)
 export const arreterAtelier = (id: string) => envoyer<{ arrete: boolean }>(`/v1/ateliers/${id}/arreter`);
 export const abandonnerAtelier = (id: string) => envoyer<{ abandonne: boolean }>(`/v1/ateliers/${id}/abandonner`);
 export const repondreAttente = (id: string, accorde: boolean) => envoyer<{ accorde: boolean }>(`/v1/ateliers/attentes/${id}`, { accorde });
+// --- Amélioration continue (lot O) ---
+export const listerAmeliorations = () =>
+  appeler<{ disponible: boolean; projets: ProjetAmelioration[]; ameliorations: Amelioration[] }>("/v1/ameliorations");
+export const proposerAmelioration = (s: {
+  projet: string;
+  titre: string;
+  raison: string;
+  description?: string;
+  origine?: "jarvis" | "utilisateur";
+}) => envoyer<Amelioration>("/v1/ameliorations", s);
+export const ouvrirAtelierAmelioration = (id: string, lancer = true) =>
+  envoyer<Amelioration>(`/v1/ameliorations/${id}/atelier`, { lancer });
+export const apercuAmelioration = (id: string) => appeler<ApercuAmelioration>(`/v1/ameliorations/${id}/apercu`);
+export const testerAmelioration = (id: string) => envoyer<{ lance: boolean }>(`/v1/ameliorations/${id}/tests`);
+export const rejeterAmelioration = (id: string) => envoyer<Amelioration>(`/v1/ameliorations/${id}/rejeter`);
+export const demanderMiseEnService = (id: string) => envoyer<ReponseAction>(`/v1/ameliorations/${id}/mise-en-service`);
+export const demanderRetourArriere = (id: string) => envoyer<ReponseAction>(`/v1/ameliorations/${id}/retour`);
 // --- Voix et vision (phase 10) ---
 /** Enregistrement → texte (transcription sur le PC) ; `eveil` : la phrase commence par « Jarvis ». */
 export async function transcrireAudio(audio: Blob): Promise<{ texte: string; eveil: boolean; commande: string }> {
@@ -351,6 +389,17 @@ export async function transcrireAudio(audio: Blob): Promise<{ texte: string; eve
   }
   if (!rep.ok) throw await lireErreur(rep);
   return (await rep.json()) as { texte: string; eveil: boolean; commande: string };
+}
+/** Envoie un enregistrement brut (corps de la requête) avec des en-têtes en plus ; réponse JSON. */
+export async function envoyerAudio<T>(chemin: string, audio: Blob, extra: Record<string, string> = {}): Promise<T> {
+  let rep: Response;
+  try {
+    rep = await fetch(chemin, { method: "POST", headers: entetes({ "Content-Type": audio.type || "audio/webm", ...extra }), body: audio });
+  } catch {
+    throw new ErreurApi(INJOIGNABLE, 0);
+  }
+  if (!rep.ok) throw await lireErreur(rep);
+  return (await rep.json()) as T;
 }
 export const decrireImage = (image: string, question?: string) =>
   envoyer<{ description: string; modele: string }>("/v1/vision/decrire", { image, ...(question ? { question } : {}) });
@@ -436,3 +485,20 @@ export const modifierCommandeRapide = (id: string, c: CommandeRapideEdition) =>
   appeler<{ commande: CommandeRapide; conflits: ConflitCommande[] }>(`/v1/commandes-rapides/${id}`, { methode: "PUT", corps: c });
 export const supprimerCommandeRapide = (id: string) => appeler<{ supprimee: boolean }>(`/v1/commandes-rapides/${id}`, { methode: "DELETE" });
 export const executerCommandeRapide = (phrase: string) => envoyer<ResultatCommande>("/v1/commandes-rapides/executer", { phrase });
+
+// --- Bureau et téléphone (lot M) ---------------------------------------------------------------------------
+export const verifierLien = (lien: string) => envoyer<LienVerifie>("/v1/protocole", { lien });
+export const lireDemande = (id: string) => appeler<DemandeDetaillee>(`/v1/demandes/${id}`);
+export const reporterDemande = (id: string) => envoyer<{ statut: string; demande: Demande }>(`/v1/demandes/${id}/reporter`);
+export const etatPush = () => appeler<EtatPush>("/v1/push");
+export const abonnerPush = (abonnement: PushSubscriptionJSON) => envoyer<{ abonne: boolean }>("/v1/push/abonnement", abonnement);
+export const desabonnerPush = (endpoint?: string) =>
+  appeler<{ abonne: boolean }>("/v1/push/abonnement", { methode: "DELETE", corps: endpoint ? { endpoint } : {} });
+export const essayerPush = () => envoyer<{ remis: number }>("/v1/push/essai");
+export const listerPartages = () => appeler<{ partages: Partage[] }>("/v1/partages");
+export const recevoirPartage = (p: { titre: string; texte: string; url: string }) => envoyer<{ partage: Partage; message: string }>("/v1/partages", p);
+export const lirePartageRecu = (id: string) => appeler<{ partage: Partage; message: string }>(`/v1/partages/${id}`);
+export const partageTraite = (id: string) => envoyer<{ traite: boolean }>(`/v1/partages/${id}/traite`);
+export const supprimerPartage = (id: string) => appeler<{ supprime: boolean }>(`/v1/partages/${id}`, { methode: "DELETE" });
+export const listerEnvois = () => appeler<{ dossier: string; fichiers: FichierEnvoyable[]; duree_minutes: number }>("/v1/envois");
+export const creerLienEnvoi = (nom: string) => envoyer<{ url: string; chemin: string; expire_le: string }>("/v1/envois/lien", { nom });

@@ -52,16 +52,31 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
             " defis_webauthn, cles_acces, demandes, jumelages, appareils, connecteurs, executions_recettes, outils_mcp,"
             " fichiers_atelier, evenements_atelier, ateliers, memoire_vecteurs, domaines, fiches_concepts,"
             " questions_controle, extractions_domaines, journal_domaines, regles_protection, commandes_rapides,"
-            " autorisations_permanentes, connecteurs_maison"
+            " autorisations_permanentes, connecteurs_maison, abonnements_push, partages, liens_fichiers,"
+            " tentatives_jumelage, ameliorations"
             " RESTART IDENTITY CASCADE"
         )
         # Le journal d'audit est en ajout seul, même pour les tests : on ne le vide jamais (assertions relatives).
         await conn.execute("UPDATE etat_systeme SET valeur = '{\"actif\": false}' WHERE cle = 'arret_urgence'")
         await conn.execute("UPDATE etat_systeme SET valeur = '{\"termine\": false}' WHERE cle = 'accueil'")
         await conn.execute('UPDATE etat_systeme SET valeur = \'{"mode": "parle", "vus": {}}\' WHERE cle = \'matin\'')
+        await conn.execute("UPDATE etat_systeme SET valeur = '{\"mode\": \"demander\"}' WHERE cle = 'pilotage'")
+        await conn.execute(
+            'UPDATE etat_systeme SET valeur = \'{"jeu": "automatique", "mode": "normal", "avant": null,'
+            " \"modifies\": []}' WHERE cle = 'pc'"
+        )
         await conn.execute(
             'UPDATE etat_systeme SET valeur = \'{"actif": false, "voix": false, "notification": true}\''
             " WHERE cle = 'veille_claude_code'"
+        )
+        await conn.execute(
+            "UPDATE etat_systeme SET valeur = "
+            '\'{"jeu": "automatique", "mode": "normal", "avant": null, "modifies": []}\''
+            " WHERE cle = 'pc'"
+        )
+        await conn.execute(
+            'UPDATE etat_systeme SET valeur = \'{"ambiance": false, "openwakeword": false, "relance_s": 6}\''
+            " WHERE cle = 'eveil'"
         )
         await conn.execute(  # synthèse vocale (lot K2) : réglages par défaut
             'UPDATE etat_systeme SET valeur = \'{"moteur": "navigateur", "voix_piper": "fr_FR-siwis-medium",'

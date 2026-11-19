@@ -73,16 +73,6 @@ export function textePourLecture(phrase: string): string {
   return texte.replace(/[*_`#>|]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-const ARRET = /^(?:jarvis[\s,]*)?(?:stop|arr[eê]te(?:-toi)?|stoppe|ça suffit|c'est bon|tais[- ]toi|silence|chut)[\s.!]*$/i;
-const SILENCE = /(?:tais[- ]toi|silence|chut)/i;
-
-/** Phrase d'arrêt dite pendant la lecture : « stop » arrête la phrase, « silence » coupe la voix. */
-export function commandeArret(texte: string): "stop" | "silence" | null {
-  const t = texte.trim();
-  if (!ARRET.test(t)) return null;
-  return SILENCE.test(t) ? "silence" : "stop";
-}
-
 // --- Réglages courants (partagés par les lecteurs de la page) ------------------------------------------------------
 
 let courants: ReglagesSynthese = REGLAGES_DEFAUT;

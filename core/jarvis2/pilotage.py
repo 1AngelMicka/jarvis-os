@@ -45,6 +45,7 @@ VUES: dict[str, str] = {
     "connaissances": "Savoir",
     "agents": "Agents (missions, créations)",
     "ateliers": "Ateliers",
+    "ameliorations": "Améliorations",
     "connecteurs": "Connecteurs",
     "couts": "Coûts",
     "reglages": "Réglages",
@@ -62,7 +63,7 @@ REGLAGES_INTERFACE: dict[str, tuple[str, ...]] = {
 }
 TYPES_MISSION = ("recherche", "brainstorm", "revue")
 IMMEDIATES = ("naviguer", "ouvrir", "rechercher_memoire", "regler")
-PROPOSITIONS = ("proposer_mission", "proposer_atelier", "demander_action", "ajouter_regle")
+PROPOSITIONS = ("proposer_mission", "proposer_atelier", "proposer_amelioration", "demander_action", "ajouter_regle")
 
 _BLOC = re.compile(r"<actions>(.*?)(?:</actions>|$)", re.IGNORECASE | re.DOTALL)
 _ANCRE = re.compile(r"^[a-z0-9][a-z0-9-]{0,59}$")
@@ -78,6 +79,8 @@ Types :
 (animations : systeme|normales|reduites)
 - {{"type": "proposer_mission", "mission": "recherche|brainstorm|revue", "objectif": "<objectif précis>"}}
 - {{"type": "proposer_atelier", "projet": "<{projets}>", "nom": "<tâche>"}}
+- {{"type": "proposer_amelioration", "projet": "<{projets}>", "titre": "<amélioration>", "raison": "<pourquoi>"}} \
+(suggestion pour un projet ; la mise en service reste décidée par l'utilisateur)
 - {{"type": "demander_action", "action": "<action déclarée>", "parametres": {{…}}}} (actions : {actions})
 - {{"type": "ajouter_regle", "genre": "interdire|demander", "motif": "<mots ; * = tout>", "libelle": "<règle>"}}
 Une mission, un atelier, une action déclarée ou une règle ne sont que des PROPOSITIONS que l'utilisateur valide \
@@ -153,8 +156,8 @@ class ServicePilotage:
         if mode not in MODES:
             raise ErreurPilotage("Mode : oui, demander ou non")
         await self.pool.execute(
-            "INSERT INTO etat_systeme (cle, valeur) VALUES ('pilotage', $1::text::jsonb)"
-            " ON CONFLICT (cle) DO UPDATE SET valeur = excluded.valeur, maj_le = now()",
+            # La clé est créée par la migration 014 ; le rôle de l'application n'a que SELECT / UPDATE sur cette table
+            "UPDATE etat_systeme SET valeur = $1::text::jsonb, maj_le = now() WHERE cle = 'pilotage'",
             json.dumps({"mode": mode}),
         )
         return mode
@@ -174,7 +177,7 @@ class ServicePilotage:
                     actions=", ".join(
                         f"{nom} {'🔴' if getattr(a, 'niveau', '') == 'rouge' else '🟡'}"
                         for nom, a in declarees.items()
-                        if not nom.startswith("regle.")
+                        if not nom.startswith(("regle.", "amelioration."))
                     )
                     or "aucune",
                 )
@@ -289,10 +292,23 @@ class ServicePilotage:
             nom_atelier = _texte(brute.get("nom"), "nom", 120)
             parametres = {"projet": projet, "nom": nom_atelier}
             libelle = f"Ouvrir un atelier sur {projets[projet]} : {nom_atelier}"
+        elif type_ == "proposer_amelioration":
+            projets = self.projets()
+            projet = brute.get("projet")
+            if projet not in projets:
+                raise ErreurPilotage("projet d'amélioration inconnu")
+            titre = _texte(brute.get("titre"), "titre", 200, 3)
+            raison = _texte(brute.get("raison"), "raison", 2000, 3)
+            parametres = {"projet": projet, "titre": titre, "raison": raison}
+            libelle = f"Proposer une amélioration de {projets[projet]} : {titre}"
         elif type_ == "demander_action":
             declarees = self.actions_declarees()
             nom_action = brute.get("action")
-            if not isinstance(nom_action, str) or nom_action not in declarees or nom_action.startswith("regle."):
+            if (
+                not isinstance(nom_action, str)
+                or nom_action not in declarees
+                or nom_action.startswith(("regle.", "amelioration."))  # demandées depuis leur vue, jamais par le modèle
+            ):
                 raise ErreurPilotage(f"action non déclarée : « {str(nom_action)[:40]} »")
             params = brute.get("parametres") or {}
             if not isinstance(params, dict) or len(json.dumps(params)) > 2000:

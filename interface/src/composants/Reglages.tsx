@@ -24,11 +24,14 @@ import {
 import type { Etat } from "../types";
 import { EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal, reglerVoix, voixLocales } from "../voix";
 import { Telephone, Verifications } from "./Accueil";
+import { EnvoisTelephone, NotificationsTelephone, PartagesRecus } from "./Bureau";
 import { VueConnecteurs } from "./Connecteurs";
 import { VueCouts } from "./Couts";
+import { ReglagesEveil } from "./Eveil";
 import { FluxDonnees } from "./FluxDonnees";
 import { ReglagesMatin } from "./Matin";
 import { SectionMemoire } from "./Memoire";
+import { ControlePC, ModeJeuPC, RessourcesDuPC } from "./PC";
 import { AutorisationsPermanentes, CommandesRapides, ReglagePilotage, ReglesProtection } from "./Pilotage";
 import { ReglageSynthese } from "./ReglageSynthese";
 import { PanneauSecurite } from "./Securite";
@@ -423,6 +426,8 @@ export function VueReglages(p: Props) {
           </>
         );
       }
+      case "eveil":
+        return <ReglagesEveil surNotifier={p.surNotifier} />;
       case "connecteurs":
         return <VueConnecteurs surChangement={p.surChangement} />;
       case "couts":
@@ -484,8 +489,30 @@ export function VueReglages(p: Props) {
         return <PanneauSecurite nbCles={p.etat?.cles_acces ?? 0} surChangement={p.surChangement} blocs={["appareils"]} />;
       case "telephone":
         return <Telephone />;
+      case "notifications":
+        return <NotificationsTelephone />;
+      case "envois":
+        return <EnvoisTelephone />;
+      case "partages":
+        return <PartagesRecus />;
+      case "bureau":
+        return (
+          <ul className="reglage-lignes">
+            <Ligne nom="Montrer JARVIS">Ctrl+Maj+J (sinon Ctrl+Alt+J)</Ligne>
+            <Ligne nom="Parler (micro)">Ctrl+Maj+Espace (sinon Ctrl+Alt+Espace)</Ligne>
+            <Ligne nom="Regarder l'écran">Ctrl+Maj+Impr (sinon Ctrl+Alt+Impr)</Ligne>
+            <Ligne nom="Gadget de bureau">Icône de notification › Gadget de bureau</Ligne>
+            <Ligne nom="Liens jarvis://">ouvrir/&lt;vue&gt;, nouvelle, ecouter, ecran, dire?texte=…, conversation/&lt;id&gt;</Ligne>
+          </ul>
+        );
       case "veille-claude":
         return <VeilleClaude />;
+      case "ressources-pc":
+        return <RessourcesDuPC surNotifier={p.surNotifier} surChangement={p.surChangement} surDemandes={p.surDemandes} />;
+      case "mode-jeu":
+        return <ModeJeuPC surNotifier={p.surNotifier} surChangement={p.surChangement} surDemandes={p.surDemandes} />;
+      case "controle-pc":
+        return <ControlePC surNotifier={p.surNotifier} surChangement={p.surChangement} surDemandes={p.surDemandes} />;
       case "version":
         return (
           <ul className="reglage-lignes">
