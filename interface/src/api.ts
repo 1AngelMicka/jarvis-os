@@ -26,6 +26,9 @@ import type {
   Atelier,
   AttenteOutil,
   EvenementAtelier,
+  EtatVeille,
+  ModeleAtelier,
+  ReglagesVeille,
   BlocMemoire,
   EtatMemoire,
   Mission,
@@ -283,9 +286,21 @@ export const lancerTacheMemoire = (id: string) => envoyer<{ lancee: string }>(`/
 // --- Ateliers Claude Code ---
 export const listerAteliers = () =>
   unSeul("ateliers", () =>
-    appeler<{ projets: { id: string; nom: string }[]; ateliers: Atelier[]; attentes: AttenteOutil[] }>("/v1/ateliers"),
+    appeler<{ projets: { id: string; nom: string }[]; modeles: ModeleAtelier[]; ateliers: Atelier[]; attentes: AttenteOutil[] }>(
+      "/v1/ateliers",
+    ),
   );
-export const creerAtelier = (projet: string, nom: string) => envoyer<Atelier>("/v1/ateliers", { projet, nom });
+export const creerAtelier = (projet: string, nom: string, modele: string | null = null) =>
+  envoyer<Atelier>("/v1/ateliers", { projet, nom, modele });
+export const pauseAtelier = (id: string) => envoyer<{ fait: boolean }>(`/v1/ateliers/${id}/pause`);
+export const reprendreAtelier = (id: string) => envoyer<{ fait: boolean }>(`/v1/ateliers/${id}/reprendre`);
+export const relancerAtelier = (id: string) => envoyer<{ fait: boolean }>(`/v1/ateliers/${id}/relancer`);
+export const cloturerAtelier = (id: string, notes: string) => envoyer<Atelier>(`/v1/ateliers/${id}/cloturer`, { notes });
+export const modeleAtelier = (id: string, modele: string | null) =>
+  appeler<Atelier>(`/v1/ateliers/${id}/modele`, { methode: "PUT", corps: { modele } });
+export const lireVeille = (apres = 0) => appeler<EtatVeille>(`/v1/veille-claude?apres=${String(apres)}`);
+export const reglerVeille = (r: Partial<ReglagesVeille>) =>
+  appeler<{ reglages: ReglagesVeille }>("/v1/veille-claude", { methode: "PUT", corps: r });
 export const evenementsAtelier = (id: string, apres = 0) =>
   appeler<{ evenements: EvenementAtelier[]; attentes: AttenteOutil[] }>(`/v1/ateliers/${id}/evenements?apres=${String(apres)}`);
 export const consigneAtelier = (id: string, consigne: string, reprendre = false) =>

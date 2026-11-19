@@ -28,6 +28,7 @@ import { ReglagesMatin } from "./Matin";
 import { SectionMemoire } from "./Memoire";
 import { PanneauSecurite } from "./Securite";
 import { SelecteurTheme } from "./SelecteurTheme";
+import { VeilleClaude } from "./VeilleClaude";
 import { VueProfil } from "./VueProfil";
 
 interface Props {
@@ -423,6 +424,8 @@ export function VueReglages(p: Props) {
         return <PanneauSecurite nbCles={p.etat?.cles_acces ?? 0} surChangement={p.surChangement} blocs={["appareils"]} />;
       case "telephone":
         return <Telephone />;
+      case "veille-claude":
+        return <VeilleClaude />;
       case "version":
         return (
           <ul className="reglage-lignes">

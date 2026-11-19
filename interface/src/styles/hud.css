@@ -764,3 +764,16 @@ html[data-animations="reduites"] .point-etat[data-direct] { animation: none; }
   .chantier-etape input { width: 22px; height: 22px; margin: 0; }
 }
 .carte-co[data-cible] { border-color: var(--cyan); box-shadow: var(--lueur-1); }
+
+/* --- Ateliers (lot I) : conflits de fichiers, ateliers clôturés, veille des sessions Claude Code --- */
+.atelier-conflits { display: flex; flex-direction: column; gap: var(--e-1); width: 100%; margin: 0; padding: var(--e-2) var(--e-3); list-style: none; border: var(--l-fin) solid rgb(var(--c-rouge) / .45); border-radius: var(--r-2); background: rgb(var(--c-rouge) / .06); color: var(--texte-2); font-size: var(--t-mini); overflow-wrap: anywhere; }
+.ateliers-clos { display: flex; flex-direction: column; gap: var(--e-3); }
+.ateliers-clos > summary { min-height: var(--cible); display: flex; align-items: center; gap: var(--e-2); cursor: pointer; color: var(--texte-2); font: var(--t-petit) var(--f-ui); list-style: none; }
+.ateliers-clos > summary::-webkit-details-marker { display: none; }
+.ateliers-clos > summary::before { content: "▸"; color: var(--cyan); transition: transform var(--d-rapide) var(--e-sortie); }
+.ateliers-clos[open] > summary::before { transform: rotate(90deg); }
+.carte-co-cle > .select { min-width: 0; max-width: 100%; }
+.ateliers-clos > summary:focus-visible { outline: var(--l-moyen) solid rgb(var(--c-cyan) / .8); outline-offset: var(--e-1); border-radius: var(--r-1); }
+.veille-claude { display: flex; flex-direction: column; gap: var(--e-3); }
+.veille-reglages { display: flex; flex-direction: column; gap: var(--e-2); }
+.veille-permission { align-self: flex-start; }

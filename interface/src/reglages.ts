@@ -170,6 +170,14 @@ export const SECTIONS: readonly Section[] = [
     motsCles: ["mobile", "iphone", "android", "tailscale", "pwa", "distance"],
   },
   {
+    id: "veille-claude",
+    categorie: "appareils",
+    titre: "Veille de vos sessions Claude Code",
+    description: "Être prévenu quand une session vous attend ou attend une permission (lecture seule)",
+    motsCles: ["claude code", "sessions", "alerte", "notification", "permission", "vous attend", "terminal", "ateliers"],
+    alias: ["veille", "sessions-claude"],
+  },
+  {
     id: "version",
     categorie: "appareils",
     titre: "Version",

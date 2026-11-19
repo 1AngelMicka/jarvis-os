@@ -359,6 +359,58 @@ export interface Atelier {
   session: string | null;
   cree_le: string;
   actif: boolean;
+  /** Pause réelle (processus suspendu, autorisations retenues) */
+  en_pause: boolean;
+  /** Modèle de Claude Code choisi (null : réglage de Claude Code) */
+  modele: string | null;
+  notes: string | null;
+  clos_le: string | null;
+  /** Fichiers aussi modifiés par un autre atelier ouvert du même projet */
+  conflits: { fichier: string; ateliers: { id: string; nom: string }[] }[];
+}
+
+export interface ModeleAtelier {
+  id: string;
+  nom: string;
+}
+
+// --- Veille des sessions Claude Code de l'utilisateur (lecture seule) ---
+export type EtatSessionClaude = "travaille" | "vous_attend" | "permission" | "bloquee" | "inconnu";
+
+export interface SessionClaude {
+  id: string;
+  nom: string;
+  projet: string;
+  dossier: string;
+  etat: EtatSessionClaude;
+  libelle: string;
+  detail: string | null;
+  depuis: string | null;
+  origine: string | null;
+}
+
+export interface ReglagesVeille {
+  actif: boolean;
+  voix: boolean;
+  notification: boolean;
+}
+
+export interface AlerteVeille {
+  id: number;
+  texte: string;
+  etat: EtatSessionClaude;
+  session: string;
+  horodatage: string;
+}
+
+export interface EtatVeille {
+  reglages: ReglagesVeille;
+  disponible: boolean;
+  sessions: SessionClaude[];
+  alertes: AlerteVeille[];
+  /** Dernier numéro d'alerte donné par le Core (repart de 0 à son redémarrage) */
+  dernier: number;
+  maj_le: string | null;
 }
 
 export interface AttenteOutil {
