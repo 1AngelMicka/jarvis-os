@@ -62,7 +62,7 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
         await conn.execute('UPDATE etat_systeme SET valeur = \'{"mode": "parle", "vus": {}}\' WHERE cle = \'matin\'')
         await conn.execute("UPDATE etat_systeme SET valeur = '{\"mode\": \"demander\"}' WHERE cle = 'pilotage'")
         await conn.execute(
-            "UPDATE etat_systeme SET valeur = '{\"jeu\": \"automatique\", \"mode\": \"normal\", \"avant\": null,"
+            'UPDATE etat_systeme SET valeur = \'{"jeu": "automatique", "mode": "normal", "avant": null,'
             " \"modifies\": []}' WHERE cle = 'pc'"
         )
         await conn.execute(
