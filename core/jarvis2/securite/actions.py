@@ -140,6 +140,7 @@ def creer_registre(
             "Lancer une étape d'une mission projet (un appel d'IA, sans autre effet)",
             lambda p: f"Mission « {p.get('objectif')} » : étape {p.get('etape')} — {p.get('titre')}",
             etape_mission,
+            annulation="Irréversible : l'appel d'IA est fait ; son résultat reste dans la mission, à ignorer ou refaire",
         )
     )
     _ajouter_chantiers(registre)

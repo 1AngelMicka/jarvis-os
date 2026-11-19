@@ -26,7 +26,7 @@ import sys
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass
-from pathlib import Path, PurePath
+from pathlib import Path, PurePath, PureWindowsPath
 from typing import Protocol
 from xml.sax.saxutils import escape
 
@@ -160,7 +160,8 @@ class Detecteur:
         return Bac(cli, nom, True, f"{nom} en marche, image {self.image} présente")
 
     def exe_windows_sandbox(self) -> Path:
-        return Path(self.racine_systeme) / "System32" / "WindowsSandbox.exe"
+        # Chemin Windows construit comme tel, même quand les tests tournent sous Linux (CI)
+        return Path(str(PureWindowsPath(self.racine_systeme) / "System32" / "WindowsSandbox.exe"))
 
     async def bac(self, ident: str) -> Bac | None:
         """État actuel (cache) d'un type de bac."""
