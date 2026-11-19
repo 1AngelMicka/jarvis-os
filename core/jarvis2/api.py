@@ -47,6 +47,7 @@ from .api_chantiers import routeur as routeur_chantiers
 from .api_connaissances import routeur as routeur_connaissances
 from .api_connecteurs import routeur as routeur_connecteurs
 from .api_donnees import routeur as routeur_donnees
+from .api_eveil import routeur as routeur_eveil
 from .api_maison import routeur as routeur_maison
 from .api_matin import routeur as routeur_matin
 from .api_medias import routeur as routeur_medias
@@ -69,6 +70,7 @@ from .conversations import DepotConversations
 from .db import Base, ErreurBaseOuReseau, ouvrir_base, version_schema
 from .dialogue import AccordImagesRequis, ServiceDialogue, SourceMemoire
 from .embeddings import EncodeurFastEmbed
+from .eveil import ServiceEveil
 from .maison import GestionnaireMaison
 from .matin import ServiceMeteo
 from .memoire import Expurgateur, ReglagesRecherche
@@ -133,6 +135,7 @@ class Contexte:
     planificateur: Planificateur | None = field(init=False)
     pilotage: ServicePilotage = field(init=False)
     commandes: ServiceCommandes = field(init=False)
+    eveil: ServiceEveil = field(init=False)  # « Dis Jarvis » et conversation vocale de chaque appareil
 
     def __post_init__(self) -> None:
         self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp, self.ateliers, self.maison))
@@ -147,6 +150,7 @@ class Contexte:
         )
         self.service.pilotage = self.pilotage  # bloc d'actions des réponses, validé par le Core
         self.commandes = ServiceCommandes(self.pool, self.approbations.registre, self.pilotage)
+        self.eveil = ServiceEveil(self.pool, self.service, exclu=expurgateur.mentionne if expurgateur else None)
         self.connaissances = ServiceConnaissances(self.pool, self.service)
         self.missions = ServiceMissions(
             self.pool, self.service, self.recherche, self.urgence, self.scientifique, self.connaissances
@@ -379,6 +383,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             yield
         finally:
             ctx.telechargeur.arreter()  # fichiers partiels gardés : reprise au prochain accord
+            await ctx.eveil.fermer()
             for tache in taches:
                 if not tache.done():
                     tache.cancel()
@@ -598,6 +603,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_telechargements)
     app.include_router(routeur_donnees)
     app.include_router(routeur_pilotage)
+    app.include_router(routeur_eveil)
 
     dossier = parametres.dossier_interface
     if (dossier / "index.html").is_file():
