@@ -284,3 +284,44 @@ export const listerCreations = () =>
 export const creerCreation = (titre: string, demande: string) => envoyer<{ id: string; version: number }>("/v1/creations", { titre, demande });
 export const modifierCreation = (id: string, demande: string) => envoyer<{ id: string; version: number }>(`/v1/creations/${id}/modifier`, { demande });
 export const lienCreation = (id: string) => appeler<{ url: string; version: number }>(`/v1/creations/${id}/lien`);
+// --- Profil guidé (phase 13, lot D) ---
+export interface ReponseProfil {
+  question_id: string;
+  texte: string;
+  prive: boolean;
+  commentaire: string | null;
+  maj_le: string | null;
+}
+export interface SectionProfil {
+  id: string;
+  titre: string;
+  description: string;
+  prive: boolean;
+  total: number;
+  repondues: number;
+}
+export interface QuestionProfil {
+  id: string;
+  section: string;
+  texte: string;
+  aide: string;
+  reponse: ReponseProfil | null;
+}
+export interface EtatProfil {
+  sections: SectionProfil[];
+  total: number;
+  repondues: number;
+  pourcentage: number;
+  reprise: { section: string; question: string } | null;
+  heritees: number;
+}
+export const lireProfil = () => appeler<EtatProfil>("/v1/profil");
+export const lireSectionProfil = (id: string) =>
+  appeler<Omit<SectionProfil, "total" | "repondues"> & { questions: QuestionProfil[] }>(`/v1/profil/sections/${encodeURIComponent(id)}`);
+export const repondreProfil = (questionId: string, texte: string, prive: boolean) =>
+  appeler<{ reponse: ReponseProfil; modifiee: boolean }>(`/v1/profil/reponses/${encodeURIComponent(questionId)}`, {
+    methode: "PUT",
+    corps: { texte, prive },
+  });
+export const retirerReponseProfil = (questionId: string) =>
+  appeler<{ retiree: string }>(`/v1/profil/reponses/${encodeURIComponent(questionId)}`, { methode: "DELETE" });

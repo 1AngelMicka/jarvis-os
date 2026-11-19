@@ -44,6 +44,7 @@ from .api_connecteurs import routeur as routeur_connecteurs
 from .api_medias import routeur as routeur_medias
 from .api_medias import routeur_pages as routeur_creations
 from .api_memoire import routeur as routeur_memoire
+from .api_profil import routeur as routeur_profil
 from .api_securite import routeur as routeur_securite
 from .ateliers.gestionnaire import GestionnaireAteliers, Projet
 from .config import Parametres
@@ -482,6 +483,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_medias)
     app.include_router(routeur_creations)
     app.include_router(routeur_memoire)
+    app.include_router(routeur_profil)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():
