@@ -77,7 +77,23 @@ class SourceMemoire:
         except Exception:  # la mémoire ne doit jamais empêcher de répondre
             journal.exception("Mémoire indisponible : réponse sans souvenirs")
             return ContexteMemoire(consultee=False, expurgateur=self.reglages.expurgateur)
-        return ContexteMemoire(noyau=noyau, souvenirs=souvenirs, blocs=blocs, expurgateur=self.reglages.expurgateur)
+        domaines: list[dict[str, Any]] = []
+        try:  # domaine évoqué : sa carte et son niveau avant les souvenirs, ses fiches en tête
+            from .connaissances import contexte_domaines
+
+            domaines, fiches = await contexte_domaines(self.pool, self.encodeur, texte, exclure_local=externe)
+            if fiches:
+                ids = {r.souvenir.id for r in fiches}
+                souvenirs = fiches + [r for r in souvenirs if r.souvenir.id not in ids]
+        except Exception:
+            journal.exception("Connaissances indisponibles pour ce message")
+        return ContexteMemoire(
+            noyau=noyau, souvenirs=souvenirs, blocs=blocs, expurgateur=self.reglages.expurgateur, domaines=domaines
+        )
+
+
+def domaines_evoques(contexte: ContexteMemoire) -> list[dict[str, Any]]:
+    return [{"id": str(d["id"]), "nom": d["nom"], "niveau": d["niveau"]} for d in contexte.domaines]
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +140,10 @@ class ServiceDialogue:
         if self.memoire is None:
             return False
         contexte = await self.memoire.contexte(texte, externe=False)
-        return any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs)
+        return any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs) or any(
+            d["prive"]
+            for d in contexte.domaines  # domaine de connaissance privé évoqué
+        )
 
     async def consignes(
         self, texte: str, externe: bool, conversation_id: UUID | None = None
@@ -222,8 +241,10 @@ class ServiceDialogue:
                 masques.update(filtre.masques)
                 filtres.append(Message(envoi.role, filtre.texte))
             messages = filtres
-        prive = any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs) or any(
-            s.confidentialite == "local_uniquement" for s in contexte.noyau
+        prive = (
+            any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs)
+            or any(s.confidentialite == "local_uniquement" for s in contexte.noyau)
+            or any(d["prive"] for d in contexte.domaines)
         )
         return Envoi(messages, contexte, masques, prive)
 
@@ -329,6 +350,8 @@ class ServiceDialogue:
                         "memoire_consultee": contexte.consultee,
                         "masques": dict(masques),
                         "prive": prive,
+                        # Domaines de connaissance évoqués : l'interface propose de les réviser
+                        **({"domaines": domaines_evoques(contexte)} if contexte.domaines else {}),
                     }
                     stocke = await self.depot.ajouter_message(conversation.id, "jarvis", rep.texte, meta)
                     termine = True

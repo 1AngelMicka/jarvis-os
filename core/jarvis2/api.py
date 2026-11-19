@@ -37,9 +37,11 @@ from .agents.mcp import GestionnaireMCP
 from .agents.missions import ServiceMissions
 from .agents.recettes import Planificateur
 from .agents.recherche_web import RechercheWeb
+from .agents.sources_scientifiques import SourcesScientifiques
 from .api_accueil import routeur as routeur_accueil
 from .api_agents import routeur as routeur_agents
 from .api_ateliers import routeur as routeur_ateliers
+from .api_connaissances import routeur as routeur_connaissances
 from .api_connecteurs import routeur as routeur_connecteurs
 from .api_medias import routeur as routeur_medias
 from .api_medias import routeur_pages as routeur_creations
@@ -49,6 +51,7 @@ from .ateliers.gestionnaire import GestionnaireAteliers, Projet
 from .config import Parametres
 from .config_locale import charger as charger_config_locale
 from .config_locale import chemin_config
+from .connaissances import ServiceConnaissances
 from .connecteurs import Connecteurs, construire_catalogue
 from .conseil import ServiceConseil
 from .conversations import DepotConversations
@@ -94,6 +97,7 @@ class Contexte:
     chargement_modele: str | None = None  # None, « en_cours », « termine », « erreur »
     mcp: GestionnaireMCP | None = None
     recherche: RechercheWeb = field(default_factory=lambda: RechercheWeb(None))
+    scientifique: SourcesScientifiques | None = None  # bases scientifiques publiques des missions de recherche
     dossier_recettes: Path | None = None
     dossier_donnees: Path | None = None  # tâches de nuit de la mémoire (export Markdown dans memoire-md/)
     etat_bascule: EtatBascule | None = None
@@ -103,15 +107,19 @@ class Contexte:
     modele_vision: str | None = None
     approbations: Approbations = field(init=False)
     conseil: ServiceConseil = field(init=False)
+    connaissances: ServiceConnaissances = field(init=False)
     missions: ServiceMissions = field(init=False)
     planificateur: Planificateur | None = field(init=False)
 
     def __post_init__(self) -> None:
         self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp, self.ateliers))
         self.conseil = ServiceConseil(self.service)
-        self.missions = ServiceMissions(self.pool, self.service, self.recherche, self.urgence)
+        self.connaissances = ServiceConnaissances(self.pool, self.service)
+        self.missions = ServiceMissions(
+            self.pool, self.service, self.recherche, self.urgence, self.scientifique, self.connaissances
+        )
         taches = (
-            taches_memoire(self.pool, self.service, self.dossier_donnees / "memoire-md")
+            taches_memoire(self.pool, self.service, self.dossier_donnees / "memoire-md", self.connaissances)
             if self.dossier_donnees is not None and self.memoire is not None
             else []
         )
@@ -177,6 +185,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
         connecteurs=connecteurs,
         mcp=GestionnaireMCP.depuis_config(locale.serveurs_mcp),
         recherche=RechercheWeb(locale.searxng),
+        scientifique=SourcesScientifiques() if locale.scientifique else None,
         dossier_recettes=chemin_config().parent / "recettes",
         dossier_donnees=p.dossier_donnees,
         ateliers=GestionnaireAteliers(
@@ -401,9 +410,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         return {"resultats": [{"score": r.score, **r.souvenir.en_dict()} for r in resultats]}
 
     @app.get("/v1/conversations")
-    async def conversations(
-        request: Request, limite: int = 50, archivees: bool = False, q: str = ""
-    ) -> dict[str, Any]:
+    async def conversations(request: Request, limite: int = 50, archivees: bool = False, q: str = "") -> dict[str, Any]:
         depot = ctx(request).depot
         limite = max(1, min(limite, 200))
         texte = q.strip()[:200]
@@ -484,6 +491,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_medias)
     app.include_router(routeur_creations)
     app.include_router(routeur_memoire)
+    app.include_router(routeur_connaissances)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():

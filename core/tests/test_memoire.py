@@ -215,7 +215,7 @@ async def test_parcourir_par_origine_et_pages(pool: Base) -> None:
         await memoire.ajouter(pool, f"Note numéro {i}", origine="utilisateur")
     await memoire.ajouter(pool, "Rapport de mission sur les tomates", origine="mission")
     page = await memoire.parcourir(pool, limite=3)
-    assert [s.contenu for s in page][0] == "Rapport de mission sur les tomates" and len(page) == 3
+    assert page[0].contenu == "Rapport de mission sur les tomates" and len(page) == 3
     suite = await memoire.parcourir(pool, limite=10, avant=page[-1].cree_le)
     assert len(suite) == 3 and not {s.id for s in suite} & {s.id for s in page}
     assert [s.origine for s in await memoire.parcourir(pool, origine="mission")] == ["mission"]
