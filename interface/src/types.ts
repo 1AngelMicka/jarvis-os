@@ -226,6 +226,20 @@ export interface Verification {
   aide: string | null;
 }
 
+/** Gros téléchargement (modèle d'embeddings, Whisper) : lu sur ses marqueurs `.downloading` / `.ready` / `.failed`. */
+export interface Telechargement {
+  id: string;
+  titre: string;
+  nom: string;
+  statut: "absent" | "en_cours" | "interrompu" | "pret" | "echoue";
+  octets: number;
+  total: number | null;
+  raison: string | null;
+  essai: number | null;
+  maj: string | null;
+  taille_estimee: number | null;
+}
+
 export interface EtatTailscale {
   installe: boolean;
   connecte: boolean;
