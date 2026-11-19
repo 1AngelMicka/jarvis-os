@@ -9,6 +9,7 @@ import math
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 import httpx
 import pytest
@@ -140,6 +141,10 @@ def test_voix_piper_resolue_depuis_le_hub(tmp_path: Path) -> None:
     assert not telechargements.est_pret(modele)  # rien n'est téléchargé sans accord
 
 
+def raison(r: httpx.Response) -> str:
+    return unquote(r.headers["x-voix-raison"])
+
+
 # --- API : réglages, clé ElevenLabs, phrase en audio ----------------------------------------------------------------
 
 
@@ -222,7 +227,7 @@ async def test_dire_par_piper_et_par_elevenlabs(systeme: dict[str, Any]) -> None
 
     # Sans clé : rien ne part, l'interface lira avec la voix du système
     r = await client.post("/v1/synthese/dire", json={"texte": "Bonjour.", "moteur": "elevenlabs"})
-    assert r.status_code == 409 and not envoyes
+    assert r.status_code == 204 and not envoyes
     await client.put("/v1/synthese/cle", json={"cle": CLE_EL})
     r = await client.post(
         "/v1/synthese/dire", json={"texte": f"Clé {CLE_OPENAI}, écrivez à a.b@example.org.", "moteur": "elevenlabs"}
@@ -236,12 +241,12 @@ async def test_dire_par_piper_et_par_elevenlabs(systeme: dict[str, Any]) -> None
     # Phrase privée : elle ne part pas (barrière des IA externes)
     avant = len(envoyes)
     r = await client.post("/v1/synthese/dire", json={"texte": "Rendez-vous chez le médecin.", "moteur": "elevenlabs"})
-    assert r.status_code == 409 and len(envoyes) == avant
+    assert r.status_code == 204 and len(envoyes) == avant
 
-    # Clé refusée par le service : 409, l'interface prend le relais
+    # Clé refusée par le service : 204 et sa raison, l'interface prend le relais
     systeme["coffre"].definir("elevenlabs", "mauvaise-cle-123")
     r = await client.post("/v1/synthese/dire", json={"texte": "Bonjour.", "moteur": "elevenlabs"})
-    assert r.status_code == 409 and "refusée" in r.json()["detail"]
+    assert r.status_code == 204 and "refusée" in raison(r)
 
 
 @pytest.mark.base

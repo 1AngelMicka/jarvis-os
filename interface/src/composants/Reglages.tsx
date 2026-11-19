@@ -200,8 +200,8 @@ function VoixInstallees() {
   if (!voix.length)
     return (
       <p className="sec-texte" data-etat="alerte">
-        Aucune voix française locale sur cet appareil : JARVIS reste muet plutôt que d'envoyer le texte à un service en ligne. Ajoutez une voix
-        française dans les réglages de langue du système.
+        Aucune voix française locale sur cet appareil : JARVIS lit avec Piper s'il est prêt, sinon il reste muet plutôt que d'envoyer le texte à
+        un service en ligne. Ajoutez une voix française dans les réglages de langue du système.
       </p>
     );
   return (

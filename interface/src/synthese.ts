@@ -119,7 +119,8 @@ export async function synthetiserParLeCore(texte: string, moteur: Exclude<Moteur
     body: JSON.stringify({ texte, moteur }),
     signal,
   });
-  if (!rep.ok) throw new ErreurApi(`Synthèse ${moteur} indisponible`, rep.status);
+  // 204 : ce moteur ne peut pas dire la phrase (raison dans X-Voix-Raison) ; la voix du système prend le relais
+  if (!rep.ok || rep.status === 204) throw new ErreurApi(`Synthèse ${moteur} indisponible`, rep.status);
   return rep.arrayBuffer();
 }
 

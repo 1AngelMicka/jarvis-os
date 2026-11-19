@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING, Any, Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -111,10 +112,11 @@ async def telecharger_piper(request: Request) -> dict[str, Any]:
 
 @routeur.post("/synthese/dire")
 async def dire(request: Request, corps: Phrase) -> Response:
-    """Une phrase en audio (WAV de Piper, MP3 d'ElevenLabs). 409 : ce moteur ne peut pas la dire, l'interface la
-    lit avec la voix du système (JARVIS n'est jamais muet)."""
+    """Une phrase en audio (WAV de Piper, MP3 d'ElevenLabs). 204 (raison dans `X-Voix-Raison`) : ce moteur ne peut
+    pas la dire, l'interface la lit avec la voix du système (JARVIS n'est jamais muet). Un repli prévu, pas une
+    erreur : aucune trace rouge dans la console du navigateur."""
     try:
         audio = await _service(request).dire(corps.texte, corps.moteur)
     except synthese.ErreurSynthese as exc:
-        raise HTTPException(409, str(exc)) from exc
+        return Response(status_code=204, headers={"X-Voix-Raison": quote(str(exc)), "Cache-Control": "no-store"})
     return Response(audio.donnees, media_type=audio.type, headers={"X-Voix": audio.moteur, "Cache-Control": "no-store"})
