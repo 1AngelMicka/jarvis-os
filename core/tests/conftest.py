@@ -53,7 +53,7 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
             " fichiers_atelier, evenements_atelier, ateliers, memoire_vecteurs, domaines, fiches_concepts,"
             " questions_controle, extractions_domaines, journal_domaines, regles_protection, commandes_rapides,"
             " autorisations_permanentes, connecteurs_maison, abonnements_push, partages, liens_fichiers,"
-            " tentatives_jumelage, ameliorations"
+            " tentatives_jumelage, ameliorations, mission_plans"
             " RESTART IDENTITY CASCADE"
         )
         # Le journal d'audit est en ajout seul, même pour les tests : on ne le vide jamais (assertions relatives).
@@ -88,6 +88,9 @@ async def _postgres(url_proprio: str, parametres: Parametres) -> BasePostgres:
         await conn.execute(
             """UPDATE etat_systeme SET valeur = '{"actif": false, "corrections": [], "styles": {}}'"""
             " WHERE cle = 'dictee'"
+        )
+        await conn.execute(  # lot 14 · B 10 : deux étapes de mission projet en même temps
+            """UPDATE etat_systeme SET valeur = '{"parallele": 2}' WHERE cle = 'missions'"""
         )
     finally:
         await conn.close()

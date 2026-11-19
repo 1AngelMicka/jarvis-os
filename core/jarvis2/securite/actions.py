@@ -104,6 +104,20 @@ def creer_registre(
             lever_urgence,
         )
     )
+
+    async def etape_mission(conn: Connexion, p: dict[str, Any]) -> dict[str, Any]:
+        # Sans effet : l'approbation autorise la mission projet à lancer l'étape (appel d'IA, voir missions.py)
+        return {"mission_id": p.get("mission_id"), "etape": p.get("etape"), "approuvee": True}
+
+    registre.ajouter(
+        Action(
+            "mission.etape",
+            "jaune",
+            "Lancer une étape d'une mission projet (un appel d'IA, sans autre effet)",
+            lambda p: f"Mission « {p.get('objectif')} » : étape {p.get('etape')} — {p.get('titre')}",
+            etape_mission,
+        )
+    )
     _ajouter_chantiers(registre)
     _ajouter_regles(registre)
     if mcp is not None:

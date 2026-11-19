@@ -8,9 +8,11 @@ from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .agents.mcp import ErreurMCP
+from .agents.missions import ConflitMission, PlanInvalide
 from .securite import audit
 from .securite.appareils import Appareil
 
@@ -83,7 +85,7 @@ async def lancer_recette(request: Request, ident: str) -> dict[str, Any]:
 
 
 class DemandeMission(BaseModel):
-    type: Literal["recherche", "brainstorm", "revue"]
+    type: Literal["recherche", "brainstorm", "revue", "projet"]
     objectif: str = Field(min_length=3, max_length=4000)
     scientifique: bool = True  # recherche : bases scientifiques en plus du web
     domaine_id: UUID | None = None  # domaine de connaissance (revue : sa révision ; recherche : l'enrichit)
@@ -97,6 +99,57 @@ async def missions(request: Request) -> dict[str, Any]:
         "recherche_web": c.recherche.disponible,
         "scientifique": c.scientifique.noms if c.scientifique is not None else [],
     }
+
+
+class PlanModifie(BaseModel):
+    spec: str = Field(max_length=20000)
+    plan: str = Field(max_length=20000)
+
+
+class ReglagesMissions(BaseModel):
+    parallele: int = Field(ge=1, le=8)
+
+
+# Déclarées avant /missions/{ident} : « reglages » n'est pas un identifiant de mission
+@routeur.get("/missions/reglages")
+async def reglages_missions(request: Request) -> dict[str, Any]:
+    return await _ctx(request).missions.reglages()
+
+
+@routeur.put("/missions/reglages")
+async def regler_missions(request: Request, corps: ReglagesMissions) -> dict[str, Any]:
+    c, a = _ctx(request), _appareil(request)
+    reglages = await c.missions.regler(corps.parallele)
+    await audit.journaliser(c.pool, acteur=a.acteur, action="mission.reglages", details=reglages)
+    return reglages
+
+
+@routeur.put("/missions/{ident}/plan")
+async def modifier_plan(request: Request, ident: UUID, corps: PlanModifie) -> dict[str, Any]:
+    c, a = _ctx(request), _appareil(request)
+    try:
+        m = await c.missions.modifier_plan(ident, corps.spec, corps.plan)
+    except LookupError as exc:
+        raise HTTPException(404, "Mission introuvable") from exc
+    except ConflitMission as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await audit.journaliser(c.pool, acteur=a.acteur, action="mission.plan_modifie", cible=str(ident))
+    return _propre(m)
+
+
+@routeur.post("/missions/{ident}/executer", response_model=None)
+async def executer_plan(request: Request, ident: UUID) -> dict[str, Any] | JSONResponse:
+    c, a = _ctx(request), _appareil(request)
+    try:
+        await c.missions.executer_plan(ident)
+    except LookupError as exc:
+        raise HTTPException(404, "Mission introuvable") from exc
+    except ConflitMission as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except PlanInvalide as exc:
+        return JSONResponse({"detail": " ; ".join(exc.erreurs), "erreurs": exc.erreurs}, status_code=422)
+    await audit.journaliser(c.pool, acteur=a.acteur, action="mission.executee", cible=str(ident))
+    return {"id": str(ident)}
 
 
 @routeur.get("/missions/{ident}")
