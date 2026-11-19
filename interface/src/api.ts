@@ -6,6 +6,10 @@ import { EVENEMENT_NON_AUTORISE, ecrireJeton, lireJeton } from "./auth";
 import type { ResumeCouts } from "./couts";
 import { LecteurSSE } from "./sse";
 import type {
+  Activite,
+  Chantier,
+  EtapeChantier,
+  StatutChantier,
   Appareil,
   Connecteur,
   Demande,
@@ -32,6 +36,12 @@ import type {
   ResumeConversation,
   OrigineMemoire,
   Souvenir,
+  CarteMatin,
+  LieuTrouve,
+  LocalisationMatin,
+  ModeMatin,
+  Prereglage,
+  ReglagesMatin,
 } from "./types";
 
 export class ErreurApi extends Error {
@@ -86,7 +96,7 @@ function entetes(extra: Record<string, string> = {}): Record<string, string> {
   return { Accept: "application/json", ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}), ...extra };
 }
 
-async function appeler<T>(chemin: string, init: { methode?: string; corps?: unknown } = {}): Promise<T> {
+export async function appeler<T>(chemin: string, init: { methode?: string; corps?: unknown } = {}): Promise<T> {
   let rep: Response;
   try {
     rep = await fetch(chemin, {
@@ -101,7 +111,7 @@ async function appeler<T>(chemin: string, init: { methode?: string; corps?: unkn
   return (await rep.json()) as T;
 }
 
-const envoyer = <T>(chemin: string, corps: unknown = {}) => appeler<T>(chemin, { methode: "POST", corps });
+export const envoyer = <T>(chemin: string, corps: unknown = {}) => appeler<T>(chemin, { methode: "POST", corps });
 
 export const lireEtat = () => unSeul("etat", () => appeler<Etat>("/v1/etat"));
 /** Le Core répond-il ? (route publique, légère : surveillance de la connexion) */
@@ -168,14 +178,26 @@ export const terminerAccueil = () => envoyer<{ termine: boolean }>("/v1/accueil/
 export const lireDiagnostic = () => unSeul("diagnostic", () => appeler<{ verifications: Verification[] }>("/v1/diagnostic"));
 export const reparer = (id: string) => envoyer<{ verifications: Verification[] }>(`/v1/diagnostic/reparer/${encodeURIComponent(id)}`);
 export const lireTailscale = () => appeler<EtatTailscale>("/v1/tailscale");
+export const choisirPrereglages = (choix: Prereglage[]) =>
+  envoyer<{ prereglages: Prereglage[]; recette: "creee" | "existante" | null }>("/v1/accueil/prereglages", { choix });
+
+// --- Accueil du matin ---
+export const lireMatin = (rejouer = false) => appeler<CarteMatin>(`/v1/matin${rejouer ? "?rejouer=true" : ""}`);
+export const marquerMatinVu = () => envoyer<{ vu: string }>("/v1/matin/vu");
+export const lireReglagesMatin = () => appeler<ReglagesMatin>("/v1/matin/reglages");
+export const changerReglagesMatin = (r: { mode?: ModeMatin; localisation?: LocalisationMatin; effacer_localisation?: boolean }) =>
+  appeler<ReglagesMatin>("/v1/matin/reglages", { methode: "PUT", corps: r });
+export const chercherLieux = (q: string) => appeler<{ lieux: LieuTrouve[] }>(`/v1/matin/lieux?q=${encodeURIComponent(q)}`);
 
 // --- Agents : recettes, missions, outils MCP ---
 export const listerRecettes = () =>
   unSeul("recettes", () => appeler<{ dossier: string | null; recettes: Recette[]; erreurs: string[] }>("/v1/recettes"));
 export const lancerRecette = (id: string) => envoyer<{ lancee: string }>(`/v1/recettes/${encodeURIComponent(id)}/lancer`);
 export const listerMissions = () =>
-  unSeul("missions", () => appeler<{ missions: Mission[]; recherche_web: boolean }>("/v1/missions"));
-export const lancerMission = (type: Mission["type"], objectif: string) => envoyer<{ id: string }>("/v1/missions", { type, objectif });
+  unSeul("missions", () => appeler<{ missions: Mission[]; recherche_web: boolean; scientifique: string[] }>("/v1/missions"));
+/** `scientifique` : bases scientifiques en plus du web ; `domaine_id` : domaine de connaissance (revue = révision). */
+export const lancerMission = (type: Mission["type"], objectif: string, options: { scientifique?: boolean; domaine_id?: string } = {}) =>
+  envoyer<{ id: string }>("/v1/missions", { type, objectif, ...options });
 export const listerOutilsMcp = () => unSeul("mcp", () => appeler<{ serveurs: ServeurMcp[] }>("/v1/mcp/outils"));
 export const activerOutilMcp = (serveur: string, outil: string, actif: boolean) =>
   envoyer<{ actif: boolean }>(`/v1/mcp/outils/${encodeURIComponent(serveur)}/${encodeURIComponent(outil)}/actif`, { actif });
@@ -288,3 +310,54 @@ export const listerCreations = () =>
 export const creerCreation = (titre: string, demande: string) => envoyer<{ id: string; version: number }>("/v1/creations", { titre, demande });
 export const modifierCreation = (id: string, demande: string) => envoyer<{ id: string; version: number }>(`/v1/creations/${id}/modifier`, { demande });
 export const lienCreation = (id: string) => appeler<{ url: string; version: number }>(`/v1/creations/${id}/lien`);
+// --- Chantiers et activité (phase 13, lot C) ---
+export const lireActivite = () => unSeul("activite", () => appeler<Activite>("/v1/activite"));
+export const listerChantiers = (statut: "ouverts" | "termines" | "abandonnes" | "tous" = "ouverts") =>
+  appeler<{ chantiers: Chantier[] }>(`/v1/chantiers?statut=${statut}`);
+export const creerChantier = (titre: string, etapes: EtapeChantier[] = []) =>
+  envoyer<{ chantier: Chantier; cree: boolean }>("/v1/chantiers", { titre, etapes });
+export const modifierChantier = (id: string, modif: { etapes?: EtapeChantier[]; progression?: number; statut?: StatutChantier; titre?: string }) =>
+  appeler<Chantier>(`/v1/chantiers/${id}`, { methode: "PATCH", corps: modif });
+export const terminerChantier = (id: string) => envoyer<{ chantier: Chantier; doublons_abandonnes: number }>(`/v1/chantiers/${id}/terminer`);
+export const rouvrirChantier = (id: string) => envoyer<Chantier>(`/v1/chantiers/${id}/rouvrir`);
+// --- Profil guidé (phase 13, lot D) ---
+export interface ReponseProfil {
+  question_id: string;
+  texte: string;
+  prive: boolean;
+  commentaire: string | null;
+  maj_le: string | null;
+}
+export interface SectionProfil {
+  id: string;
+  titre: string;
+  description: string;
+  prive: boolean;
+  total: number;
+  repondues: number;
+}
+export interface QuestionProfil {
+  id: string;
+  section: string;
+  texte: string;
+  aide: string;
+  reponse: ReponseProfil | null;
+}
+export interface EtatProfil {
+  sections: SectionProfil[];
+  total: number;
+  repondues: number;
+  pourcentage: number;
+  reprise: { section: string; question: string } | null;
+  heritees: number;
+}
+export const lireProfil = () => appeler<EtatProfil>("/v1/profil");
+export const lireSectionProfil = (id: string) =>
+  appeler<Omit<SectionProfil, "total" | "repondues"> & { questions: QuestionProfil[] }>(`/v1/profil/sections/${encodeURIComponent(id)}`);
+export const repondreProfil = (questionId: string, texte: string, prive: boolean) =>
+  appeler<{ reponse: ReponseProfil; modifiee: boolean }>(`/v1/profil/reponses/${encodeURIComponent(questionId)}`, {
+    methode: "PUT",
+    corps: { texte, prive },
+  });
+export const retirerReponseProfil = (questionId: string) =>
+  appeler<{ retiree: string }>(`/v1/profil/reponses/${encodeURIComponent(questionId)}`, { methode: "DELETE" });

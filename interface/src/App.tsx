@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireConversation, lireEtat, lireNouveautes, listerDemandes, resumerConversation, sonderCore } from "./api";
+import { arreterUrgence, conseiller, demanderAction, dialoguer, ErreurApi, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, listerDemandes, resumerConversation, sonderCore } from "./api";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
 import { VueAccueil } from "./composants/Accueil";
+import { type CibleActivite, PanneauActivite } from "./composants/Activite";
 import { VueAgents } from "./composants/Agents";
 import { VueAteliers } from "./composants/Ateliers";
 import { VueConnecteurs } from "./composants/Connecteurs";
 import { VueCouts } from "./composants/Couts";
 import { ListeDemandes } from "./composants/Demandes";
-import { Console, Fil, type MessageAffiche } from "./composants/Dialogue";
+import { Console, EVENEMENT_JOINDRE, Fil, type MessageAffiche } from "./composants/Dialogue";
+import { Aide, type ModePalette, Palette } from "./composants/Palette";
+import { commande as infoCommande, commandeDuRaccourci, type IdCommande, themeDepuis, themeSuivant } from "./commandes";
+import type { ImageJointe } from "./images";
+import { choisirTheme, lireTheme, THEMES, type Theme } from "./theme";
 import { ListeConversations } from "./composants/Historique";
 import { VueMemoire } from "./composants/VueMemoire";
+import { VueConnaissances } from "./composants/Connaissances";
+import { AccueilMatin } from "./composants/Matin";
 import { EcranJumelage } from "./composants/Jumelage";
 import { Panneau } from "./composants/Panneau";
 import { type EtatNoyau, Reacteur } from "./composants/Reacteur";
@@ -18,8 +25,8 @@ import { PanneauSecurite } from "./composants/Securite";
 import { CommandesVoix } from "./composants/Voix";
 import { SelecteurTheme } from "./composants/SelecteurTheme";
 import { ecrirePreferences, lirePreferences } from "./preferences";
-import { LecteurVocal } from "./voix";
-import type { AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
+import { couperVoix, LecteurVocal } from "./voix";
+import type { Activite, AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
 
 let compteur = 0;
 const nouvelleCle = () => `m${String(++compteur)}`;
@@ -57,7 +64,7 @@ export function App() {
   );
 }
 
-type Onglet = "conversations" | "demandes" | "securite";
+type Onglet = "conversations" | "activite" | "demandes" | "securite";
 
 function Hud() {
   const [etat, setEtat] = useState<Etat | null>(null);
@@ -74,13 +81,20 @@ function Hud() {
   const [alerte, setAlerte] = useState(false);
   const [lateralOuvert, setLateralOuvert] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>("conversations");
-  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire" | "couts">("dialogue");
+  const [vue, setVue] = useState<"dialogue" | "connecteurs" | "accueil" | "agents" | "ateliers" | "memoire" | "connaissances" | "couts">("dialogue");
   const [conseil, setConseil] = useState(false);
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
   const [annonce, setAnnonce] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
+  // Panneau Activité (chantiers, missions, ateliers, créations) et élément à ouvrir dans une vue
+  const [activite, setActivite] = useState<Activite | null>(null);
+  const [erreurActivite, setErreurActivite] = useState<string | null>(null);
+  const [cible, setCible] = useState<CibleActivite | null>(null);
+  const [palette, setPalette] = useState<{ mode: ModePalette; requete: string } | null>(null);
+  const [aide, setAide] = useState(false);
   const controleur = useRef<AbortController | null>(null);
   const lecteur = useRef(new LecteurVocal()).current;
+  const [rejouerMatin, setRejouerMatin] = useState(0); // « Rejouer l'accueil » du matin (panneau État)
   const minuterieNotif = useRef<number | undefined>(undefined);
 
   const notifier = useCallback((message: string) => {
@@ -152,6 +166,22 @@ function Hud() {
     }
   }, [notifier]);
 
+  const rafraichirActivite = useCallback(() => {
+    lireActivite()
+      .then((a) => {
+        setErreurActivite(null);
+        setActivite((avant) => (avant && JSON.stringify(avant) === JSON.stringify(a) ? avant : a));
+      })
+      .catch((e: unknown) => {
+        setErreurActivite(e instanceof Error ? e.message : "Activité illisible.");
+      });
+  }, []);
+  useEffect(rafraichirActivite, [rafraichirActivite]);
+  // L'élément ciblé depuis l'Activité ne vaut que pour la vue qu'il a ouverte
+  useEffect(() => {
+    setCible((c) => (c && c.vue !== vue ? null : c));
+  }, [vue]);
+
   // Surveillance de la connexion : l'état « Core en ligne / hors ligne » suit la réalité (toutes les 15 s, et dès que la
   // fenêtre revient au premier plan) ; au retour du Core, tout est rechargé.
   const horsLigne = erreurEtat !== null;
@@ -165,6 +195,7 @@ function Hud() {
           }
           // File d'approbations : une demande créée ou close ailleurs (autre appareil, expiration) apparaît ici
           void signalerAppris();
+          rafraichirActivite(); // panneau Activité et sa pastille
           return listerDemandes().then(({ demandes }) => {
             setEtat((e) => (e && JSON.stringify(e.demandes) !== JSON.stringify(demandes) ? { ...e, demandes } : e));
           });
@@ -184,7 +215,7 @@ function Hud() {
       document.removeEventListener("visibilitychange", auRetour);
       window.removeEventListener("online", sonder);
     };
-  }, [horsLigne, charger, signalerAppris]);
+  }, [horsLigne, charger, signalerAppris, rafraichirActivite]);
 
   const rafraichir = useCallback(
     (message?: string) => {
@@ -327,9 +358,10 @@ function Hud() {
       });
   };
 
-  const envoyer = (texte: string) => {
+  const envoyer = (texte: string, images: ImageJointe[] = []) => {
     const cleJarvis = nouvelleCle();
-    setMessages((ms) => [...ms, { cle: nouvelleCle(), role: "utilisateur", texte }]);
+    const affichees = images.map(({ id, nom, dataUrl, poids }) => ({ id, nom, dataUrl, poids }));
+    setMessages((ms) => [...ms, { cle: nouvelleCle(), role: "utilisateur", texte, ...(affichees.length ? { images: affichees } : {}) }]);
     setEnCours(true);
     setPremierMorceau(false);
     setAnnonce("");
@@ -393,6 +425,7 @@ function Hud() {
       moteur,
       ...(moteur !== "auto" && modeles[moteur] ? { modele: modeles[moteur] } : {}),
       ...(moteurInfo?.efforts.length && effort ? { effort } : {}),
+      ...(images.length ? { images: images.map((i) => i.dataUrl) } : {}),
     };
     const appel = conseil
       ? conseiller({ question: texte, ...(active ? { conversation_id: active } : {}) }, surEvenement, ctrl.signal)
@@ -418,6 +451,112 @@ function Hud() {
     lecteur.arreter();
     controleur.current?.abort();
   };
+
+  // --- Commandes : palette Ctrl+K, « / » dans la saisie, raccourcis ---
+  const changerTheme = (t: Theme) => {
+    choisirTheme(t);
+    notifier(`Thème : ${THEMES.find((x) => x.id === t)?.nom ?? t}.`);
+  };
+
+  const executer = (id: IdCommande, argument = "") => {
+    const vues: Partial<Record<IdCommande, typeof vue>> = {
+      memoire: "memoire",
+      connecteurs: "connecteurs",
+      agents: "agents",
+      ateliers: "ateliers",
+      dialogue: "dialogue",
+      installation: "accueil",
+    };
+    const versVue = vues[id];
+    if (versVue) {
+      setVue(versVue);
+      setLateralOuvert(false);
+      return;
+    }
+    switch (id) {
+      case "nouvelle":
+        nouvelle();
+        break;
+      case "historique":
+        setOnglet("conversations");
+        setLateralOuvert(true);
+        // Large écran : la colonne est déjà visible, le focus va à sa recherche
+        window.setTimeout(() => {
+          document.querySelector<HTMLElement>(".colonne-droite input")?.focus();
+        }, 0);
+        break;
+      case "chercher":
+        setPalette({ mode: "conversations", requete: argument });
+        break;
+      case "theme": {
+        const t = argument ? themeDepuis(argument) : themeSuivant(lireTheme());
+        if (t) changerTheme(t);
+        else notifier(`Thème inconnu : « ${argument} ». Thèmes : ${THEMES.map((x) => x.nom).join(", ")}.`);
+        break;
+      }
+      case "demandes":
+        montrerDemandes();
+        break;
+      case "securite":
+        setOnglet("securite");
+        setLateralOuvert(true);
+        break;
+      case "silence":
+        couperVoix(lecteur);
+        notifier("Voix coupée.");
+        break;
+      case "image":
+        setVue("dialogue");
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent(EVENEMENT_JOINDRE));
+        }, 0);
+        break;
+      case "resumer":
+        if (active) resumer();
+        else notifier("Aucune conversation ouverte à résumer.");
+        break;
+      case "urgence":
+        setPalette({ mode: "urgence", requete: "" });
+        break;
+      case "aide":
+        setAide(true);
+        break;
+      case "palette":
+        setPalette((pal) => (pal ? null : { mode: "tout", requete: "" }));
+        break;
+      default:
+        notifier(`${infoCommande(id).nom} : indisponible ici.`);
+    }
+  };
+  const executerRef = useRef(executer);
+  executerRef.current = executer;
+
+  // Depuis la palette : elle se ferme d'abord (le focus revient), puis la commande agit
+  const depuisPalette = (action: () => void) => {
+    setPalette(null);
+    window.setTimeout(action, 0);
+  };
+
+  useEffect(() => {
+    const surTouche = (e: KeyboardEvent) => {
+      const id = commandeDuRaccourci(e);
+      if (id) {
+        e.preventDefault();
+        executerRef.current(id);
+        return;
+      }
+      const cible = e.target as HTMLElement | null;
+      const saisie = cible?.closest("input, textarea, select, [contenteditable='true']");
+      if (e.key === "?" && !saisie && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector("dialog[open]")) {
+        e.preventDefault();
+        setAide(true);
+      }
+    };
+    window.addEventListener("keydown", surTouche);
+    return () => {
+      window.removeEventListener("keydown", surTouche);
+    };
+  }, []);
 
   const etatNoyau: EtatNoyau = alerte || urgence ? "alerte" : enCours ? (premierMorceau ? "parole" : "reflexion") : "repos";
   const moteurs = etat?.moteurs ?? [];
@@ -450,6 +589,7 @@ function Hud() {
 
   const ONGLETS: { id: Onglet; nom: string; pastille?: number }[] = [
     { id: "conversations", nom: "Conversations" },
+    { id: "activite", nom: "Activité", pastille: activite?.en_cours ?? 0 },
     { id: "demandes", nom: "Demandes", pastille: nbDemandes },
     { id: "securite", nom: "Sécurité" },
   ];
@@ -500,6 +640,16 @@ function Hud() {
             }}
           >
             Mémoire
+          </button>
+          <button
+            type="button"
+            className="btn btn-discret btn-mini btn-connecteurs"
+            aria-pressed={vue === "connaissances"}
+            onClick={() => {
+              setVue((v) => (v === "connaissances" ? "dialogue" : "connaissances"));
+            }}
+          >
+            Savoir
           </button>
           <button
             type="button"
@@ -603,6 +753,23 @@ function Hud() {
             )}
             {etat && (
               <li className="etat-item">
+                <span className="point-etat" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="etat-nom etat-lien"
+                  disabled={urgence}
+                  onClick={() => {
+                    setVue("dialogue");
+                    setRejouerMatin((n) => n + 1);
+                  }}
+                >
+                  Accueil du matin
+                </button>
+                <span className="etat-valeur">rejouer</span>
+              </li>
+            )}
+            {etat && (
+              <li className="etat-item">
                 <span className="point-etat" data-ok={nbDemandes === 0} aria-hidden="true" />
                 <button type="button" className="etat-nom etat-lien" onClick={montrerDemandes}>
                   Demandes
@@ -648,6 +815,7 @@ function Hud() {
           >
             <div className="panneau-corps">
               <VueAteliers
+                initial={cible?.vue === "ateliers" ? cible.id : undefined}
                 surChangement={rafraichir}
                 surAction={(r) => {
                   suiteAction(r, "Atelier fusionné.");
@@ -678,6 +846,29 @@ function Hud() {
               <VueMemoire surChangement={rafraichir} />
             </div>
           </Panneau>
+        ) : vue === "connaissances" ? (
+          <Panneau
+            titre="Connaissances"
+            className="panneau-scene"
+            ordre={2}
+            id="connaissances"
+            meta="domaines, cartes, fiches, révisions"
+            actions={
+              <button
+                type="button"
+                className="btn btn-mini"
+                onClick={() => {
+                  setVue("dialogue");
+                }}
+              >
+                Retour au dialogue
+              </button>
+            }
+          >
+            <div className="panneau-corps">
+              <VueConnaissances surChangement={rafraichir} />
+            </div>
+          </Panneau>
         ) : vue === "agents" ? (
           <Panneau
             titre="Agents"
@@ -699,6 +890,7 @@ function Hud() {
           >
             <div className="panneau-corps">
               <VueAgents
+                cible={cible?.vue === "agents" ? cible : null}
                 surChangement={rafraichir}
                 surOuvrirConversation={(id) => {
                   setVue("dialogue");
@@ -774,6 +966,7 @@ function Hud() {
               </div>
             ) : (
               <>
+                {etat && <AccueilMatin lecteur={lecteur} urgence={urgence} rejouer={rejouerMatin} surNotifier={notifier} />}
                 <Fil
                 messages={messages}
                 moteurs={moteurs}
@@ -796,6 +989,7 @@ function Hud() {
                   }}
                   surEffort={setEffort}
                   surEnvoyer={envoyer}
+                  surCommande={executer}
                   surArreter={arreter}
                   extras={
                     <CommandesVoix
@@ -836,7 +1030,7 @@ function Hud() {
                   }}
                 >
                   {o.nom}
-                  {o.pastille ? <span className="pastille pastille--ambre">{o.pastille}</span> : null}
+                  {o.pastille ? <span className={o.id === "demandes" ? "pastille pastille--ambre" : "pastille"}>{o.pastille}</span> : null}
                 </button>
               ))}
             </div>
@@ -855,6 +1049,23 @@ function Hud() {
           </header>
           <div className="panneau-corps" role="tabpanel" id={`vue-${onglet}`} aria-labelledby={`onglet-${onglet}`}>
             {onglet === "conversations" && <ListeConversations conversations={conversations} active={active} surChoisir={ouvrir} surMiseAJour={mettreAJourConversation} surErreur={notifier} />}
+            {onglet === "activite" && (
+              <PanneauActivite
+                activite={activite}
+                erreur={erreurActivite}
+                surRafraichir={rafraichirActivite}
+                surNotifier={notifier}
+                surAction={(r) => {
+                  suiteAction(r, "Chantier abandonné.");
+                  rafraichirActivite();
+                }}
+                surOuvrir={(c) => {
+                  setCible(c);
+                  setVue(c.vue);
+                  setLateralOuvert(false);
+                }}
+              />
+            )}
             {onglet === "demandes" && <ListeDemandes demandes={etat?.demandes ?? []} nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />}
             {onglet === "securite" && <PanneauSecurite nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />}
           </div>
@@ -877,6 +1088,42 @@ function Hud() {
       <p className="visuellement-cache" aria-live="polite">
         {annonce}
       </p>
+      {palette && (
+        <Palette
+          mode={palette.mode}
+          requeteInitiale={palette.requete}
+          conversations={conversations}
+          urgenceActive={urgence}
+          surFermer={() => {
+            setPalette(null);
+          }}
+          surCommande={(id) => {
+            depuisPalette(() => {
+              executer(id);
+            });
+          }}
+          surTheme={(t) => {
+            depuisPalette(() => {
+              changerTheme(t);
+            });
+          }}
+          surOuvrirConversation={(id) => {
+            depuisPalette(() => {
+              ouvrir(id);
+            });
+          }}
+          surUrgence={() => {
+            depuisPalette(declencherUrgence);
+          }}
+        />
+      )}
+      {aide && (
+        <Aide
+          surFermer={() => {
+            setAide(false);
+          }}
+        />
+      )}
     </div>
   );
 }

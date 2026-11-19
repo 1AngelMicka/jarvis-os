@@ -749,6 +749,7 @@ class ContexteMemoire:
     souvenirs: list[Resultat] = field(default_factory=list)
     consultee: bool = True
     expurgateur: Expurgateur = field(default_factory=Expurgateur)
+    domaines: list[dict[str, Any]] = field(default_factory=list)  # domaines de connaissance évoqués
 
     def bloc(self) -> str:
         """Section mémoire des consignes système (noyau puis souvenirs), toujours expurgée."""
@@ -763,6 +764,12 @@ class ContexteMemoire:
             )
         if self.noyau:
             texte += f"\nNoyau (connaissances de référence, prioritaires) :\n{formater_noyau(self.noyau)}\n"
+        if self.domaines:  # carte et niveau des domaines évoqués : avant les souvenirs
+            from .connaissances import bloc_domaines
+
+            texte += (
+                f"\nDomaines de connaissance évoqués (carte conceptuelle, niveau) :\n{bloc_domaines(self.domaines)}\n"
+            )
         texte += (
             f"\nSouvenirs pertinents (du plus pertinent au moins pertinent) :\n{formater_souvenirs(self.souvenirs)}"
         )

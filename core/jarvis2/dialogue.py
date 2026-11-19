@@ -10,7 +10,7 @@ import logging
 import re
 import time
 from collections import Counter
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -21,7 +21,7 @@ from .conversations import Conversation, DepotConversations, MessageStocke, titr
 from .db import Base
 from .embeddings import Encodeur
 from .memoire import ContexteMemoire, ReglagesRecherche, lire_noyau, rechercher_multi
-from .moteurs.base import Delta, ErreurMoteur, Fin, Message, Options
+from .moteurs.base import Delta, ErreurMoteur, Fin, Image, Message, Options
 from .moteurs.telemetrie import MoteurInstrumente
 from .securite.filtre import masquer
 
@@ -33,6 +33,7 @@ journal = logging.getLogger("jarvis2.dialogue")
 NB_MESSAGES_HISTORIQUE = 40
 # Gardé dans le message pour son pied « transparence » (estimations signalées, équivalent API de l'abonnement)
 META_TRANSPARENCE = ("effort", "source_auth", "cout_estime", "cout_inconnu", "cout_equivalent_api_usd")
+NB_MAX_JOINTES = 5  # images par message (même limite que l'interface)
 
 CONSIGNES_SYSTEME = """Tu es JARVIS, l'assistant personnel de l'utilisateur : un exocortex qui prolonge sa façon \
 de penser, pas un chatbot. Tu réponds en français, avec précision et concision, en vouvoyant l'utilisateur.
@@ -48,6 +49,24 @@ Date et heure actuelles : {maintenant}
 
 
 TEXTE_MASQUE = "(réponse confidentielle produite par une IA locale : masquée pour les IA externes)"
+
+
+def mention_images(nombre: int) -> str:
+    """Trace d'images d'un message PASSÉ. Formulée pour qu'un petit modèle ne l'applique pas aux images du
+    message actuel (« non conservée » seul lui faisait répondre qu'il ne voyait pas l'image jointe)."""
+    pluriel = "s" if nombre > 1 else ""
+    return (
+        f"[Ce message précédent était accompagné de {nombre} image{pluriel}, que vous avez vue{pluriel} alors ; "
+        "elle n'est plus jointe ici. Seules les images du nouveau message sont visibles.]"
+        if nombre == 1
+        else f"[Ce message précédent était accompagné de {nombre} images, que vous avez vues alors ; elles ne sont "
+        "plus jointes ici. Seules les images du nouveau message sont visibles.]"
+    )
+
+
+def resume_images(images: Sequence[Image]) -> list[dict[str, Any]]:
+    """Ce qui reste d'une image dans l'historique : son type et son poids, jamais son contenu."""
+    return [{"type": i.type_mime, "octets": len(i.donnees)} for i in images]
 
 
 def maintenant_paris() -> str:
@@ -80,7 +99,23 @@ class SourceMemoire:
         except Exception:  # la mémoire ne doit jamais empêcher de répondre
             journal.exception("Mémoire indisponible : réponse sans souvenirs")
             return ContexteMemoire(consultee=False, expurgateur=self.reglages.expurgateur)
-        return ContexteMemoire(noyau=noyau, souvenirs=souvenirs, blocs=blocs, expurgateur=self.reglages.expurgateur)
+        domaines: list[dict[str, Any]] = []
+        try:  # domaine évoqué : sa carte et son niveau avant les souvenirs, ses fiches en tête
+            from .connaissances import contexte_domaines
+
+            domaines, fiches = await contexte_domaines(self.pool, self.encodeur, texte, exclure_local=externe)
+            if fiches:
+                ids = {r.souvenir.id for r in fiches}
+                souvenirs = fiches + [r for r in souvenirs if r.souvenir.id not in ids]
+        except Exception:
+            journal.exception("Connaissances indisponibles pour ce message")
+        return ContexteMemoire(
+            noyau=noyau, souvenirs=souvenirs, blocs=blocs, expurgateur=self.reglages.expurgateur, domaines=domaines
+        )
+
+
+def domaines_evoques(contexte: ContexteMemoire) -> list[dict[str, Any]]:
+    return [{"id": str(d["id"]), "nom": d["nom"], "niveau": d["niveau"]} for d in contexte.domaines]
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +162,10 @@ class ServiceDialogue:
         if self.memoire is None:
             return False
         contexte = await self.memoire.contexte(texte, externe=False)
-        return any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs)
+        return any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs) or any(
+            d["prive"]
+            for d in contexte.domaines  # domaine de connaissance privé évoqué
+        )
 
     async def consignes(
         self, texte: str, externe: bool, conversation_id: UUID | None = None
@@ -168,31 +206,47 @@ class ServiceDialogue:
             return ""
 
     async def choisir_moteur(
-        self, moteur: str | None, conversation: Conversation | None = None, texte: str | None = None
+        self,
+        moteur: str | None,
+        conversation: Conversation | None = None,
+        texte: str | None = None,
+        images: bool = False,
     ) -> MoteurInstrumente:
-        instance, _ = await self.choisir_moteur_detaille(moteur, conversation, texte)
+        instance, _ = await self.choisir_moteur_detaille(moteur, conversation, texte, images)
         return instance
 
     async def choisir_moteur_detaille(
-        self, moteur: str | None, conversation: Conversation | None = None, texte: str | None = None
+        self,
+        moteur: str | None,
+        conversation: Conversation | None = None,
+        texte: str | None = None,
+        images: bool = False,
     ) -> tuple[MoteurInstrumente, str | None]:
         """Choix explicite > choix imposé pour la conversation > routeur (jamais un connecteur à risque ; une IA
-        locale seulement pour un sujet privé). Connecteur choisi au plafond de dépenses : refus clair si aucune
-        autre IA n'est disponible, sinon le routeur passe à une autre IA et l'avertissement est rendu."""
-        instance = await self._choisir(moteur, conversation, texte)
+        locale seulement pour un sujet privé ; avec des images jointes, un connecteur qui sait les lire).
+        Connecteur choisi au plafond de dépenses : refus clair si aucune autre IA n'est disponible, sinon le routeur
+        passe à une autre IA et l'avertissement est rendu."""
+        instance = await self._choisir(moteur, conversation, texte, images)
+        if images and not instance.interne.vision:
+            raise ErreurMoteur(
+                f"« {instance.interne.nom} » ne lit pas les images : choisissez Claude, une API (Anthropic, OpenAI, "
+                "Gemini…) ou Ollama avec un modèle de vision, ou envoyez le message sans image"
+            )
         if self.connecteurs is None:
             return instance, None
         etat = await self.connecteurs.etat_plafond(instance.id_moteur)
         if not etat or not etat["atteint"]:
             return instance, None
         refus = self.connecteurs.message_plafond(instance.id_moteur, etat)
-        autre = await self.connecteurs.router(local=await self.est_prive(texte), exclus=frozenset({instance.id_moteur}))
+        autre = await self.connecteurs.router(
+            local=await self.est_prive(texte), images=images, exclus=frozenset({instance.id_moteur})
+        )
         if autre is None or autre not in self.moteurs:
             raise ErreurMoteur(refus)
         return self.moteurs[autre], f"{refus} Réponse par « {self.moteurs[autre].interne.nom} »."
 
     async def _choisir(
-        self, moteur: str | None, conversation: Conversation | None = None, texte: str | None = None
+        self, moteur: str | None, conversation: Conversation | None, texte: str | None, images: bool
     ) -> MoteurInstrumente:
         cle = moteur if moteur and moteur != "auto" else None
         if cle is None and moteur is None and conversation is not None and conversation.connecteur:
@@ -202,11 +256,16 @@ class ServiceDialogue:
         if cle is None:
             if self.connecteurs is not None:
                 prive = await self.est_prive(texte)
-                cle = await self.connecteurs.router(local=prive)
+                cle = await self.connecteurs.router(local=prive, images=images)
                 if cle is None and prive:
                     raise ErreurMoteur(
                         "Sujet privé : aucune IA locale n'est disponible, et ce message ne quitte pas le PC. "
                         "Lancez Ollama ou un autre modèle local (Connecteurs), ou choisissez une IA à la main."
+                    )
+                if cle is None and images:
+                    raise ErreurMoteur(
+                        "Aucun connecteur disponible ne lit les images : activez Claude, une API ou Ollama avec "
+                        "un modèle de vision (Connecteurs)"
                     )
                 if cle is None:
                     raise ErreurMoteur("Aucun connecteur d'IA disponible : ouvrez l'onglet Connecteurs")
@@ -237,6 +296,7 @@ class ServiceDialogue:
         message: str,
         historique: list[MessageStocke],
         conversation_id: UUID | None = None,
+        images: Sequence[Image] = (),
     ) -> Envoi:
         """Consignes + mémoire + historique + message ; pour un connecteur externe : souvenirs privés exclus,
         réponses locales privées masquées, secrets et données personnelles remplacés. `conversation_id` d'une
@@ -248,18 +308,22 @@ class ServiceDialogue:
             contenu = m.contenu
             if externe and m.meta.get("prive"):  # réponse locale bâtie sur des souvenirs privés
                 contenu = TEXTE_MASQUE
+            if m.meta.get("images"):  # les images ne sont pas gardées : le modèle sait seulement qu'il y en avait
+                contenu = f"{contenu}\n{mention_images(len(m.meta['images']))}"
             messages.append(Message("utilisateur" if m.role == "utilisateur" else "assistant", contenu))
-        messages.append(Message("utilisateur", message))
+        messages.append(Message("utilisateur", message, tuple(images)))
         masques: Counter[str] = Counter()
         if externe:  # dernière barrière : secrets et données personnelles ne quittent jamais le PC
             filtres = []
             for envoi in messages:
                 filtre = masquer(envoi.contenu)
                 masques.update(filtre.masques)
-                filtres.append(Message(envoi.role, filtre.texte))
+                filtres.append(Message(envoi.role, filtre.texte, envoi.images))
             messages = filtres
-        prive = any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs) or any(
-            s.confidentialite == "local_uniquement" for s in contexte.noyau
+        prive = (
+            any(r.souvenir.confidentialite == "local_uniquement" for r in contexte.souvenirs)
+            or any(s.confidentialite == "local_uniquement" for s in contexte.noyau)
+            or any(d["prive"] for d in contexte.domaines)
         )
         return Envoi(messages, contexte, masques, prive)
 
@@ -309,12 +373,19 @@ class ServiceDialogue:
         conversation_id: UUID | None = None,
         moteur: str | None = None,
         options: Options | None = None,
+        images: Sequence[Image] = (),
     ) -> AsyncIterator[EvenementDialogue]:
+        """`images` : gardées en mémoire le temps de cette réponse seulement ; l'historique n'en garde que le
+        nombre, le type et le poids."""
         message = message.strip()
+        if len(images) > NB_MAX_JOINTES:
+            raise ValueError(f"{NB_MAX_JOINTES} images au plus par message")
+        if not message and images:
+            message = "Que montrent ces images ?" if len(images) > 1 else "Que montre cette image ?"
         if not message:
             raise ValueError("Message vide")
         conversation, titre = await self.ouvrir(message, conversation_id)
-        instance, avertissement = await self.choisir_moteur_detaille(moteur, conversation, message)
+        instance, avertissement = await self.choisir_moteur_detaille(moteur, conversation, message, images=bool(images))
         if avertissement:
             moteur = None  # le choix imposé reste celui de la conversation : il reprendra au plafond relevé
         if moteur == "auto":
@@ -324,8 +395,12 @@ class ServiceDialogue:
                 conversation.id, instance.id_moteur, options.modele if options else None
             )
         historique = await self.depot.messages(conversation.id, limite=NB_MESSAGES_HISTORIQUE)
-        msg_utilisateur = await self.depot.ajouter_message(conversation.id, "utilisateur", message)
-        envoi = await self.preparer(instance, message, historique, None if historique else conversation.id)
+        msg_utilisateur = await self.depot.ajouter_message(
+            conversation.id, "utilisateur", message, {"images": resume_images(images)} if images else None
+        )
+        envoi = await self.preparer(
+            instance, message, historique, None if historique else conversation.id, images=images
+        )
         messages, contexte, masques, prive = envoi.messages, envoi.contexte, envoi.masques, envoi.prive
         if self.memoire is not None and contexte.souvenirs:  # base de l'oubli : ce qui sert n'est jamais archivé
             from .memoire_v2 import noter_acces
@@ -346,6 +421,7 @@ class ServiceDialogue:
                 "noyau": len(contexte.noyau),
                 "masques": dict(masques),
                 **({"avertissement": avertissement} if avertissement else {}),
+                "images": len(images),
             },
         )
         debut = time.perf_counter()
@@ -370,6 +446,8 @@ class ServiceDialogue:
                         "memoire_consultee": contexte.consultee,
                         "masques": dict(masques),
                         "prive": prive,
+                        # Domaines de connaissance évoqués : l'interface propose de les réviser
+                        **({"domaines": domaines_evoques(contexte)} if contexte.domaines else {}),
                     }
                     stocke = await self.depot.ajouter_message(conversation.id, "jarvis", rep.texte, meta)
                     termine = True

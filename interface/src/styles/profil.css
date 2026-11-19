@@ -1,0 +1,73 @@
+/* Vue Profil guidé (phase 13, lot D) : sommaire des sections, entretien question par question. Tokens seulement. */
+.profil-vue { display: flex; flex-direction: column; gap: var(--e-5); max-width: var(--colonne-lecture); margin: 0 auto; padding: var(--e-3) 0 var(--e-6); }
+
+.profil-tete { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--e-4); }
+.profil-tete-texte { flex: 1 1 18rem; display: flex; flex-direction: column; gap: var(--e-2); }
+.profil-titre { margin: 0; font: 600 var(--t-moyen)/1.2 var(--f-ui); color: var(--cyan-vif); }
+.profil-sous-titre { margin: 0; font: var(--t-petit)/1.4 var(--f-ui); color: var(--texte-2); font-variant-numeric: tabular-nums; }
+.profil-sous-titre strong { color: var(--texte-fort); font-weight: 600; }
+.profil-tete-actions { display: flex; flex-wrap: wrap; gap: var(--e-2); }
+.profil-tete-actions .btn[aria-pressed="true"] { border-color: var(--cyan); background: rgb(var(--c-cyan) / .14); color: var(--texte-fort); }
+
+.profil-reprendre { align-self: flex-start; }
+.profil-annonce { margin: 0; font: var(--t-petit)/1.4 var(--f-ui); color: var(--vert); }
+.profil-annonce--discret { color: var(--texte-3); }
+
+.profil-sections { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
+.profil-section {
+  width: 100%; height: 100%; display: flex; flex-direction: column; gap: var(--e-2); padding: var(--e-4);
+  border: var(--l-fin) solid var(--ligne-faible); border-radius: var(--r-2); background: rgb(var(--c-creux) / .45);
+  color: var(--texte); text-align: left; font: inherit; cursor: pointer; transition: var(--transition);
+}
+.profil-section:hover, .profil-section:focus-visible { border-color: var(--cyan); background: rgb(var(--c-cyan) / .06); }
+.profil-section[data-complete] { border-left: var(--l-fort) solid var(--vert); }
+.profil-section-tete { display: flex; align-items: center; gap: var(--e-2); }
+.profil-section-titre { font: 600 var(--t-corps)/1.3 var(--f-ui); color: var(--cyan-vif); }
+.profil-section-compte { margin-left: auto; font: var(--t-micro)/1 var(--f-donnees); color: var(--texte-3); font-variant-numeric: tabular-nums; }
+.profil-section-description { flex: 1; font-size: var(--t-mini); line-height: 1.45; color: var(--texte-2); }
+
+.profil-entretien { display: flex; flex-direction: column; gap: var(--e-4); }
+.profil-entretien-tete { display: flex; flex-direction: column; gap: var(--e-2); }
+.profil-entretien-tete .lien-btn { align-self: flex-start; margin: 0; }
+.profil-entretien-section { margin: 0; font: 600 var(--t-base)/1.3 var(--f-ui); color: var(--cyan-vif); }
+.profil-entretien-description { margin: 0; font-size: var(--t-petit); color: var(--texte-2); }
+.profil-etapes { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--e-2); }
+.profil-etape {
+  width: var(--e-4); height: var(--e-4); padding: 0; border: var(--l-moyen) solid var(--ligne); border-radius: var(--r-rond);
+  background: transparent; cursor: pointer; transition: var(--transition);
+}
+.profil-etape[data-repondue] { background: var(--vert); border-color: var(--vert); }
+.profil-etape[aria-current="step"] { border-color: var(--cyan-vif); box-shadow: 0 0 0 3px rgb(var(--c-cyan) / .2); }
+@media (pointer: coarse) {
+  .profil-etapes li { display: flex; align-items: center; justify-content: center; min-width: var(--cible); min-height: var(--cible); }
+}
+
+.profil-carte {
+  display: flex; flex-direction: column; gap: var(--e-3); padding: var(--e-5);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-3); background: rgb(var(--c-verre-bas) / .6);
+}
+.profil-compteur { margin: 0; font: var(--t-micro)/1 var(--f-donnees); color: var(--texte-3); letter-spacing: calc(.08em * var(--chasse-k)); text-transform: var(--casse); }
+.profil-question { margin: 0; font: 500 var(--t-moyen)/1.35 var(--f-texte); color: var(--texte-fort); text-wrap: balance; }
+.profil-aide { margin: 0; font-size: var(--t-petit); color: var(--texte-2); }
+.profil-reponse { width: 100%; min-height: 7.5em; padding: var(--e-3); font: var(--t-corps)/1.5 var(--f-texte); resize: vertical; }
+.profil-options { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--e-3); }
+.profil-prive { display: inline-flex; align-items: center; gap: var(--e-2); min-height: var(--cible); font: var(--t-mini)/1.3 var(--f-ui); color: var(--texte-2); cursor: pointer; }
+.profil-prive input { width: var(--e-4); height: var(--e-4); accent-color: var(--ambre); }
+.profil-voix { display: flex; flex-wrap: wrap; gap: var(--e-2); }
+.profil-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--e-2); }
+.profil-retirer { margin: 0 auto 0 0; color: var(--texte-3); }
+
+.memoire-profil {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-3); padding: var(--e-3) var(--e-4);
+  border: var(--l-fin) solid var(--ligne-faible); border-left: var(--l-fort) solid var(--vert); border-radius: var(--r-2);
+  background: rgb(var(--c-creux) / .45);
+}
+.memoire-profil-texte { flex: 1 1 14rem; margin: 0; font-size: var(--t-petit); color: var(--texte-2); }
+
+@media (max-width: 560px) {
+  .profil-carte { padding: var(--e-4); }
+  .profil-actions .btn { flex: 1 1 auto; }
+  .profil-actions .btn-principal { flex-basis: 100%; order: 3; }
+  .profil-question { font-size: var(--t-base); }
+}
+@media (pointer: coarse) { .profil-reponse { font-size: var(--t-base); } }

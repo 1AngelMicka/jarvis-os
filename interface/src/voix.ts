@@ -46,6 +46,11 @@ export class LecteurVocal {
     this.tampon = reste;
   }
 
+  /** Lit un texte entier tout de suite, même si la lecture des réponses est coupée (demande explicite). */
+  lire(texte: string): void {
+    for (const m of `${texte}\n`.matchAll(FIN_DE_PHRASE)) this.dire(m[0]);
+  }
+
   finir(): void {
     if (this.actif && this.tampon.trim()) this.dire(this.tampon);
     this.tampon = "";
@@ -56,6 +61,16 @@ export class LecteurVocal {
     if (this.disponible) window.speechSynthesis.cancel();
     this.parle = false;
   }
+}
+
+/** Événement de fenêtre : la voix a été coupée ailleurs (Ctrl+M, « /silence », palette). */
+export const EVENEMENT_SILENCE = "jarvis2:silence";
+
+/** Coupe la lecture à voix haute tout de suite, et la désactive jusqu'à ce qu'on la rallume. */
+export function couperVoix(lecteur: LecteurVocal): void {
+  lecteur.actif = false;
+  lecteur.arreter();
+  window.dispatchEvent(new CustomEvent(EVENEMENT_SILENCE));
 }
 
 function typeAudio(): string {

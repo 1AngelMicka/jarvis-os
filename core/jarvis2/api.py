@@ -32,29 +32,36 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__, memoire
+from . import __version__, memoire, vision
 from .agents.mcp import GestionnaireMCP
 from .agents.missions import ServiceMissions
 from .agents.recettes import Planificateur
 from .agents.recherche_web import RechercheWeb
+from .agents.sources_scientifiques import SourcesScientifiques
 from .api_accueil import routeur as routeur_accueil
 from .api_agents import routeur as routeur_agents
 from .api_ateliers import routeur as routeur_ateliers
+from .api_chantiers import routeur as routeur_chantiers
+from .api_connaissances import routeur as routeur_connaissances
 from .api_connecteurs import routeur as routeur_connecteurs
+from .api_matin import routeur as routeur_matin
 from .api_medias import routeur as routeur_medias
 from .api_medias import routeur_pages as routeur_creations
 from .api_memoire import routeur as routeur_memoire
+from .api_profil import routeur as routeur_profil
 from .api_securite import routeur as routeur_securite
 from .ateliers.gestionnaire import GestionnaireAteliers, Projet
 from .config import Parametres
 from .config_locale import charger as charger_config_locale
 from .config_locale import chemin_config
+from .connaissances import ServiceConnaissances
 from .connecteurs import Connecteurs, construire_catalogue
 from .conseil import ServiceConseil
 from .conversations import DepotConversations
 from .db import Base, ErreurBaseOuReseau, ouvrir_base, version_schema
 from .dialogue import ServiceDialogue, SourceMemoire
 from .embeddings import EncodeurFastEmbed
+from .matin import ServiceMeteo
 from .memoire import Expurgateur, ReglagesRecherche
 from .memoire_v2 import EtatBascule, basculer, modele_actif, modele_majoritaire
 from .moteurs.base import ErreurMoteur, Options
@@ -94,6 +101,7 @@ class Contexte:
     chargement_modele: str | None = None  # None, « en_cours », « termine », « erreur »
     mcp: GestionnaireMCP | None = None
     recherche: RechercheWeb = field(default_factory=lambda: RechercheWeb(None))
+    scientifique: SourcesScientifiques | None = None  # bases scientifiques publiques des missions de recherche
     dossier_recettes: Path | None = None
     dossier_donnees: Path | None = None  # tâches de nuit de la mémoire (export Markdown dans memoire-md/)
     etat_bascule: EtatBascule | None = None
@@ -101,17 +109,23 @@ class Contexte:
     transcripteur: Transcripteur | None = None
     url_ollama: str = "http://127.0.0.1:11434"
     modele_vision: str | None = None
+    meteo: ServiceMeteo = field(default_factory=ServiceMeteo)
+    matin_locale: dict[str, Any] = field(default_factory=dict)  # [matin] de la configuration locale (privé)
     approbations: Approbations = field(init=False)
     conseil: ServiceConseil = field(init=False)
+    connaissances: ServiceConnaissances = field(init=False)
     missions: ServiceMissions = field(init=False)
     planificateur: Planificateur | None = field(init=False)
 
     def __post_init__(self) -> None:
         self.approbations = Approbations(self.pool, creer_registre(self.urgence, self.mcp, self.ateliers))
         self.conseil = ServiceConseil(self.service)
-        self.missions = ServiceMissions(self.pool, self.service, self.recherche, self.urgence)
+        self.connaissances = ServiceConnaissances(self.pool, self.service)
+        self.missions = ServiceMissions(
+            self.pool, self.service, self.recherche, self.urgence, self.scientifique, self.connaissances
+        )
         taches = (
-            taches_memoire(self.pool, self.service, self.dossier_donnees / "memoire-md")
+            taches_memoire(self.pool, self.service, self.dossier_donnees / "memoire-md", self.connaissances)
             if self.dossier_donnees is not None and self.memoire is not None
             else []
         )
@@ -129,7 +143,9 @@ class ModificationConversation(BaseModel):
 
 
 class DemandeDialogue(BaseModel):
-    message: str = Field(min_length=1, max_length=100_000)
+    message: str = Field(max_length=100_000)  # peut être vide s'il y a des images
+    # Images jointes en data URL (5 au plus, 3 Mo chacune une fois décodées) : jamais gardées en base
+    images: list[str] = Field(default_factory=list, max_length=5)
     conversation_id: UUID | None = None
     moteur: str | None = None
     modele: str | None = Field(default=None, max_length=200)
@@ -177,6 +193,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
         connecteurs=connecteurs,
         mcp=GestionnaireMCP.depuis_config(locale.serveurs_mcp),
         recherche=RechercheWeb(locale.searxng),
+        scientifique=SourcesScientifiques() if locale.scientifique else None,
         dossier_recettes=chemin_config().parent / "recettes",
         dossier_donnees=p.dossier_donnees,
         ateliers=GestionnaireAteliers(
@@ -191,6 +208,7 @@ async def construire_contexte(p: Parametres) -> Contexte:
         transcripteur=TranscripteurWhisper(p.dossier_modeles, p.modele_voix),
         url_ollama=p.ollama_url,
         modele_vision=locale.connecteur("ollama").get("modele_vision"),
+        matin_locale=locale.matin,
     )
 
 
@@ -228,6 +246,7 @@ async def decrire_moteur(moteur: MoteurInstrumente) -> dict[str, Any]:
         "detail": sante.detail,
         "modeles": [{"id": m.id, "nom": m.nom, "defaut": m.defaut} for m in modeles],
         "efforts": list(moteur.interne.efforts),
+        "vision": moteur.interne.vision,
         "effort_defaut": getattr(moteur.interne, "effort", None),
     }
 
@@ -459,12 +478,18 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         if demande.conversation_id and await c.depot.obtenir(demande.conversation_id) is None:
             raise HTTPException(404, "Conversation introuvable")
         options = Options(modele=demande.modele or None, effort=demande.effort or None)
+        try:
+            images = [vision.decoder_jointe(i) for i in demande.images]
+        except vision.ErreurVision as exc:
+            raise HTTPException(422, str(exc)) from exc
+        if not demande.message.strip() and not images:
+            raise HTTPException(422, "Message vide")
 
         async def flux() -> AsyncIterator[bytes]:
             with c.urgence.suivre():  # l'arrêt d'urgence annule cette réponse (et tue la CLI) immédiatement
                 try:
                     async for ev in c.service.repondre(
-                        demande.message, demande.conversation_id, demande.moteur, options
+                        demande.message, demande.conversation_id, demande.moteur, options, images
                     ):
                         yield sse(ev.type, ev.donnees)
                 except (ErreurMoteur, ValueError, LookupError) as exc:
@@ -482,6 +507,10 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_medias)
     app.include_router(routeur_creations)
     app.include_router(routeur_memoire)
+    app.include_router(routeur_chantiers)
+    app.include_router(routeur_profil)
+    app.include_router(routeur_connaissances)
+    app.include_router(routeur_matin)
 
     dossier = parametres.dossier_interface
     if dossier.is_dir():

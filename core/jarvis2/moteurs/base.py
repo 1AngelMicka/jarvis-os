@@ -22,9 +22,32 @@ class ErreurMoteur(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class Image:
+    """Image jointe par l'utilisateur, gardée en mémoire le temps de la réponse seulement (jamais en base)."""
+
+    type_mime: str  # image/jpeg | image/png | image/webp | image/gif
+    donnees: bytes
+
+    @property
+    def extension(self) -> str:
+        return {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}.get(
+            self.type_mime, "bin"
+        )
+
+    def base64(self) -> str:
+        import base64
+
+        return base64.b64encode(self.donnees).decode("ascii")
+
+    def data_url(self) -> str:
+        return f"data:{self.type_mime};base64,{self.base64()}"
+
+
+@dataclass(frozen=True, slots=True)
 class Message:
     role: Role
     contenu: str
+    images: tuple[Image, ...] = ()  # seulement sur le dernier message de l'utilisateur
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +117,7 @@ class Moteur(ABC):
     installation_url: str | None = None  # « Comment installer »
     conditions_url: str | None = None
     efforts: tuple[str, ...] = ()
+    vision: bool = False  # sait lire les images jointes (sinon : message clair, rien n'est envoyé)
 
     @abstractmethod
     def stream(self, messages: Sequence[Message], options: Options | None = None) -> AsyncGenerator[Evenement]:

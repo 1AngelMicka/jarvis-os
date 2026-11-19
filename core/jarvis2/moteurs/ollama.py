@@ -28,16 +28,20 @@ class MoteurOllama(Moteur):
     externe = False
     famille = "local"
     installation_url = "https://ollama.com/download"
+    vision = True  # selon le modèle : vérifié à l'envoi (capacité « vision » d'Ollama, sinon `modele_vision`)
 
     def __init__(
         self,
         url: str = "http://127.0.0.1:11434",
         modele: str | None = None,
+        modele_vision: str | None = None,
         delai: float = 300.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.url = url.rstrip("/")
         self.modele = modele
+        self.modele_vision = modele_vision
+        self._capacites: dict[str, frozenset[str] | None] = {}
         self.client = httpx.AsyncClient(
             base_url=self.url, timeout=httpx.Timeout(delai, connect=3.0), transport=transport
         )
@@ -51,14 +55,44 @@ class MoteurOllama(Moteur):
             raise ErreurMoteur("Aucun modèle installé dans Ollama")
         return modeles[0].id
 
+    async def capacites(self, modele: str) -> frozenset[str] | None:
+        """Capacités annoncées par Ollama (« vision »…) ; None si cette version ne les donne pas."""
+        if modele in self._capacites:
+            return self._capacites[modele]
+        try:
+            rep = await self.client.post("/api/show", json={"model": modele}, timeout=5.0)
+            rep.raise_for_status()
+            brut = rep.json().get("capabilities")
+        except (httpx.HTTPError, ValueError):
+            return None
+        capacites = frozenset(str(c) for c in brut) if isinstance(brut, list) else None
+        self._capacites[modele] = capacites
+        return capacites
+
+    async def modele_pour_images(self, modele: str) -> str:
+        """Le modèle choisi s'il voit les images, sinon le modèle de vision de la configuration locale."""
+        capacites = await self.capacites(modele)
+        if capacites is None or "vision" in capacites:
+            return modele
+        if self.modele_vision and self.modele_vision != modele:
+            return self.modele_vision
+        raise ErreurMoteur(
+            f"Le modèle local « {modele} » ne lit pas les images : choisissez un modèle de vision (ex. qwen3.5:2b), "
+            "ou ajoutez [connecteurs.ollama] modele_vision à la configuration locale"
+        )
+
     async def stream(self, messages: Sequence[Message], options: Options | None = None) -> AsyncGenerator[Evenement]:
         options = options or Options()
         modele = options.modele or await self._modele_par_defaut()
-        corps: dict[str, Any] = {
-            "model": modele,
-            "messages": [{"role": ROLES[m.role], "content": m.contenu} for m in messages],
-            "stream": True,
-        }
+        if any(m.images for m in messages):
+            modele = await self.modele_pour_images(modele)
+        envois: list[dict[str, Any]] = []
+        for m in messages:
+            envoi: dict[str, Any] = {"role": ROLES[m.role], "content": m.contenu}
+            if m.images:
+                envoi["images"] = [i.base64() for i in m.images]
+            envois.append(envoi)
+        corps: dict[str, Any] = {"model": modele, "messages": envois, "stream": True}
         if options.temperature is not None:
             corps["options"] = {"temperature": options.temperature}
         if options.rapide:

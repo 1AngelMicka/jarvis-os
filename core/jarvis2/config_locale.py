@@ -78,8 +78,13 @@ class ConfigLocale:
     serveurs_mcp: tuple[dict[str, Any], ...] = ()
     # Recherche web privée : adresse d'une instance SearXNG ([recherche] searxng = "http://…")
     searxng: str | None = None
+    # Bases scientifiques publiques des missions de recherche (OpenAlex, arXiv, PubMed, Europe PMC) :
+    # [recherche] scientifique = false pour ne jamais les interroger
+    scientifique: bool = True
     # Projets ouverts aux ateliers Claude Code ([[ateliers.projets]] : id, nom, chemin d'un dépôt git)
     projets_ateliers: tuple[dict[str, Any], ...] = ()
+    # Accueil du matin ([matin] : ville, ou latitude et longitude) : lieu PRIVÉ, jamais lu à voix haute
+    matin: dict[str, Any] = field(default_factory=dict)
 
     def connecteur(self, ident: str) -> dict[str, Any]:
         return self.connecteurs.get(ident, {})
@@ -119,6 +124,9 @@ def analyser(donnees: dict[str, Any], chemin: Path | None = None) -> ConfigLocal
     searxng = (donnees.get("recherche") or {}).get("searxng")
     if searxng is not None and not (isinstance(searxng, str) and searxng.startswith(("http://", "https://"))):
         raise ValueError("recherche.searxng : adresse http(s) attendue")
+    scientifique = (donnees.get("recherche") or {}).get("scientifique", True)
+    if not isinstance(scientifique, bool):
+        raise ValueError("recherche.scientifique : true ou false attendu")
     return ConfigLocale(
         chemin=chemin,
         sujets_exclus=_motifs(confidentialite.get("sujets_exclus"), "confidentialite.sujets_exclus"),
@@ -129,7 +137,9 @@ def analyser(donnees: dict[str, Any], chemin: Path | None = None) -> ConfigLocal
         sujets_prives=_motifs(confidentialite.get("sujets_prives"), "confidentialite.sujets_prives"),
         serveurs_mcp=tuple(serveurs),
         searxng=searxng.rstrip("/") if searxng else None,
+        scientifique=scientifique,
         projets_ateliers=tuple(p for p in (donnees.get("ateliers") or {}).get("projets") or [] if isinstance(p, dict)),
+        matin=dict(donnees.get("matin") or {}),
     )
 
 

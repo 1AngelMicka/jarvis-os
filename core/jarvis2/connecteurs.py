@@ -128,12 +128,19 @@ def construire_catalogue(
                 tarifs=tarifs,
                 installation_url=cle_url,
                 cout_fourni=cout_fourni,
+                vision=bool(reg.get("vision", True)),
             ),
             ident,
             cle_url,
         )
     # Modèles locaux
-    ajouter(ollama.MoteurOllama(url=p.ollama_url, modele=locale.connecteur("ollama").get("modele")))
+    ajouter(
+        ollama.MoteurOllama(
+            url=p.ollama_url,
+            modele=locale.connecteur("ollama").get("modele"),
+            modele_vision=locale.connecteur("ollama").get("modele_vision"),
+        )
+    )
     locaux = {
         "lmstudio": ("LM Studio (local)", "http://127.0.0.1:1234/v1", "https://lmstudio.ai/download"),
         "llamacpp": ("llama.cpp (local)", "http://127.0.0.1:8080/v1", "https://github.com/ggml-org/llama.cpp"),
@@ -150,6 +157,7 @@ def construire_catalogue(
                 None,
                 modele=reg.get("modele"),
                 installation_url=installation,
+                vision=bool(reg.get("vision", True)),
                 # Détecté sur un port connu, mais n'importe quel programme peut l'occuper : l'utilisateur l'active
                 actif_par_defaut=False,
             )
@@ -167,6 +175,7 @@ def construire_catalogue(
                 coffre.fournisseur(nom_cle) if nom_cle else None,
                 modele=c.get("modele"),
                 tarifs=tarifs,
+                vision=bool(c.get("vision", True)),
             ),
             nom_cle,
         )
@@ -272,8 +281,14 @@ class Connecteurs:
             for (i, d), s in zip(definitions, sorties, strict=True)
         ]
 
-    async def router(self, local: bool = False, exclus: frozenset[str] = frozenset()) -> str | None:
+    async def router(
+        self, local: bool = False, images: bool = False, exclus: frozenset[str] = frozenset()
+    ) -> str | None:
+        """`images` : seuls les connecteurs qui savent lire les images jointes sont candidats. `exclus` et
+        connecteurs au plafond de dépenses : jamais choisis."""
         etats = await self.etats(tous=False)
+        if images:
+            etats = [e for e in etats if self.definitions[e.id].moteur.interne.vision]
         atteints = {e.id for e in etats if e.utilisable and await self.plafond_atteint(e.id)}
         return choisir(etats, self.prefere, local=local, exclus=exclus | atteints)
 
@@ -384,6 +399,7 @@ class Connecteurs:
                     "effort_defaut": getattr(m, "effort", None),
                     "payant": self.payant(e.id),
                     "plafond_mensuel_usd": self.plafond(e.id),
+                    "vision": m.vision,
                 }
             )
         return cartes

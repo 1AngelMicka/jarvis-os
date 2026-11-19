@@ -78,6 +78,11 @@ def main() -> int:
     elif scenario == "echo":
         texte = prompt
         ecrire(delta(texte))
+    elif scenario == "images":  # ce que la CLI voit : outils permis, dossier de travail, fichiers présents
+        outils = sys.argv[sys.argv.index("--tools") + 1]
+        fichiers = ",".join(sorted(os.listdir(os.getcwd())))
+        texte = json.dumps({"outils": outils, "cwd": os.getcwd(), "fichiers": fichiers, "prompt": prompt})
+        ecrire(delta(texte))
     else:
         texte = "Bonjour, Monsieur."
         ecrire(delta("Bonjour, "))

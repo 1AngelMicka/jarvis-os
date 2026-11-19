@@ -16,6 +16,8 @@ export interface InfoMoteur {
   detail: string;
   modeles: InfoModele[];
   efforts: string[];
+  /** Sait lire les images jointes (selon le modèle pour Ollama et les compatibles OpenAI). */
+  vision?: boolean;
   effort_defaut: string | null;
   famille?: "cli" | "api" | "local";
   risque?: boolean;
@@ -147,6 +149,9 @@ export interface MetaMessage {
   cout_inconnu?: boolean;
   cout_equivalent_api_usd?: number;
   plafond?: EtatPlafond;
+  /** Images jointes à un message de l'utilisateur : seulement leur type et leur poids (le Core ne les garde pas). */
+  images?: { type: string; octets: number }[];
+  domaines?: { id: string; nom: string; niveau: number }[]; // domaines de connaissance évoqués
 }
 
 export interface MessageStocke {
@@ -168,6 +173,8 @@ export interface DemandeDialogue {
   moteur?: string;
   modele?: string;
   effort?: string;
+  /** Images jointes, en data URL (5 au plus). */
+  images?: string[];
 }
 
 export type EvenementDialogue =
@@ -202,6 +209,7 @@ export interface EtatAccueil {
   termine: boolean;
   stockage: "sqlite" | "postgres";
   tailscale: EtatTailscale | null;
+  prereglages?: Prereglage[];
 }
 
 export interface Jumelage {
@@ -241,10 +249,21 @@ export interface Mission {
   id: string;
   type: "recherche" | "brainstorm" | "revue";
   objectif: string;
+  parametres?: { scientifique?: boolean; domaine_id?: string };
   statut: "en_file" | "en_cours" | "terminee" | "echec" | "annulee";
   progression: number;
   etapes: { nom: string; le: string }[];
-  resultat: { rapport: string; sources: { titre: string; url: string }[]; souvenir_id: string | null; moteur: string } | null;
+  resultat: {
+    rapport: string;
+    sources: { titre: string; url: string }[];
+    souvenir_id: string | null;
+    moteur: string;
+    // Révision d'un domaine de connaissance
+    score?: number;
+    lacunes?: string[];
+    suggestions?: string[];
+    domaine_id?: string;
+  } | null;
   erreur: string | null;
   cree_le: string;
   termine_le: string | null;
@@ -329,3 +348,87 @@ export interface OrigineMemoire {
   nom: string;
   nombre: number;
 }
+
+// --- Chantiers et activité (phase 13, lot C) ---
+export type StatutChantier = "propose" | "a_faire" | "en_cours" | "en_attente_utilisateur" | "bloque" | "termine" | "abandonne";
+
+export interface EtapeChantier {
+  titre: string;
+  fait: boolean;
+}
+
+export interface Chantier {
+  id: string;
+  titre: string;
+  description: string | null;
+  categorie: string;
+  statut: StatutChantier;
+  progression: number;
+  etape_courante: string | null;
+  etapes: EtapeChantier[];
+  responsable: string;
+  action_utilisateur: string | null;
+  priorite: number;
+  origine: string;
+  motif: string | null;
+  cree_le: string;
+  maj_le: string;
+  termine_le: string | null;
+}
+
+export interface Activite {
+  chantiers: Chantier[];
+  missions: Pick<Mission, "id" | "type" | "objectif" | "statut" | "progression" | "cree_le" | "termine_le">[];
+  ateliers: Pick<Atelier, "id" | "projet" | "nom" | "statut" | "actif">[];
+  attentes_ateliers: number;
+  creations: { id: string; titre: string; version_courante: number; maj_le: string }[];
+  en_cours: number;
+}
+// --- Accueil du matin (lot L) ---
+export type ModeMatin = "parle" | "texte" | "desactive";
+export interface MeteoMatin {
+  temperature: number | null;
+  ciel: string | null;
+  min: number | null;
+  max: number | null;
+  pluie: number | null;
+  texte: string;
+}
+export interface RecetteMatin {
+  id: string;
+  nom: string;
+  statut: "ok" | "erreur" | "en_cours" | "ignoree";
+}
+export type CarteMatin =
+  | { afficher: false; raison: "urgence" | "desactive" | "deja_vu"; mode: ModeMatin }
+  | {
+      afficher: true;
+      mode: ModeMatin;
+      jour: string;
+      lieu_connu: boolean;
+      salutation: string;
+      date: string;
+      heure: string;
+      meteo: MeteoMatin | null;
+      recettes: RecetteMatin[];
+      attention: string[];
+      texte_parle: string;
+    };
+export interface LocalisationMatin {
+  nom: string | null;
+  source: "configuration" | "geocodage" | "appareil";
+  latitude?: number;
+  longitude?: number;
+}
+export interface ReglagesMatin {
+  mode: ModeMatin;
+  localisation: LocalisationMatin | null;
+}
+export interface LieuTrouve {
+  nom: string;
+  region: string | null;
+  pays: string | null;
+  latitude: number;
+  longitude: number;
+}
+export type Prereglage = "conversation" | "code" | "recherche" | "point_du_matin";

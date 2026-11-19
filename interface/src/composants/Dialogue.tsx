@@ -1,7 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
+import { analyserCommande, type IdCommande, suggererSlash, texteAEnvoyer } from "../commandes";
+import { ErreurImage, type ImageJointe, imagesDe, NB_MAX_IMAGES, places, preparerImage, TYPES_ACCEPTES } from "../images";
 import { TexteRiche } from "../texte";
+import { DomainesEvoques } from "./Connaissances";
 import type { AvisExpert, InfoMoteur, MetaMessage } from "../types";
+import { type ImageAffichee, Vignettes, versAffichees } from "./PiecesJointes";
 import { PiedReponse } from "./PiedReponse";
 
 export interface MessageAffiche {
@@ -10,6 +14,8 @@ export interface MessageAffiche {
   texte: string;
   meta?: MetaMessage;
   enCours?: boolean;
+  /** Images jointes (gardées dans cette page seulement : le Core ne les conserve pas). */
+  images?: ImageAffichee[];
 }
 
 const NOMS_EFFORT: Record<string, string> = {
@@ -60,10 +66,18 @@ function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
   return (
     <article className={`msg msg--${m.role}`} data-interlocuteur={m.role === "jarvis" ? (local ? "local" : "jarvis") : undefined} aria-busy={m.enCours || undefined}>
       <span className="msg-auteur">{m.role === "utilisateur" ? "Vous" : m.role === "erreur" ? "Incident" : "JARVIS"}</span>
-      <div className="msg-corps">
-        {m.role === "jarvis" ? <TexteRiche source={m.texte} /> : m.texte}
-        {m.enCours && <span className="curseur-flux" aria-hidden="true" />}
-      </div>
+      {m.images && m.images.length > 0 && <Vignettes images={m.images} libelle="Images jointes" className="vignettes--fil" />}
+      {(m.texte || m.role !== "utilisateur" || !m.images?.length) && (
+        <div className="msg-corps">
+          {m.role === "jarvis" ? <TexteRiche source={m.texte} /> : m.texte}
+          {m.enCours && <span className="curseur-flux" aria-hidden="true" />}
+        </div>
+      )}
+      {!m.images?.length && m.meta?.images && m.meta.images.length > 0 && (
+        <p className="msg-images-absentes">
+          {m.meta.images.length} image{m.meta.images.length > 1 ? "s" : ""} jointe{m.meta.images.length > 1 ? "s" : ""} · non conservée{m.meta.images.length > 1 ? "s" : ""}
+        </p>
+      )}
       {m.meta?.conseil && m.meta.conseil.length > 0 && <Avis avis={m.meta.conseil} />}
       {m.role === "jarvis" && !m.enCours && m.meta && (
         <div className="msg-pied">
@@ -73,6 +87,7 @@ function Message({ m, moteurs }: { m: MessageAffiche; moteurs: InfoMoteur[] }) {
               {m.meta.souvenirs.length} souvenir{m.meta.souvenirs.length > 1 ? "s" : ""}
             </span>
           ) : null}
+          {m.meta.domaines?.length ? <DomainesEvoques domaines={m.meta.domaines} /> : null}
           {m.meta.memoire_consultee === false && <span className="msg-meta msg-meta--ambre">mémoire indisponible</span>}
           {m.meta.jetons_sortie ? <span className="msg-meta">{m.meta.jetons_sortie} jetons</span> : null}
           {nbMasques(m.meta) > 0 && (
@@ -133,6 +148,12 @@ export function Fil({ messages, moteurs, reflexion, chargement, etapeReflexion }
             <span>
               <kbd>Échap</kbd> arrêter
             </span>
+            <span>
+              <kbd>Ctrl</kbd> + <kbd>K</kbd> commandes
+            </span>
+            <span>
+              <kbd>/</kbd> dans la saisie
+            </span>
           </p>
         </div>
       </div>
@@ -179,7 +200,9 @@ interface ConsoleProps {
   surMoteur: (id: string) => void;
   surModele: (id: string) => void;
   surEffort: (e: string) => void;
-  surEnvoyer: (texte: string) => void;
+  surEnvoyer: (texte: string, images: ImageJointe[]) => void;
+  /** Commande « / » validée dans la saisie. */
+  surCommande: (id: IdCommande, argument: string) => void;
   surArreter: () => void;
   /** Commandes supplémentaires (voix, vision), à côté du conseil. */
   extras?: React.ReactNode;
@@ -187,10 +210,30 @@ interface ConsoleProps {
 
 export function Console(p: ConsoleProps) {
   const [texte, setTexte] = useState("");
+  const [images, setImages] = useState<ImageJointe[]>([]);
+  const [enPreparation, setEnPreparation] = useState(0);
+  const [erreurSaisie, setErreurSaisie] = useState<string | null>(null);
+  const [survol, setSurvol] = useState(false);
+  const [suggestion, setSuggestion] = useState(0);
+  const [suggestionsFermees, setSuggestionsFermees] = useState(false);
   const champ = useRef<HTMLTextAreaElement>(null);
+  const fichiers = useRef<HTMLInputElement>(null);
+  const profondeurGlisser = useRef(0);
+  const idSuggestions = useId();
   const auto = p.moteur === "auto";
   const moteurActif = auto ? undefined : p.moteurs.find((m) => m.id === p.moteur);
   const pret = auto ? p.moteurs.some((m) => m.disponible && !m.risque) : Boolean(moteurActif?.disponible);
+  const suggestions = suggestionsFermees ? [] : suggererSlash(texte);
+  const choisie = suggestions[Math.min(suggestion, suggestions.length - 1)];
+  // Images refusées d'avance : conseil multi-IA, ou connecteur choisi qui ne sait pas les lire
+  const refusImages = images.length
+    ? p.conseil
+      ? "Le conseil multi-IA ne lit pas les images : désactivez-le pour les envoyer."
+      : moteurActif && moteurActif.vision === false
+        ? `${moteurActif.nom} ne lit pas les images : choisissez Auto, Claude, une API ou Ollama avec un modèle de vision.`
+        : null
+    : null;
+  const peutEnvoyer = (Boolean(texte.trim()) || images.length > 0) && pret && !p.bloquee && !refusImages && !enPreparation;
 
   useEffect(() => {
     const el = champ.current;
@@ -215,16 +258,110 @@ export function Console(p: ConsoleProps) {
     };
   }, [p]);
 
-  const envoyer = () => {
-    const t = texte.trim();
-    if (!t || p.enCours || p.bloquee || !pret) return;
-    p.surEnvoyer(t);
+  const joindre = (liste: Iterable<File>) => {
+    const { images: candidates, ignores } = imagesDe(liste);
+    const libres = places(images.length + enPreparation);
+    const retenues = candidates.slice(0, libres);
+    const messages: string[] = [];
+    if (ignores) messages.push(`${String(ignores)} fichier${ignores > 1 ? "s" : ""} ignoré${ignores > 1 ? "s" : ""} (seules les images sont acceptées).`);
+    if (candidates.length > retenues.length) messages.push(`${String(NB_MAX_IMAGES)} images au plus par message.`);
+    setErreurSaisie(messages.length ? messages.join(" ") : null);
+    if (!retenues.length) return;
+    setEnPreparation((n) => n + retenues.length);
+    for (const f of retenues) {
+      preparerImage(f)
+        .then((img) => {
+          setImages((is) => (is.length < NB_MAX_IMAGES ? [...is, img] : is));
+        })
+        .catch((e: unknown) => {
+          setErreurSaisie(e instanceof ErreurImage ? e.message : `${f.name} : image illisible.`);
+        })
+        .finally(() => {
+          setEnPreparation((n) => n - 1);
+        });
+    }
+  };
+
+  // Glisser-déposer : partout dans la fenêtre tant que le dialogue est affiché
+  const joindreRef = useRef(joindre);
+  joindreRef.current = joindre;
+  useEffect(() => {
+    const contientFichiers = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    const entree = (e: DragEvent) => {
+      if (!contientFichiers(e)) return;
+      profondeurGlisser.current++;
+      setSurvol(true);
+    };
+    const dessus = (e: DragEvent) => {
+      if (!contientFichiers(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    };
+    const sortie = (e: DragEvent) => {
+      if (!contientFichiers(e)) return;
+      profondeurGlisser.current = Math.max(0, profondeurGlisser.current - 1);
+      if (!profondeurGlisser.current) setSurvol(false);
+    };
+    const depot = (e: DragEvent) => {
+      if (!contientFichiers(e)) return;
+      e.preventDefault();
+      profondeurGlisser.current = 0;
+      setSurvol(false);
+      if (e.dataTransfer?.files.length) joindreRef.current(e.dataTransfer.files);
+      champ.current?.focus();
+    };
+    window.addEventListener("dragenter", entree);
+    window.addEventListener("dragover", dessus);
+    window.addEventListener("dragleave", sortie);
+    window.addEventListener("drop", depot);
+    return () => {
+      window.removeEventListener("dragenter", entree);
+      window.removeEventListener("dragover", dessus);
+      window.removeEventListener("dragleave", sortie);
+      window.removeEventListener("drop", depot);
+    };
+  }, []);
+
+  // « /image » ou la palette : ouvrir le sélecteur de fichiers (photothèque sur iPhone)
+  useEffect(() => {
+    const ouvrir = () => {
+      fichiers.current?.click();
+    };
+    window.addEventListener(EVENEMENT_JOINDRE, ouvrir);
+    return () => {
+      window.removeEventListener(EVENEMENT_JOINDRE, ouvrir);
+    };
+  }, []);
+
+  const lancerCommande = (id: IdCommande, argument: string) => {
     setTexte("");
+    setSuggestion(0);
+    setErreurSaisie(null);
+    p.surCommande(id, argument);
+  };
+
+  const envoyer = () => {
+    if (p.enCours || p.bloquee) return;
+    const analyse = analyserCommande(texte);
+    if (analyse.type === "commande") {
+      lancerCommande(analyse.commande.id, analyse.argument);
+      return;
+    }
+    if (analyse.type === "inconnue") {
+      setErreurSaisie(`Commande inconnue : « /${analyse.nom} ». Tapez /aide pour la liste, ou // pour envoyer un message qui commence par « / ».`);
+      return;
+    }
+    if (!peutEnvoyer) return;
+    p.surEnvoyer(texteAEnvoyer(texte), images);
+    setTexte("");
+    setImages([]);
+    setErreurSaisie(null);
   };
 
   return (
     <form
       className="console"
+      data-survol={survol || undefined}
       onSubmit={(e) => {
         e.preventDefault();
         if (p.enCours) p.surArreter();
@@ -315,7 +452,75 @@ export function Console(p: ConsoleProps) {
           {moteurActif.nom} indisponible : {moteurActif.detail}.
         </p>
       )}
+      {erreurSaisie && (
+        <p className="console-alerte" role="alert">
+          {erreurSaisie}
+        </p>
+      )}
+      {refusImages && (
+        <p className="console-alerte" role="alert">
+          {refusImages}
+        </p>
+      )}
+      <Vignettes
+        images={versAffichees(images)}
+        enPreparation={enPreparation}
+        libelle={`Images jointes au message (${String(images.length)} sur ${String(NB_MAX_IMAGES)})`}
+        className="vignettes--saisie"
+        surRetirer={(id) => {
+          setImages((is) => is.filter((i) => i.id !== id));
+          setErreurSaisie(null);
+          champ.current?.focus();
+        }}
+      />
+      {suggestions.length > 0 && (
+        <ul className="suggestions" id={idSuggestions} role="listbox" aria-label="Commandes">
+          {suggestions.map((c) => (
+            <li
+              key={c.id}
+              id={`${idSuggestions}-${c.id}`}
+              role="option"
+              aria-selected={c === choisie}
+              className="suggestion"
+              onMouseDown={(e) => {
+                e.preventDefault(); // le focus reste dans la saisie
+                lancerCommande(c.id, "");
+              }}
+            >
+              <code className="suggestion-nom">/{c.slash}</code>
+              {c.argument && <span className="suggestion-argument">[{c.argument}]</span>}
+              <span className="suggestion-detail">{c.nom}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="saisie">
+        <input
+          ref={fichiers}
+          id="joindre-image"
+          type="file"
+          accept={TYPES_ACCEPTES.join(",")}
+          multiple
+          hidden
+          onChange={(e) => {
+            if (e.target.files?.length) joindre(e.target.files);
+            e.target.value = ""; // la même image peut être choisie de nouveau
+          }}
+        />
+        <button
+          type="button"
+          className="joindre-btn"
+          aria-label={`Joindre des images (${String(images.length)} sur ${String(NB_MAX_IMAGES)})`}
+          title="Joindre des images (ou collez-les, ou glissez-les)"
+          disabled={p.bloquee || places(images.length + enPreparation) === 0}
+          onClick={() => {
+            fichiers.current?.click();
+          }}
+        >
+          <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4L15 6.9" />
+          </svg>
+        </button>
         <label className="visuellement-cache" htmlFor="saisie-message">
           Message à JARVIS
         </label>
@@ -324,12 +529,52 @@ export function Console(p: ConsoleProps) {
           ref={champ}
           rows={1}
           value={texte}
-          placeholder={p.conseil ? "Question pour le conseil…" : "Écrire à JARVIS…"}
+          placeholder={p.conseil ? "Question pour le conseil…" : images.length ? "Une question sur ces images ? (facultatif)" : "Écrire à JARVIS… (/ pour les commandes)"}
           autoComplete="off"
+          role={suggestions.length ? "combobox" : undefined}
+          aria-expanded={suggestions.length ? true : undefined}
+          aria-controls={suggestions.length ? idSuggestions : undefined}
+          aria-autocomplete={suggestions.length ? "list" : undefined}
+          aria-activedescendant={choisie ? `${idSuggestions}-${choisie.id}` : undefined}
           onChange={(e) => {
             setTexte(e.target.value);
+            setSuggestion(0);
+            setSuggestionsFermees(false);
+            if (erreurSaisie?.startsWith("Commande inconnue")) setErreurSaisie(null);
+          }}
+          onPaste={(e) => {
+            const colles = Array.from(e.clipboardData.files);
+            if (!colles.some((f) => f.type.startsWith("image/"))) return;
+            if (!e.clipboardData.getData("text/plain")) e.preventDefault();
+            joindre(colles);
           }}
           onKeyDown={(e) => {
+            if (suggestions.length) {
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                const pas = e.key === "ArrowDown" ? 1 : -1;
+                setSuggestion((i) => (Math.min(i, suggestions.length - 1) + pas + suggestions.length) % suggestions.length);
+                return;
+              }
+              if (e.key === "Tab" && choisie?.slash) {
+                e.preventDefault();
+                setTexte(`/${choisie.slash}${choisie.argument ? " " : ""}`);
+                return;
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation(); // ferme les suggestions sans arrêter la réponse
+                setSuggestionsFermees(true);
+                return;
+              }
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && choisie) {
+                e.preventDefault();
+                // « /th » + Entrée : la commande choisie ; une commande qui attend un argument le laisse taper
+                if (choisie.argument && analyserCommande(texte).type !== "commande") setTexte(`/${choisie.slash ?? ""} `);
+                else lancerCommande(choisie.id, "");
+                return;
+              }
+            }
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               envoyer();
@@ -340,7 +585,7 @@ export function Console(p: ConsoleProps) {
           type="submit"
           className="envoyer-btn"
           data-arreter={p.enCours || undefined}
-          disabled={!p.enCours && (!texte.trim() || !pret || p.bloquee)}
+          disabled={!p.enCours && !peutEnvoyer && !texte.trim().startsWith("/")}
           aria-label={p.enCours ? "Arrêter la réponse" : "Envoyer"}
           title={p.enCours ? "Arrêter (Échap)" : "Envoyer (Entrée)"}
         >
@@ -355,6 +600,14 @@ export function Console(p: ConsoleProps) {
           )}
         </button>
       </div>
+      {survol && (
+        <div className="depot-images" aria-hidden="true">
+          Déposez vos images ({String(places(images.length + enPreparation))} place{places(images.length + enPreparation) > 1 ? "s" : ""})
+        </div>
+      )}
     </form>
   );
 }
+
+/** Événement de fenêtre : ouvrir le sélecteur d'images de la console (commande « /image », palette). */
+export const EVENEMENT_JOINDRE = "jarvis2:joindre-image";
