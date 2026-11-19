@@ -77,14 +77,16 @@ export function AppelDecision({ id, surFermer }: PropsDecision) {
         const r = await reporterDemande(id);
         return `Reporté : rappel vers ${HEURE.format(new Date(r.demande.rappel_le ?? Date.now()))}.`;
       }
+      const empreinte = d.demande.empreinte;
+      if (!empreinte) throw new Error("Demande sans empreinte (antérieure à la mise à jour) : relancez l'action.");
       if (!rouge) {
-        await approuver(id);
+        await approuver(id, empreinte);
         return `Fait : ${d.demande.resume}`;
       }
       if (d.cles_acces === 0) throw new Error("Aucune clé d'accès enregistrée : ajoutez-en une (Réglages › Sécurité) pour dire oui à une action 🔴.");
       if (!clesDisponibles()) throw new Error("Ce navigateur ne gère pas les clés d'accès ici (HTTPS ou localhost requis).");
       const defi = await optionsApprobation(id);
-      await approuver(id, await signerDefi(defi));
+      await approuver(id, empreinte, await signerDefi(defi));
       return `Fait : ${d.demande.resume}`;
     };
     appel()
@@ -119,6 +121,11 @@ export function AppelDecision({ id, surFermer }: PropsDecision) {
               {d.description} · demandée par {d.demande.demandeur.replace(/^appareil:/, "")}
               {enAttente && ` · expire à ${HEURE.format(new Date(d.demande.expire_le))}`}
             </p>
+            {d.demande.empreinte_courte && (
+              <p className="demande-empreinte">
+                Empreinte du plan <code>{d.demande.empreinte_courte}</code>
+              </p>
+            )}
             {!enAttente && <p className="decision-close">Cette demande n'attend plus de décision ({d.demande.statut}).</p>}
             {enAttente && rouge && <p className="decision-aide">« Oui » demande votre clé d'accès (empreinte, visage ou code de l'appareil).</p>}
           </>

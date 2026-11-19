@@ -6,6 +6,8 @@ import { EVENEMENT_NON_AUTORISE, ecrireJeton, lireJeton } from "./auth";
 import type { ResumeCouts } from "./couts";
 import { LecteurSSE } from "./sse";
 import type {
+  EntreeAnnulation,
+  ResultatAnnulation,
   Activite,
   Chantier,
   EtapeChantier,
@@ -179,11 +181,19 @@ const signalerDecision = <T>(r: T): T => {
   window.dispatchEvent(new CustomEvent(EVENEMENT_DEMANDE_DECIDEE));
   return r;
 };
-export const approuver = (id: string, credential?: Record<string, unknown>, toujours = false) =>
-  envoyer<ReponseAction>(`/v1/demandes/${id}/approuver`, { ...(credential ? { credential } : {}), ...(toujours ? { toujours } : {}) }).then(
-    signalerDecision,
-  );
+/** Approuver : l'empreinte du plan affichée est renvoyée ; si la demande a changé depuis, l'approbation tombe. */
+export const approuver = (id: string, empreinte: string, credential?: Record<string, unknown>, toujours = false) =>
+  envoyer<ReponseAction>(`/v1/demandes/${id}/approuver`, {
+    empreinte,
+    ...(credential ? { credential } : {}),
+    ...(toujours ? { toujours } : {}),
+  }).then(signalerDecision);
 export const refuser = (id: string) => envoyer<{ statut: string }>(`/v1/demandes/${id}/refuser`).then(signalerDecision);
+
+// --- Pile d'annulation (actions réversibles exécutées, 24 h) ---
+export const listerAnnulations = () => appeler<{ annulations: EntreeAnnulation[] }>("/v1/annulations");
+export const annulerAction = (id: string) => envoyer<ResultatAnnulation>(`/v1/annulations/${encodeURIComponent(id)}/annuler`).then(signalerDecision);
+export const annulerDerniere = () => envoyer<ResultatAnnulation>("/v1/annulations/derniere/annuler").then(signalerDecision);
 
 // --- Arrêt d'urgence, audit ---
 export const arreterUrgence = () => envoyer<{ reponses_interrompues: number }>("/v1/urgence/arreter");

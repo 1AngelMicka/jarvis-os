@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { accorderImages, ajouterRegle, arreterUrgence, conseiller, creerAtelier, demanderAction, dialoguer, ErreurApi, executerCommandeRapide, lancerMission, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, lirePilotage, listerDemandes, proposerAmelioration, recevoirPartage, verifierLien, resumerConversation, sonderCore } from "./api";
+import { accorderImages, ajouterRegle, annulerDerniere, arreterUrgence, conseiller, creerAtelier, demanderAction, dialoguer, ErreurApi, executerCommandeRapide, lancerMission, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, lirePilotage, listerDemandes, proposerAmelioration, recevoirPartage, verifierLien, resumerConversation, sonderCore } from "./api";
 import { choisirAnimations, estChoixAnimations } from "./animations";
 import { aAppliquerSeules, EVENEMENT_PILOTAGE, texteVisible } from "./pilotage";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
@@ -13,6 +13,7 @@ import { VueAmeliorations } from "./composants/Ameliorations";
 import { VueAteliers } from "./composants/Ateliers";
 import { VueConnecteurs } from "./composants/Connecteurs";
 import { VueCouts } from "./composants/Couts";
+import { ActionsAnnulables } from "./composants/ActionsAnnulables";
 import { ListeDemandes } from "./composants/Demandes";
 import { DicteeGlobale } from "./composants/Dictee";
 import { Console, EVENEMENT_JOINDRE, Fil, type MessageAffiche } from "./composants/Dialogue";
@@ -469,6 +470,17 @@ function Hud() {
       });
   };
 
+  /** « Annuler » (commande rapide, palette, /annuler) : la dernière action réversible exécutée. */
+  const annulerDerniereAction = async (): Promise<string> => {
+    try {
+      const r = await annulerDerniere();
+      rafraichir();
+      return `Annulé : ${r.annulation.resume} (${r.annulation.comment.toLowerCase()}).`;
+    } catch (e: unknown) {
+      return e instanceof Error ? e.message : "Annulation impossible.";
+    }
+  };
+
   const suiteCommandeRapide = async (action: { type: string; libelle: string; genre?: string } | undefined, resultat: ReponseAction | undefined, erreur: string | undefined): Promise<string> => {
     if (erreur) return `Commande reconnue, mais refusée : ${erreur}`;
     if (!action) return "Commande reconnue.";
@@ -481,6 +493,7 @@ function Hud() {
       rafraichir();
       return `Fait : ${action.libelle}.`;
     }
+    if (action.type === "annuler") return annulerDerniereAction();
     try {
       return (await appliquerAction(action as ActionPilotage)) ?? `${action.libelle}.`;
     } catch (e: unknown) {
@@ -658,6 +671,9 @@ function Hud() {
       }
       case "demandes":
         montrerDemandes();
+        break;
+      case "annuler":
+        void annulerDerniereAction().then(notifier);
         break;
       case "securite":
         setOnglet("securite");
@@ -1525,7 +1541,12 @@ function Hud() {
                 }}
               />
             )}
-            {onglet === "demandes" && <ListeDemandes demandes={etat?.demandes ?? []} nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />}
+            {onglet === "demandes" && (
+              <>
+                <ListeDemandes demandes={etat?.demandes ?? []} nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />
+                <ActionsAnnulables surChangement={rafraichir} />
+              </>
+            )}
             {onglet === "securite" && <PanneauSecurite nbCles={etat?.cles_acces ?? 0} surChangement={rafraichir} />}
           </div>
         </section>

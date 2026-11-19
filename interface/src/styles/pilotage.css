@@ -28,6 +28,17 @@
 }
 .demande-toujours input { inline-size: var(--e-5); block-size: var(--e-5); accent-color: var(--ambre); flex: none; }
 
+/* --- Demandes : empreinte du plan ; pile d'annulation ------------------------------------------------------- */
+.demande-empreinte { margin: var(--e-1) 0 0; font: var(--t-micro)/1.3 var(--f-ui); color: var(--texte-3); }
+.demande-empreinte code { font: var(--t-micro)/1.3 var(--f-donnees); color: var(--texte-2); letter-spacing: .04em; }
+.annulables { display: flex; flex-direction: column; gap: var(--e-3); margin-top: var(--e-6); min-width: 0; }
+.annulables-titre { margin: 0; font: var(--t-micro)/1.2 var(--f-donnees); color: var(--texte-2); text-transform: uppercase; letter-spacing: .08em; }
+.annulables-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-2); }
+.annulable { display: flex; align-items: center; justify-content: space-between; gap: var(--e-3); min-width: 0; }
+.annulable-texte { min-width: 0; }
+.annulable-resume { margin: 0 0 var(--e-1); font-size: var(--t-mini); color: var(--texte); overflow-wrap: anywhere; }
+.annulable .btn { flex: none; }
+
 /* --- Réglages : commandes rapides et règles ------------------------------------------------------------------ */
 .rapides, .regles { display: flex; flex-direction: column; gap: var(--e-4); min-width: 0; }
 .rapides-liste, .regles-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e-3); }
