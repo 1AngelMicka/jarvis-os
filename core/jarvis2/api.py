@@ -34,7 +34,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__, memoire, vision
+from . import __version__, memoire, vision, widgets
 from .agents.mcp import GestionnaireMCP
 from .agents.missions import ServiceMissions
 from .agents.recettes import Planificateur
@@ -65,6 +65,7 @@ from .api_securite import routeur as routeur_securite
 from .api_synthese import routeur as routeur_synthese
 from .api_telechargements import routeur as routeur_telechargements
 from .api_transcription import routeur as routeur_transcription
+from .api_widgets import routeur as routeur_widgets
 from .ateliers.gestionnaire import GestionnaireAteliers, Projet
 from .ateliers.veille import SourceFichiersEtat, VeilleClaudeCode, dossier_par_defaut
 from .commandes_rapides import ServiceCommandes
@@ -582,12 +583,19 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
                 return list(await asyncio.gather(*(decrire_moteur(m) for m in c.moteurs.values())))
             return [carte for carte in await c.connecteurs.decrire(tous=False) if carte["disponible"]]
 
-        moteurs, conversations, comptes, demandes, nb_cles = await asyncio.gather(
+        async def widgets_epingles() -> list[dict[str, Any]]:
+            try:
+                return await widgets.lister(c.pool)
+            except Exception:  # base pas encore migrée : le HUD démarre sans widget
+                return []
+
+        moteurs, conversations, comptes, demandes, nb_cles, epingles = await asyncio.gather(
             connecteurs_actifs(),
             c.depot.lister(limite=50),
             memoire.compter(c.pool),
             c.approbations.lister("en_attente"),
             c.pool.fetchval("SELECT count(*) FROM cles_acces"),
+            widgets_epingles(),
         )
         return {
             "appareil": request.state.appareil.en_dict(),
@@ -600,6 +608,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             "moteurs": moteurs,
             "conversations": [conv.en_dict() for conv in conversations],
             "memoire": comptes,
+            "widgets": epingles,  # phase 14, D 16 : épinglés dans le HUD (un seul appel au démarrage)
         }
 
     @app.get("/v1/memoire/recherche")
@@ -719,6 +728,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_transcription)
     app.include_router(routeur_donnees)
     app.include_router(routeur_pilotage)
+    app.include_router(routeur_widgets)
     app.include_router(routeur_pc)
     app.include_router(routeur_eveil)
     app.include_router(routeur_routage)

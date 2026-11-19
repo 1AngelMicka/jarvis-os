@@ -2,6 +2,7 @@
 
 import type { EtatPlafond } from "./couts";
 import type { Avis, RouteMessage } from "./routage";
+import type { Widget, WidgetEpingle } from "./widgets";
 
 export interface InfoModele {
   id: string;
@@ -159,6 +160,8 @@ export interface Etat {
   cles_acces: number;
   /** Serveur sans écran : capture, clics et contrôle de l'écran refusés par le Core. */
   sans_ecran?: boolean;
+  /** Widgets épinglés dans le HUD (phase 14, D 16). */
+  widgets?: WidgetEpingle[];
 }
 
 export interface MetaMessage {
@@ -197,6 +200,9 @@ export interface MetaMessage {
   /** Routeur par type de tâche (14 · B 11) : type, raison, IA rétrogradées écartées ; avis de l'utilisateur. */
   route?: RouteMessage;
   retour?: Avis;
+  /** Widgets générés (14 · D 16), fragments validés et réécrits par le Core ; `widgets_ecartes` : raisons. */
+  widgets?: Widget[];
+  widgets_ecartes?: string[];
 }
 
 export interface LectureNonFiable {
@@ -250,7 +256,9 @@ export type EvenementDialogue =
   | { type: "titre"; donnees: { conversation_id: string; titre: string } }
   | { type: "invente"; donnees: { message_id: number; affirmations: AffirmationInventee[] } }
   /** Image jointe pour un connecteur cloud sans accord : rien n'est parti, l'accord est demandé. */
-  | { type: "accord_images"; donnees: { connecteur: string; nom: string; message: string } };
+  | { type: "accord_images"; donnees: { connecteur: string; nom: string; message: string } }
+  /** Un outil long démarre (conseil, lecture d'images…) : phrase fixe du Core, affichée et dite si la voix est active. */
+  | { type: "attente"; donnees: { outil: string; phrase: string } };
 
 // --- Premier lancement ---
 export interface Verification {

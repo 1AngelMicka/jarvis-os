@@ -17,6 +17,12 @@ describe("texte visible pendant le flux", () => {
     expect(texteVisible("a < b")).toBe("a < b");
     expect(texteVisible("Bonjour")).toBe("Bonjour");
   });
+  it("masque aussi un bloc de widget (14 · D 16), le premier bloc l'emporte", () => {
+    expect(texteVisible('Minuteur prêt.\n<widget titre="Thé"><div class="w-carte">')).toBe("Minuteur prêt.");
+    expect(texteVisible("Voici <wid")).toBe("Voici ");
+    expect(texteVisible('Ok <widget titre="a"></widget><actions>[]')).toBe("Ok");
+    expect(texteVisible("un <w")).toBe("un ");
+  });
 });
 
 describe("actions appliquées seules", () => {

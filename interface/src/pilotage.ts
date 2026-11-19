@@ -6,16 +6,17 @@
 
 import type { ActionPilotage, ModePilotage } from "./types";
 
-const OUVERTURE = "<actions";
+// Blocs masqués pendant le flux : actions (lot F) et widgets (14 · D 16), retirés par le Core à la fin
+const OUVERTURES = ["<actions", "<widget"];
 
-/** Texte à montrer pendant le flux : tout ce qui précède `<actions`, sans un début de balise encore incomplet. */
+/** Texte à montrer pendant le flux : tout ce qui précède `<actions` ou `<widget`, sans un début de balise incomplet. */
 export function texteVisible(texte: string): string {
   const bas = texte.toLowerCase();
-  const debut = bas.indexOf(OUVERTURE);
-  if (debut >= 0) return texte.slice(0, debut).trimEnd();
+  const debuts = OUVERTURES.map((o) => bas.indexOf(o)).filter((i) => i >= 0);
+  if (debuts.length) return texte.slice(0, Math.min(...debuts)).trimEnd();
   // « Voici <ac » : le morceau suivant dira si c'est le bloc ; en attendant, rien n'est montré de cette fin
-  for (let n = Math.min(OUVERTURE.length - 1, bas.length); n > 0; n--) {
-    if (bas.endsWith(OUVERTURE.slice(0, n))) return texte.slice(0, texte.length - n);
+  for (let n = Math.max(...OUVERTURES.map((o) => o.length)) - 1; n > 0; n--) {
+    if (n <= bas.length && OUVERTURES.some((o) => n < o.length && bas.endsWith(o.slice(0, n)))) return texte.slice(0, texte.length - n);
   }
   return texte;
 }

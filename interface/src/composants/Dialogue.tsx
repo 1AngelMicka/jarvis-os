@@ -9,6 +9,7 @@ import type { ActionPilotage, AffirmationInventee, AvisExpert, BilanBarriere, In
 import { ActionsJarvis } from "./ActionsJarvis";
 import { type ImageAffichee, Vignettes, versAffichees } from "./PiecesJointes";
 import { PiedReponse } from "./PiedReponse";
+import { WidgetsDuMessage } from "./Widgets";
 
 export interface MessageAffiche {
   cle: string;
@@ -137,6 +138,7 @@ function Message({ m, moteurs, surAction }: { m: MessageAffiche; moteurs: InfoMo
       {m.role === "jarvis" && !m.enCours && m.meta?.invente && m.meta.invente.length > 0 && <AvertissementInvente affirmations={m.meta.invente} />}
       {m.meta?.conseil && m.meta.conseil.length > 0 && <Avis avis={m.meta.conseil} />}
       {m.role === "jarvis" && !m.enCours && m.meta?.barriere && m.meta.barriere.bloquees.length > 0 && <BarriereInjection bilan={m.meta.barriere} />}
+      {m.role === "jarvis" && !m.enCours && <WidgetsDuMessage widgets={m.meta?.widgets} ecartes={m.meta?.widgets_ecartes} />}
       {m.role === "jarvis" && !m.enCours && surAction && (m.meta?.actions?.length || m.meta?.actions_ecartees?.length) ? (
         <ActionsJarvis actions={m.meta.actions ?? []} ecartees={m.meta.actions_ecartees} appliquees={m.actionsAppliquees ?? false} surAction={surAction} />
       ) : null}

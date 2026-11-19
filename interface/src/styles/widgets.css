@@ -1,0 +1,63 @@
+/* Phase 14, D 16 : widgets générés à la demande (sous une réponse, épinglés dans le HUD).
+   Les classes `w-*` sont la liste FERMÉE que le Core (widgets.py) et le filtre de l'interface (widgets.ts) acceptent :
+   en ajouter une = l'ajouter aux deux listes ET ici. Uniquement des tokens (DESIGN.md, règle 1). */
+
+/* --- Cadre d'un widget ---------------------------------------------------------------------------------------- */
+.widgets-reponse { margin: var(--e-3) 0 0; display: flex; flex-wrap: wrap; gap: var(--e-3); min-width: 0; }
+.widget {
+  flex: 1 1 16em; min-width: 0; max-inline-size: 100%;
+  padding: var(--e-3) var(--e-4); display: flex; flex-direction: column; gap: var(--e-2);
+  border: var(--l-fin) solid var(--ligne); border-radius: var(--r-2); background: rgb(var(--c-creux) / .45);
+}
+.widget-tete { display: flex; align-items: center; justify-content: space-between; gap: var(--e-2); min-width: 0; }
+.widget-titre {
+  margin: 0; min-width: 0; overflow-wrap: anywhere;
+  font: var(--t-mini)/1.3 var(--f-ui); color: var(--texte-2); letter-spacing: calc(.04em * var(--chasse-k)); text-transform: var(--casse);
+}
+.widget-contenu { min-width: 0; overflow-x: auto; font: var(--t-petit)/1.45 var(--f-texte); color: var(--texte); overflow-wrap: anywhere; }
+.widget-contenu :where(p, h3, h4, ul, ol) { margin: 0 0 var(--e-2); }
+.widget-contenu :where(p, h3, h4, ul, ol):last-child { margin-bottom: 0; }
+.widget-contenu :where(h3, h4) { font: var(--t-petit)/1.3 var(--f-ui); color: var(--texte-fort); }
+.widget-contenu :where(ul, ol) { padding-inline-start: var(--e-5); }
+.widget-contenu table { border-collapse: collapse; inline-size: 100%; font: var(--t-mini)/1.4 var(--f-ui); }
+.widget-contenu :where(th, td) { padding: var(--e-1) var(--e-2); border-bottom: var(--l-fin) solid var(--ligne-faible); text-align: start; }
+.widget-contenu th { color: var(--texte-2); font-weight: 600; }
+.widget-contenu a { color: var(--cyan-vif); }
+.widget-contenu :where(meter, progress) { inline-size: 100%; accent-color: var(--cyan); }
+.widget-refus { margin: 0; font: var(--t-mini)/1.4 var(--f-ui); color: var(--ambre-texte); overflow-wrap: anywhere; }
+
+/* --- Classes permises dans un fragment ------------------------------------------------------------------------- */
+.w-carte { display: flex; flex-direction: column; gap: var(--e-2); min-width: 0; }
+.w-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 7em), 1fr)); gap: var(--e-2) var(--e-3); }
+.w-ligne { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--e-1) var(--e-3); }
+.w-pile { display: flex; flex-direction: column; gap: var(--e-1); }
+.w-titre { font: var(--t-base)/1.25 var(--f-affiche); color: var(--texte-fort); text-transform: var(--casse); }
+.w-valeur { font: var(--t-moyen)/1.1 var(--f-donnees); color: var(--texte-fort); font-variant-numeric: tabular-nums; }
+.w-geant { font: var(--t-titre)/1 var(--f-donnees); color: var(--texte-fort); font-variant-numeric: tabular-nums; }
+.w-libelle { font: var(--t-mini)/1.3 var(--f-ui); color: var(--texte-2); }
+.w-unite { font: var(--t-mini)/1.3 var(--f-ui); color: var(--texte-3); }
+.w-icone { font-size: var(--t-grand); line-height: 1; }
+.w-mono { font-family: var(--f-mono); }
+.w-discret { color: var(--texte-3); }
+.w-accent { color: var(--cyan-vif); }
+.w-succes { color: var(--vert); }
+.w-attention { color: var(--ambre-texte); }
+.w-danger { color: var(--rouge-clair); }
+.w-liste { list-style: none; padding: 0; display: flex; flex-direction: column; gap: var(--e-1); }
+.w-liste > li { padding: var(--e-1) 0; border-bottom: var(--l-fin) solid var(--ligne-faible); }
+.w-liste > li:last-child { border-bottom: 0; }
+.w-coche { color: var(--texte-3); text-decoration: line-through; }
+.w-minuteur { font-variant-numeric: tabular-nums; }
+.w-jauge { inline-size: 100%; }
+
+/* --- Minuteur (animé par l'interface, jamais par le fragment) -------------------------------------------------- */
+.w-minuteur-bloc { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--e-2) var(--e-3); }
+.w-minuteur-boutons { display: inline-flex; gap: var(--e-2); }
+
+/* --- Épinglés dans le HUD : colonne de gauche (≥ 900 px), bandeau au-dessus du dialogue (téléphone) --------------- */
+.widgets-epingles { display: flex; flex-direction: column; gap: var(--e-3); min-width: 0; }
+.panneau-widgets .widgets-epingles { padding: var(--e-3) var(--e-4) var(--e-4); overflow-y: auto; min-height: 0; }
+.widgets-mobile { flex-direction: row; overflow-x: auto; padding: 0 0 var(--e-3); scroll-snap-type: x proximity; }
+.widgets-mobile .widget { flex: 0 0 min(85%, 20em); scroll-snap-align: start; }
+@media (min-width: 900px) { .widgets-mobile { display: none; } }
+.panneau-widgets { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }

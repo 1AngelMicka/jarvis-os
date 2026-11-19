@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from . import attente
 from .dialogue import NB_MESSAGES_HISTORIQUE, TEXTE_MASQUE, EvenementDialogue, ServiceDialogue
 from .moteurs.base import Delta, ErreurMoteur, Fin, Message
 from .moteurs.telemetrie import MoteurInstrumente
@@ -149,6 +150,7 @@ class ServiceConseil:
                 "moteur": synthetiseur.id_moteur,
             },
         )
+        yield EvenementDialogue("attente", attente.evenement("conseil"))  # outil long : la phrase part tout de suite
         taches = [asyncio.create_task(self._avis(m, question, historique, conversation.id)) for m in membres]
         avis: list[Avis] = []
         try:

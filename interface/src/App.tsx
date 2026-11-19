@@ -40,6 +40,8 @@ import { ecrirePreferences, lirePreferences } from "./preferences";
 import { couperVoix, LecteurVocal } from "./voix";
 import type { ActionPilotage, Activite, AvisExpert, Etat, EvenementDialogue, InfoMoteur, LienVerifie, MessageStocke, ModePilotage, Partage, ReponseAction, ResumeConversation } from "./types";
 import { useAlertesVeille } from "./veilleClaude";
+import { type ActionsWidgets, ContexteWidgets, WidgetsEpingles } from "./composants/Widgets";
+import { epinglerWidget, retirerWidget, type Widget, type WidgetEpingle } from "./widgets";
 
 let compteur = 0;
 const nouvelleCle = () => `m${String(++compteur)}`;
@@ -104,6 +106,10 @@ function Hud() {
   const [demandeReglages, setDemandeReglages] = useState<DemandeReglages | null>(null);
   const [conseil, setConseil] = useState(false);
   const [avisEnCours, setAvisEnCours] = useState<{ attendus: number; recus: number } | null>(null);
+  // Phrase d'attente (14 · D 16) : un outil long a démarré (conseil, lecture d'images…)
+  const [attente, setAttente] = useState<string | null>(null);
+  // Widgets épinglés dans le HUD (14 · D 16), lus avec l'état au démarrage
+  const [widgetsEpingles, setWidgetsEpingles] = useState<WidgetEpingle[]>([]);
   const [annonce, setAnnonce] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
   // Panneau Activité (chantiers, missions, ateliers, créations) et élément à ouvrir dans une vue
@@ -163,6 +169,7 @@ function Hud() {
       .then((e) => {
         setEtat(e);
         setConversations(e.conversations);
+        if (e.widgets) setWidgetsEpingles(e.widgets);
         if (!initial) return;
         const prefs = lirePreferences();
         // « auto » : le routeur choisit ; un choix mémorisé n'est repris que s'il existe encore
@@ -495,6 +502,7 @@ function Hud() {
     setMessages((ms) => [...ms, { cle: cleUtilisateur, role: "utilisateur", texte, ...(affichees.length ? { images: affichees } : {}) }]);
     setEnCours(true);
     setPremierMorceau(false);
+    setAttente(null);
     setAnnonce("");
     const ctrl = new AbortController();
     controleur.current = ctrl;
@@ -506,6 +514,11 @@ function Hud() {
     let lu = 0;
     const surEvenement = (ev: EvenementDialogue) => {
       switch (ev.type) {
+        case "attente":
+          // Phrase fixe du Core : affichée à la place de « réflexion », dite si la lecture à voix haute est active
+          setAttente(ev.donnees.phrase);
+          if (lecteur.actif) lecteur.pousser(`${ev.donnees.phrase}\n`);
+          break;
         case "avis":
           avis.push(ev.donnees);
           setAvisEnCours((a) => (a ? { ...a, recus: a.recus + 1 } : a));
@@ -600,9 +613,45 @@ function Hud() {
         }
         setEnCours(false);
         setAvisEnCours(null);
+        setAttente(null);
         if (controleur.current === ctrl) controleur.current = null;
       });
   };
+
+  // --- Widgets générés (14 · D 16) : épingler, retirer, liens internes, fin d'un minuteur ---
+  const epingler = (w: Widget) => {
+    epinglerWidget(w)
+      .then((r) => {
+        setWidgetsEpingles((ws) => (ws.some((x) => x.id === r.widget.id) ? ws : [...ws, r.widget]));
+        notifier(r.nouveau ? `Widget « ${r.widget.titre} » épinglé dans le HUD.` : "Ce widget est déjà épinglé.");
+      })
+      .catch((e: unknown) => {
+        notifier(e instanceof Error ? e.message : "Épinglage impossible.");
+      });
+  };
+  const retirerEpingle = (id: string) => {
+    retirerWidget(id)
+      .then(() => {
+        setWidgetsEpingles((ws) => ws.filter((w) => w.id !== id));
+        notifier("Widget retiré du HUD.");
+      })
+      .catch((e: unknown) => {
+        notifier(e instanceof Error ? e.message : "Retrait impossible.");
+      });
+  };
+  const rappelsWidgets: Pick<ActionsWidgets, "surNaviguer" | "surFinMinuteur"> = {
+    surNaviguer: (v) => {
+      appliquerAction({ type: "naviguer", genre: "immediate", niveau: "vert", libelle: "Ouvrir la vue", parametres: { vue: v } }).catch((e: unknown) => {
+        notifier(e instanceof Error ? e.message : "Vue indisponible.");
+      });
+    },
+    surFinMinuteur: (titre) => {
+      const message = `Minuteur « ${titre} » terminé.`;
+      notifier(message);
+      if (lecteur.actif) lecteur.lire(message);
+    },
+  };
+  const actionsWidgets: ActionsWidgets = { ...rappelsWidgets, epingles: new Set(widgetsEpingles.map((w) => w.empreinte)), surEpingler: epingler };
 
   const arreter = () => {
     lecteur.arreter();
@@ -1131,6 +1180,11 @@ function Hud() {
             )}
           </ul>
         </Panneau>
+        {widgetsEpingles.length > 0 && (
+          <Panneau titre="Widgets" className="panneau-widgets" ordre={2} meta={`${String(widgetsEpingles.length)} épinglé${widgetsEpingles.length > 1 ? "s" : ""}`}>
+            <WidgetsEpingles widgets={widgetsEpingles} surRetirer={retirerEpingle} {...rappelsWidgets} />
+          </Panneau>
+        )}
       </aside>
 
       <main className="scene">
@@ -1422,14 +1476,21 @@ function Hud() {
                     }}
                   />
                 )}
+                <WidgetsEpingles className="widgets-mobile" widgets={widgetsEpingles} surRetirer={retirerEpingle} {...rappelsWidgets} />
+                <ContexteWidgets.Provider value={actionsWidgets}>
                 <Fil
                 messages={messages}
                 moteurs={moteurs}
                 reflexion={enCours && !premierMorceau}
                 chargement={chargement || !etat}
-                {...(avisEnCours ? { etapeReflexion: `Conseil : ${String(avisEnCours.recus)} avis sur ${String(avisEnCours.attendus)}…` } : {})}
+                {...(avisEnCours && (avisEnCours.recus > 0 || !attente)
+                  ? { etapeReflexion: `Conseil : ${String(avisEnCours.recus)} avis sur ${String(avisEnCours.attendus)}…` }
+                  : attente
+                    ? { etapeReflexion: attente }
+                    : {})}
                 surAction={appliquerAction}
               />
+                </ContexteWidgets.Provider>
                 <Console
                   moteurs={moteurs}
                   moteur={moteur}
