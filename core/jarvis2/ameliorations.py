@@ -293,7 +293,8 @@ class ServiceAmeliorations:
             proc = await asyncio.create_subprocess_exec(
                 *projet.tests,
                 cwd=str(dossier),
-                env=environnement_propre(os.environ),
+                # Pas de fichiers .pyc écrits par des tests Python : ils changeraient le contenu testé
+                env={**environnement_propre(os.environ), "PYTHONDONTWRITEBYTECODE": "1"},
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
@@ -350,12 +351,14 @@ class ServiceAmeliorations:
                     raise
                 except Exception as exc:
                     essai = {"reussi": False, "code": None, "sortie": f"Erreur : {exc}"}
-                # Contenu modifié pendant les tests : l'essai ne vaut pas pour le nouveau contenu
+                # Contenu modifié pendant les tests (fichiers écrits par les tests et non ignorés par git, ou travail
+                # en parallèle) : l'essai ne vaut pas pour le nouveau contenu, et on le dit
                 apres = (await instantane(worktree, base))["empreinte"]
+                change = apres != empreinte
                 await self._noter_tests(
                     ident,
                     "atelier",
-                    {**essai, "empreinte": empreinte if apres == empreinte else "", "le": _maintenant()},
+                    {**essai, "empreinte": "" if change else empreinte, "contenu_change": change, "le": _maintenant()},
                 )
 
         t = asyncio.create_task(tache())

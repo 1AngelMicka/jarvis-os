@@ -31,6 +31,7 @@ pytestmark = pytest.mark.base
 
 # Tests du projet : réussis s'il n'y a pas de fichier CASSE ; « lent » : attend (pour l'arrêt d'urgence)
 TESTS = (sys.executable, "-c", "import pathlib, sys; sys.exit(1 if pathlib.Path('CASSE').exists() else 0)")
+ECRIT = (sys.executable, "-c", "import pathlib; pathlib.Path('trace.txt').write_text('x')")
 TESTS_LENTS = (sys.executable, "-c", "import time; time.sleep(30)")
 
 
@@ -113,6 +114,13 @@ async def test_cycle_complet(
     with pytest.raises(ErreurAmelioration, match="tests doivent avoir réussi"):
         await service.parametres_mise_en_service(a["id"])
     (worktree / "CASSE").unlink()
+    # Des tests qui écrivent un fichier non ignoré dans l'atelier : l'essai ne vaut pas pour le contenu vu
+    ateliers.projets["essai"] = Projet("essai", "Essai", projet, ECRIT)
+    essai = await lancer_tests(service, a["id"])
+    assert essai["reussi"] is True and essai["contenu_change"] is True and essai["empreinte"] == ""
+    assert (await service.apercu(a["id"]))["tests_a_jour"] is False
+    (worktree / "trace.txt").unlink()
+    ateliers.projets["essai"] = Projet("essai", "Essai", projet, TESTS)
     essai = await lancer_tests(service, a["id"])
     assert essai["reussi"] is True and (await service.apercu(a["id"]))["tests_a_jour"] is True
     params = await service.parametres_mise_en_service(a["id"])
