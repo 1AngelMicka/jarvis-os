@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { accorderImages, ajouterRegle, arreterUrgence, conseiller, creerAtelier, demanderAction, dialoguer, ErreurApi, executerCommandeRapide, lancerMission, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, lirePilotage, listerDemandes, resumerConversation, sonderCore } from "./api";
+import { accorderImages, ajouterRegle, recevoirPartage, verifierLien, arreterUrgence, conseiller, creerAtelier, demanderAction, dialoguer, ErreurApi, executerCommandeRapide, lancerMission, leverUrgence, lireAccueil, lireActivite, lireConversation, lireEtat, lireNouveautes, lirePilotage, listerDemandes, resumerConversation, sonderCore } from "./api";
 import { choisirAnimations, estChoixAnimations } from "./animations";
 import { aAppliquerSeules, EVENEMENT_PILOTAGE, texteVisible } from "./pilotage";
 import { EVENEMENT_NON_AUTORISE, lireJeton } from "./auth";
+import { emettre, estGadget, EVENEMENT_ECOUTER, EVENEMENT_PREREMPLIR, lireDecision, lireLien, lirePartage, nettoyerAdresse } from "./bureau";
 import { VueAccueil } from "./composants/Accueil";
+import { AppelDecision, CartePartage, Gadget, PropositionEcran } from "./composants/Bureau";
 import { type CibleActivite, PanneauActivite } from "./composants/Activite";
 import { VueAgents } from "./composants/Agents";
 import { VueAteliers } from "./composants/Ateliers";
@@ -34,7 +36,7 @@ import { CommandesVoix } from "./composants/Voix";
 import { SelecteurTheme } from "./composants/SelecteurTheme";
 import { ecrirePreferences, lirePreferences } from "./preferences";
 import { couperVoix, LecteurVocal } from "./voix";
-import type { ActionPilotage, Activite, AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ModePilotage, ReponseAction, ResumeConversation } from "./types";
+import type { ActionPilotage, Activite, AvisExpert, Etat, EvenementDialogue, InfoMoteur, LienVerifie, MessageStocke, ModePilotage, Partage, ReponseAction, ResumeConversation } from "./types";
 import { useAlertesVeille } from "./veilleClaude";
 
 let compteur = 0;
@@ -63,7 +65,11 @@ export function App() {
     };
   }, []);
   return autorise ? (
-    <Hud />
+    estGadget(window.location.search) ? (
+      <Gadget />
+    ) : (
+      <Hud />
+    )
   ) : (
     <EcranJumelage
       surAutorise={() => {
@@ -106,6 +112,10 @@ function Hud() {
   // Image jointe pour un connecteur cloud sans accord : rien n'est parti, la fenêtre d'accord attend la réponse
   const [accordImages, setAccordImages] = useState<{ connecteur: string; nom: string; texte: string; images: ImageJointe[]; cle: string } | null>(null);
   const [aide, setAide] = useState(false);
+  // Bureau et téléphone (lot M) : appel de décision, contenu partagé, raccourci « écran »
+  const [decision, setDecision] = useState<string | null>(null);
+  const [partageRecu, setPartageRecu] = useState<{ partage: Partage; message: string } | null>(null);
+  const [propositionEcran, setPropositionEcran] = useState(false);
   const controleur = useRef<AbortController | null>(null);
   const lecteur = useRef(new LecteurVocal()).current;
   const [rejouerMatin, setRejouerMatin] = useState(0); // « Rejouer l'accueil » du matin (panneau État)
@@ -164,13 +174,17 @@ function Hud() {
       });
   }, []);
 
+  // Arrivée par un lien jarvis://, une notification ou un partage : l'assistant de premier lancement ne la masque pas
+  const arriveeParLien = useRef(
+    Boolean(lireLien(window.location.hash) ?? lireDecision(window.location.hash) ?? lirePartage(window.location.search)),
+  );
   useEffect(() => {
     charger();
     // Premier lancement : l'assistant s'ouvre tant qu'il n'a pas été terminé
     lireAccueil()
       .then((a) => {
-        // …sauf si une adresse directe (`#reglages/…`) a déjà ouvert une autre vue
-        if (!a.termine && !lireAdresse(window.location.hash)) setVue("accueil");
+        // …sauf si une adresse directe (`#reglages/…`) ou un lien a déjà ouvert une autre vue
+        if (!a.termine && !lireAdresse(window.location.hash) && !arriveeParLien.current) setVue("accueil");
       })
       .catch(() => {
         /* Core injoignable : l'écran d'erreur du dialogue le dit déjà */
@@ -676,6 +690,81 @@ function Hud() {
   };
   const executerRef = useRef(executer);
   executerRef.current = executer;
+
+  // --- Liens jarvis:// (application de bureau, gadget, raccourcis) : vérifiés par le Core, action 🟢 au plus ---
+  const appliquerLien = (l: LienVerifie) => {
+    const p = l.parametres;
+    switch (l.action) {
+      case "ouvrir":
+        void appliquerAction({ type: "naviguer", genre: "immediate", niveau: "vert", libelle: l.libelle, parametres: { vue: p.vue ?? "dialogue" } });
+        break;
+      case "conversation":
+        if (p.id) ouvrir(p.id);
+        break;
+      case "nouvelle":
+        nouvelle();
+        break;
+      case "ecouter":
+        setVue("dialogue");
+        window.setTimeout(() => {
+          emettre(EVENEMENT_ECOUTER);
+        }, 0);
+        break;
+      case "ecran":
+        setVue("dialogue");
+        setPropositionEcran(true);
+        break;
+      case "dire":
+        setVue("dialogue");
+        window.setTimeout(() => {
+          emettre(EVENEMENT_PREREMPLIR, p.texte ?? "");
+        }, 0);
+        notifier("Texte reçu par un lien : relisez-le avant de l'envoyer.");
+        break;
+      case "decision":
+        if (p.id) setDecision(p.id);
+        break;
+      case "gadget":
+        notifier("Le gadget de bureau s'ouvre depuis l'application de bureau.");
+        break;
+    }
+  };
+  const appliquerLienRef = useRef(appliquerLien);
+  appliquerLienRef.current = appliquerLien;
+  useEffect(() => {
+    const traiter = () => {
+      const lien = lireLien(window.location.hash);
+      const idDecision = lireDecision(window.location.hash);
+      if (!lien && !idDecision) return;
+      history.replaceState(null, "", window.location.pathname + window.location.search); // un rechargement ne le rejoue pas
+      if (idDecision) setDecision(idDecision);
+      if (lien)
+        verifierLien(lien)
+          .then((l) => {
+            appliquerLienRef.current(l);
+          })
+          .catch((e: unknown) => {
+            notifier(`Lien refusé : ${e instanceof Error ? e.message : "inconnu"}`);
+          });
+    };
+    traiter();
+    window.addEventListener("hashchange", traiter);
+    return () => {
+      window.removeEventListener("hashchange", traiter);
+    };
+  }, [notifier]);
+  // « Partager vers JARVIS » (téléphone) : le contenu est gardé par le Core, affiché comme non fiable, rien ne part seul
+  useEffect(() => {
+    const recu = lirePartage(window.location.search);
+    if (!recu) return;
+    nettoyerAdresse();
+    setVue("dialogue");
+    recevoirPartage(recu)
+      .then(setPartageRecu)
+      .catch((e: unknown) => {
+        notifier(`Partage non reçu : ${e instanceof Error ? e.message : "erreur"}`);
+      });
+  }, [notifier]);
 
   // --- JARVIS pilote l'interface : actions validées par le Core (lot F) ---
   const appliquerAction = async (a: ActionPilotage): Promise<string | undefined> => {
@@ -1264,6 +1353,26 @@ function Hud() {
             ) : (
               <>
                 {etat && <AccueilMatin lecteur={lecteur} urgence={urgence} rejouer={rejouerMatin} surNotifier={notifier} />}
+                {propositionEcran && (
+                  <PropositionEcran
+                    surFermer={() => {
+                      setPropositionEcran(false);
+                    }}
+                  />
+                )}
+                {partageRecu && (
+                  <CartePartage
+                    partage={partageRecu.partage}
+                    message={partageRecu.message}
+                    surDemander={(m) => {
+                      setPartageRecu(null);
+                      envoyer(m);
+                    }}
+                    surFermer={() => {
+                      setPartageRecu(null);
+                    }}
+                  />
+                )}
                 <Fil
                 messages={messages}
                 moteurs={moteurs}
@@ -1446,6 +1555,15 @@ function Hud() {
         <Aide
           surFermer={() => {
             setAide(false);
+          }}
+        />
+      )}
+      {decision && (
+        <AppelDecision
+          id={decision}
+          surFermer={(m) => {
+            setDecision(null);
+            rafraichir(m);
           }}
         />
       )}

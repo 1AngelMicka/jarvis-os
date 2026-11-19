@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { EVENEMENT_ECOUTER, EVENEMENT_ECRAN, prendre } from "../bureau";
 import { decrireImage, transcrireAudio } from "../api";
 import { capturerEcran, EcouteMainsLibres, Enregistreur, EVENEMENT_SILENCE, EVENEMENT_VOIX, type LecteurVocal } from "../voix";
 
@@ -130,6 +131,24 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
       });
   };
 
+  // Raccourcis globaux de l'application de bureau (lot M) : « voix » ouvre la dictée, « écran » lance la capture
+  const actions = useRef({ ecouter: () => {}, ecran: () => {} });
+  useEffect(() => {
+    const ecouter = () => {
+      if (prendre(EVENEMENT_ECOUTER) !== null) actions.current.ecouter();
+    };
+    const ecranDemande = () => {
+      if (prendre(EVENEMENT_ECRAN) !== null) actions.current.ecran();
+    };
+    ecouter(); // raccourci arrivé avant que les commandes vocales soient montées
+    window.addEventListener(EVENEMENT_ECOUTER, ecouter);
+    window.addEventListener(EVENEMENT_ECRAN, ecranDemande);
+    return () => {
+      window.removeEventListener(EVENEMENT_ECOUTER, ecouter);
+      window.removeEventListener(EVENEMENT_ECRAN, ecranDemande);
+    };
+  }, []);
+
   const decrireEcran = () => {
     setEcran(true);
     capturerEcran()
@@ -144,6 +163,19 @@ export function CommandesVoix({ lecteur, enCours, bloquee, sansEcran, surEnvoyer
       .finally(() => {
         setEcran(false);
       });
+  };
+
+  actions.current = {
+    ecouter: () => {
+      if (bloquee) surNotifier("Arrêt d'urgence actif : le micro reste fermé.");
+      else if (!micro) surNotifier("Micro indisponible dans ce navigateur.");
+      else if (!dictee) basculerDictee();
+    },
+    ecran: () => {
+      if (sansEcran) surNotifier("Serveur sans écran : la capture est désactivée.");
+      else if (!partage) surNotifier("Partage d'écran indisponible dans ce navigateur.");
+      else if (!ecran && !bloquee) decrireEcran();
+    },
   };
 
   return (

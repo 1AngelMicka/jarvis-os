@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
+import { EVENEMENT_PREREMPLIR, prendre } from "../bureau";
 import { analyserCommande, type IdCommande, suggererSlash, texteAEnvoyer } from "../commandes";
 import { ErreurImage, type ImageJointe, imagesDe, NB_MAX_IMAGES, places, preparerImage, TYPES_ACCEPTES } from "../images";
 import { TexteRiche } from "../texte";
@@ -357,6 +358,21 @@ export function Console(p: ConsoleProps) {
       window.removeEventListener("dragover", dessus);
       window.removeEventListener("dragleave", sortie);
       window.removeEventListener("drop", depot);
+    };
+  }, []);
+
+  // Lien jarvis://dire (lot M) : préremplit la saisie ; le texte vient de l'extérieur, l'utilisateur le relit et l'envoie
+  useEffect(() => {
+    const preremplir = () => {
+      const texte = prendre(EVENEMENT_PREREMPLIR);
+      if (!texte) return;
+      setTexte(texte);
+      window.setTimeout(() => champ.current?.focus(), 0);
+    };
+    preremplir(); // lien arrivé avant que la saisie soit montée
+    window.addEventListener(EVENEMENT_PREREMPLIR, preremplir);
+    return () => {
+      window.removeEventListener(EVENEMENT_PREREMPLIR, preremplir);
     };
   }, []);
 

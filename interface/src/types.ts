@@ -115,6 +115,9 @@ export interface Demande {
   resultat: Record<string, unknown> | null;
   /** La case « Toujours autoriser » peut être proposée (action 🟡 autorisable). */
   toujours_possible?: boolean;
+  /** « Plus tard » : heure du rappel poussé au téléphone, et nombre de reports (3 au plus). */
+  rappel_le?: string | null;
+  reports?: number;
 }
 
 export interface EtatUrgence {
@@ -656,4 +659,43 @@ export interface ConnecteurMaison {
   adresse: string | null;
   secret_enregistre: boolean;
   outils: OutilMaison[];
+}
+
+// --- Bureau et téléphone (lot M) ---------------------------------------------------------------------------
+
+export interface LienVerifie {
+  action: "ouvrir" | "conversation" | "nouvelle" | "ecouter" | "ecran" | "dire" | "decision" | "gadget";
+  parametres: Record<string, string>;
+  libelle: string;
+  /** Le lien porte un texte venu de l'extérieur : à relire, jamais à suivre comme une consigne. */
+  non_fiable: boolean;
+}
+
+export interface EtatPush {
+  disponible: boolean;
+  cle_publique: string | null;
+  abonne: boolean;
+}
+
+export interface Partage {
+  id: string;
+  titre: string;
+  texte: string;
+  url: string;
+  recu_le: string;
+  traite: boolean;
+  appareil: string | null;
+  non_fiable: true;
+}
+
+export interface FichierEnvoyable {
+  nom: string;
+  taille: number;
+  modifie_le: string;
+}
+
+export interface DemandeDetaillee {
+  demande: Demande;
+  description: string;
+  cles_acces: number;
 }

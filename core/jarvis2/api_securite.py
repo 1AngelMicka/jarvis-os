@@ -39,6 +39,16 @@ def est_local(request: Request) -> bool:
     )
 
 
+def source_requete(request: Request) -> str:
+    """Adresse de l'appareil qui appelle. Derrière `tailscale serve` (proxy sur la boucle locale), la première
+    adresse de X-Forwarded-For ; sinon l'adresse de la connexion."""
+    hote = request.client.host if request.client else "inconnue"
+    transmise = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if hote in ("127.0.0.1", "::1") and transmise:
+        return transmise[:100]
+    return hote[:100]
+
+
 def origine_page(request: Request) -> str:
     return request.headers.get("origin") or f"{request.url.scheme}://{request.headers.get('host', '')}"
 
@@ -107,12 +117,31 @@ async def premier_appareil(request: Request, corps: NouvelAppareil) -> dict[str,
 async def echanger(request: Request, corps: Echange) -> dict[str, Any]:
     """Public : code de jumelage à usage unique -> jeton de ce nouvel appareil."""
     c = ctx(request)
+    source = source_requete(request)
     async with c.pool.acquire() as conn:
+        if await appareils.jumelage_bloque(conn, source):
+            await audit.journaliser(
+                conn, acteur="inconnu", action="jumelage.bloque", niveau="rouge", details={"source": source}
+            )
+            raise HTTPException(
+                429,
+                "Trop d'essais de jumelage : réessayez dans 15 minutes, ou créez un nouveau code depuis un appareil"
+                " déjà autorisé",
+            )
         try:
             appareil, jeton = await appareils.echanger_jumelage(conn, corps.code, corps.nom)
         except ErreurJumelage as exc:
-            await audit.journaliser(conn, acteur="inconnu", action="jumelage.refuse", niveau="jaune", resultat=str(exc))
+            await appareils.noter_echec_jumelage(conn, source)
+            await audit.journaliser(
+                conn,
+                acteur="inconnu",
+                action="jumelage.refuse",
+                niveau="jaune",
+                details={"source": source},
+                resultat=str(exc),
+            )
             raise HTTPException(403, str(exc)) from exc
+        await appareils.effacer_tentatives(conn, source)
         await audit.journaliser(conn, acteur=appareil.acteur, action="jumelage.utilise", cible=str(appareil.id))
     return {"appareil": appareil.en_dict(), "jeton": jeton}
 
@@ -122,6 +151,7 @@ async def creer_jumelage(request: Request, corps: Jumelage) -> dict[str, Any]:
     """Code à usage unique (5 min) + QR, pour associer un nouvel appareil."""
     c, a = ctx(request), appareil_courant(request)
     code, expire = await appareils.creer_jumelage(c.pool, a.id, corps.type)
+    await appareils.effacer_tentatives(c.pool)  # l'utilisateur est là : un blocage éventuel est levé
     # Le téléphone ne joint pas « localhost » : adresse Tailscale du PC quand le Core y est publié
     ts = c.tailscale
     distante = ts.adresse if ts is not None and ts.serve_actif else None

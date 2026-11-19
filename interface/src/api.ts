@@ -16,6 +16,11 @@ import type {
   ConnecteurMaison,
   OutilMaison,
   Demande,
+  DemandeDetaillee,
+  EtatPush,
+  FichierEnvoyable,
+  LienVerifie,
+  Partage,
   Materiel,
   DemandeAction,
   DemandeDialogue,
@@ -436,3 +441,20 @@ export const modifierCommandeRapide = (id: string, c: CommandeRapideEdition) =>
   appeler<{ commande: CommandeRapide; conflits: ConflitCommande[] }>(`/v1/commandes-rapides/${id}`, { methode: "PUT", corps: c });
 export const supprimerCommandeRapide = (id: string) => appeler<{ supprimee: boolean }>(`/v1/commandes-rapides/${id}`, { methode: "DELETE" });
 export const executerCommandeRapide = (phrase: string) => envoyer<ResultatCommande>("/v1/commandes-rapides/executer", { phrase });
+
+// --- Bureau et téléphone (lot M) ---------------------------------------------------------------------------
+export const verifierLien = (lien: string) => envoyer<LienVerifie>("/v1/protocole", { lien });
+export const lireDemande = (id: string) => appeler<DemandeDetaillee>(`/v1/demandes/${id}`);
+export const reporterDemande = (id: string) => envoyer<{ statut: string; demande: Demande }>(`/v1/demandes/${id}/reporter`);
+export const etatPush = () => appeler<EtatPush>("/v1/push");
+export const abonnerPush = (abonnement: PushSubscriptionJSON) => envoyer<{ abonne: boolean }>("/v1/push/abonnement", abonnement);
+export const desabonnerPush = (endpoint?: string) =>
+  appeler<{ abonne: boolean }>("/v1/push/abonnement", { methode: "DELETE", corps: endpoint ? { endpoint } : {} });
+export const essayerPush = () => envoyer<{ remis: number }>("/v1/push/essai");
+export const listerPartages = () => appeler<{ partages: Partage[] }>("/v1/partages");
+export const recevoirPartage = (p: { titre: string; texte: string; url: string }) => envoyer<{ partage: Partage; message: string }>("/v1/partages", p);
+export const lirePartageRecu = (id: string) => appeler<{ partage: Partage; message: string }>(`/v1/partages/${id}`);
+export const partageTraite = (id: string) => envoyer<{ traite: boolean }>(`/v1/partages/${id}/traite`);
+export const supprimerPartage = (id: string) => appeler<{ supprime: boolean }>(`/v1/partages/${id}`, { methode: "DELETE" });
+export const listerEnvois = () => appeler<{ dossier: string; fichiers: FichierEnvoyable[]; duree_minutes: number }>("/v1/envois");
+export const creerLienEnvoi = (nom: string) => envoyer<{ url: string; chemin: string; expire_le: string }>("/v1/envois/lien", { nom });
