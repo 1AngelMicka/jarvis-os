@@ -75,6 +75,10 @@ class Action:
     # Action 🟢 qui écrit ou envoie (réglage, état changé) : refusée comme une 🟡 dans un tour contaminé
     ecrit: bool = False
 
+    # Vérification en plus des niveaux (voix du propriétaire pour une serrure…) : appelée avec « demande » avant de
+    # créer la demande, puis « execution » juste avant d'agir ; refuse par ErreurAction
+    garde: Callable[[str], Awaitable[None]] | None = None
+
     def est_disponible(self) -> bool:
         return self.disponible is None or self.disponible()
 
@@ -197,6 +201,8 @@ class Approbations:
         action = self.registre.get(nom)
         if not action.est_disponible():
             raise ErreurAction(f"Action indisponible : « {nom} » (connecteur désactivé)")
+        if action.garde is not None:
+            await action.garde("demande")
         async with self.pool.acquire() as conn:
             resume = action.resumer(params)
             # Tour contaminé (contenu non fiable lu) : aucune action qui agit, même 🟢 « écrit » ou toujours autorisée
@@ -410,6 +416,8 @@ class Approbations:
                 await self._interdite(conn, action, demande.parametres, appareil.acteur)
                 if not action.est_disponible():
                     raise ErreurAction(f"Action indisponible : « {action.nom} » (connecteur désactivé)")
+                if action.garde is not None:
+                    await action.garde("execution")
                 resultat = await self._executer(conn, action, demande.parametres, appareil.acteur, demande_id)
             except ErreurAction as exc:
                 await conn.execute(

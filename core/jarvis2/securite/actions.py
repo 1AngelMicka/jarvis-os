@@ -268,8 +268,9 @@ def _ajouter_mcp(registre: Registre, mcp: GestionnaireMCP) -> None:
 
 
 def _ajouter_maison(registre: Registre, maison: GestionnaireMaison, urgence: ArretUrgence) -> None:
-    """Hue et OBS : actions présentes seulement quand le connecteur est activé (voir `Action.disponible`)."""
+    """Hue, OBS, Home Assistant : actions présentes seulement quand le connecteur est activé (`Action.disponible`)."""
     from ..maison import OUTILS
+    from ..maison.home_assistant import ErreurHomeAssistant
     from ..maison.hue import ErreurHue, couleur_xy, luminosite_pont
     from ..maison.obs import ErreurOBS
 
@@ -310,7 +311,109 @@ def _ajouter_maison(registre: Registre, maison: GestionnaireMaison, urgence: Arr
         await maison.obs().direct(demarrer)
         return {"direct": demarrer}
 
+    ha = maison.ha
+
+    def oui(valeur: Any) -> bool:
+        return valeur in (True, "true", "1", 1, "oui")
+
+    def entite(p: dict[str, Any]) -> str:
+        return str(p.get("entite", "")).strip().lower()
+
+    def pourcent(valeur: Any, bas: int, haut: int, quoi: str) -> int:
+        try:
+            nombre = round(float(valeur))
+        except (TypeError, ValueError) as exc:
+            raise ErreurAction(f"{quoi} invalide : de {bas} à {haut} attendu") from exc
+        if not bas <= nombre <= haut:
+            raise ErreurAction(f"{quoi} invalide : de {bas} à {haut} attendu")
+        return nombre
+
+    def nom_ha(p: dict[str, Any]) -> str | None:
+        return str(p["nom"])[:80] if p.get("nom") else None
+
+    async def ha_lumiere(p: dict[str, Any]) -> dict[str, Any]:
+        if not oui(p.get("allumer", True)):
+            return await ha.commander("light", "turn_off", entite(p), outil_mcp="HassTurnOff", nom=nom_ha(p))
+        if p.get("luminosite") is not None:
+            niveau = pourcent(p["luminosite"], 1, 100, "Luminosité")
+            return await ha.commander(
+                "light",
+                "turn_on",
+                entite(p),
+                {"brightness_pct": niveau},
+                outil_mcp="HassLightSet",
+                arguments_mcp={"brightness": niveau},
+                nom=nom_ha(p),
+            )
+        return await ha.commander("light", "turn_on", entite(p), outil_mcp="HassTurnOn", nom=nom_ha(p))
+
+    async def ha_prise(p: dict[str, Any]) -> dict[str, Any]:
+        allumer = oui(p.get("allumer", True))
+        service, outil = ("turn_on", "HassTurnOn") if allumer else ("turn_off", "HassTurnOff")
+        return await ha.commander("switch", service, entite(p), outil_mcp=outil, nom=nom_ha(p))
+
+    async def ha_media(p: dict[str, Any]) -> dict[str, Any]:
+        commande = str(p.get("commande", ""))
+        if commande == "volume":
+            volume = pourcent(p.get("volume"), 0, 100, "Volume")
+            return await ha.commander(
+                "media_player",
+                "volume_set",
+                entite(p),
+                {"volume_level": round(volume / 100, 2)},
+                outil_mcp="HassSetVolume",
+                arguments_mcp={"volume_level": volume},
+                nom=nom_ha(p),
+            )
+        services = {
+            "lecture": ("media_play", "HassMediaUnpause"),
+            "pause": ("media_pause", "HassMediaPause"),
+            "suivant": ("media_next_track", "HassMediaNext"),
+        }
+        if commande not in services:
+            raise ErreurAction("Commande : « lecture », « pause », « suivant » ou « volume »")
+        service, outil = services[commande]
+        return await ha.commander("media_player", service, entite(p), outil_mcp=outil, nom=nom_ha(p))
+
+    async def ha_serrure(p: dict[str, Any]) -> dict[str, Any]:
+        operation = str(p.get("operation", ""))
+        if operation not in ("verrouiller", "ouvrir"):
+            raise ErreurAction("Opération : « verrouiller » ou « ouvrir »")
+        service, outil = ("lock", "HassTurnOn") if operation == "verrouiller" else ("unlock", "HassTurnOff")
+        return await ha.commander("lock", service, entite(p), outil_mcp=outil, nom=nom_ha(p))
+
+    async def ha_alarme(p: dict[str, Any]) -> dict[str, Any]:
+        services = {
+            "absent": "alarm_arm_away",
+            "present": "alarm_arm_home",
+            "nuit": "alarm_arm_night",
+            "desarmer": "alarm_disarm",
+        }
+        mode = str(p.get("mode", ""))
+        if mode not in services:
+            raise ErreurAction("Mode : « absent », « present », « nuit » ou « desarmer »")
+        code = ha.code_alarme()  # lu dans le coffre au moment d'agir : jamais dans la demande ni au journal
+        donnees = {"code": code} if code else {}
+        return await ha.commander("alarm_control_panel", services[mode], entite(p), donnees)  # REST seulement
+
+    async def ha_portail(p: dict[str, Any]) -> dict[str, Any]:
+        operation = str(p.get("operation", ""))
+        if operation not in ("ouvrir", "fermer"):
+            raise ErreurAction("Opération : « ouvrir » ou « fermer »")
+        service, outil = ("open_cover", "HassTurnOn") if operation == "ouvrir" else ("close_cover", "HassTurnOff")
+        return await ha.commander("cover", service, entite(p), outil_mcp=outil, nom=nom_ha(p))
+
+    def cible_ha(p: dict[str, Any]) -> str:
+        return f"« {p.get('nom') or p.get('entite')} »"
+
     executeurs: dict[str, Any] = {
+        "ha.etat": lambda p: ha.etat(),
+        "ha.lumiere": ha_lumiere,
+        "ha.prise": ha_prise,
+        "ha.media": ha_media,
+        "ha.serrure": ha_serrure,
+        "ha.alarme": ha_alarme,
+        "ha.portail": ha_portail,
         "hue.etat": hue_etat,
         "hue.allumer": lambda p: hue_regler(p, {"on": True}),
         "hue.eteindre": lambda p: hue_regler(p, {"on": False}),
@@ -324,6 +427,32 @@ def _ajouter_maison(registre: Registre, maison: GestionnaireMaison, urgence: Arr
         "obs.direct.demarrer": lambda p: obs_direct(True),
     }
     resumes: dict[str, Any] = {
+        "ha.etat": lambda p: "Lire l'état de la maison (Home Assistant)",
+        "ha.lumiere": lambda p: (
+            f"Éteindre la lumière {cible_ha(p)}"
+            if not oui(p.get("allumer", True))
+            else f"Allumer la lumière {cible_ha(p)}"
+            + (f" à {p.get('luminosite')} %" if p.get("luminosite") is not None else "")
+        ),
+        "ha.prise": lambda p: f"{'Allumer' if oui(p.get('allumer', True)) else 'Éteindre'} la prise {cible_ha(p)}",
+        "ha.media": lambda p: (
+            f"Régler le volume de {cible_ha(p)} à {p.get('volume')} %"
+            if p.get("commande") == "volume"
+            else f"Média {cible_ha(p)} : {p.get('commande')}"
+        ),
+        "ha.serrure": lambda p: (
+            f"OUVRIR la serrure {cible_ha(p)}"
+            if p.get("operation") == "ouvrir"
+            else f"Verrouiller la serrure {cible_ha(p)}"
+        ),
+        "ha.alarme": lambda p: (
+            f"DÉSARMER l'alarme {cible_ha(p)}"
+            if p.get("mode") == "desarmer"
+            else f"Armer l'alarme {cible_ha(p)} (mode {p.get('mode')})"
+        ),
+        "ha.portail": lambda p: (
+            f"OUVRIR le portail {cible_ha(p)}" if p.get("operation") == "ouvrir" else f"Fermer le portail {cible_ha(p)}"
+        ),
         "hue.etat": lambda p: "Lire l'état des lumières Hue",
         "hue.allumer": lambda p: f"Allumer {libelle(p)} (Hue)",
         "hue.eteindre": lambda p: f"Éteindre {libelle(p)} (Hue)",
@@ -349,7 +478,7 @@ def _ajouter_maison(registre: Registre, maison: GestionnaireMaison, urgence: Arr
                 raise ErreurAction("Arrêt d'urgence actif : aucune commande maison n'est envoyée")
             try:
                 resultat: dict[str, Any] = await appel(p)
-            except (ErreurHue, ErreurOBS) as exc:
+            except (ErreurHue, ErreurOBS, ErreurHomeAssistant) as exc:
                 raise ErreurAction(str(exc)) from exc
             return resultat  # état lu sur un appareil : une donnée, jamais une instruction
 
@@ -365,5 +494,7 @@ def _ajouter_maison(registre: Registre, maison: GestionnaireMaison, urgence: Arr
                 resumes[nom],
                 executeur(nom),
                 disponible=lambda c=connecteur: maison.actif(c),  # type: ignore[misc]
+                # 🔴 de Home Assistant (serrure, alarme, portail) : clé d'accès ET voix du propriétaire
+                garde=maison.garder_rouge if connecteur == "home_assistant" and outil["niveau"] == "rouge" else None,
             )
         )

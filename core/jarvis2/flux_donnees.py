@@ -370,6 +370,49 @@ async def _elevenlabs(c: Contexte) -> list[Flux]:
     ]
 
 
+def _maison(c: Contexte) -> list[Flux]:
+    """Home Assistant et le serveur Wyoming (lot 14-D18) : jamais l'adresse, seulement sa catégorie."""
+    flux: list[Flux] = []
+    if c.maison is not None:
+        ha = c.maison.ha
+        flux.append(
+            Flux(
+                id="home_assistant",
+                categorie="maison",
+                fonction="Pilotage de la maison par Home Assistant",
+                service="Votre Home Assistant",
+                destination=destination_url(ha.adresse) if ha.adresse else "reseau",
+                etat="actif" if ha.actif else "inactif",
+                envoie=[
+                    "Les commandes que vous approuvez (entité visée et service : allumer, verrouiller…)",
+                    "Les demandes de lecture de l'état de la maison",
+                ],
+                jamais=["Vos conversations, votre mémoire, vos fichiers", "Le code de l'alarme, sauf pour la désarmer"],
+                desactiver=Desactivation("Désactiver Home Assistant dans Connecteurs › Maison", reglage="connecteurs"),
+                detail=None if ha.adresse else "Non configuré : rien ne part.",
+            )
+        )
+    reglages = c.wyoming.reglages
+    local = str(reglages.get("hote", "127.0.0.1")).startswith("127.")
+    flux.append(
+        Flux(
+            id="wyoming",
+            categorie="maison",
+            fonction="Voix pour Home Assistant et les satellites (Wyoming)",
+            service="Ce PC, pour Home Assistant et vos satellites autorisés (une clé par appareil)",
+            destination="pc" if local else "reseau",
+            etat="actif" if reglages.get("actif") else "inactif",
+            envoie=["Le texte transcrit et la voix de JARVIS, renvoyés seulement à l'appareil qui a parlé"],
+            jamais=[
+                "L'audio d'avant le mot d'éveil : jeté par le PC sans être lu",
+                "L'audio et le texte des phrases : jamais gardés (seulement l'heure et la personne, par pièce)",
+            ],
+            desactiver=Desactivation("Couper le serveur Wyoming dans Connecteurs › Maison", reglage="connecteurs"),
+        )
+    )
+    return flux
+
+
 async def decrire(c: Contexte, p: Parametres) -> dict[str, Any]:
     connecteurs, inactifs = await _connecteurs(c)
     flux = [
@@ -380,6 +423,7 @@ async def decrire(c: Contexte, p: Parametres) -> dict[str, Any]:
         *_telephone(c, p),
         *await _mcp(c),
         *await _elevenlabs(c),
+        *_maison(c),
         *_locaux(c),
     ]
     sortants = [f for f in flux if not f.local and f.etat == "actif"]

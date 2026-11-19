@@ -8,6 +8,9 @@
 - **Fermée** : quand la reconnaissance est activée, une action 🟡🔴 demandée à la voix n'est acceptée que si la phrase
   a été reconnue comme celle du propriétaire. Modèle absent, aucune empreinte, parole trop courte, voix d'un autre :
   l'action est refusée (les actions 🟢 ne changent pas).
+- Profils par personne (lot 14-D18) : d'autres voix de la maison peuvent avoir leurs empreintes, rangées sous
+  l'identifiant de leur profil (`profil`). Elles ne comptent JAMAIS comme le propriétaire : une phrase plus proche
+  d'un profil que du propriétaire est « inconnue » pour les actions, mais attribuée à ce profil (présence, volume).
 - Une phrase est « venue de la voix » si elle reprend une transcription des 2 dernières minutes (comparaison du texte
   normalisé), ou si l'interface l'annonce (en-tête `X-Jarvis-Voix`).
 """
@@ -43,6 +46,7 @@ DEPOT_MODELE = "Wespeaker/wespeaker-voxceleb-ecapa-tdnn512"
 FICHIER_MODELE = "voxceleb_ECAPA512.onnx"
 NOM_MODELE = "wespeaker-voxceleb-ecapa-tdnn512"
 EMPREINTES_MAX = 10
+EMPREINTES_PROFIL_MAX = 5
 PAROLE_INSCRIPTION = 3.0  # secondes de parole au moins pour une empreinte
 PAROLE_VERIFICATION = 1.0
 DUREE_ATTESTATION = 120.0
@@ -172,6 +176,7 @@ class Attestation:
     verdict: Verdict
     score: float | None
     instant: float
+    profil: str | None = None  # profil reconnu (autre personne de la maison), None pour le propriétaire ou inconnu
 
 
 def voix_annoncee(entetes: Any) -> bool:
@@ -244,8 +249,24 @@ class ServiceProprietaire:
         tmp.write_text(json.dumps({"version": 1, "modele": NOM_MODELE, "empreintes": empreintes}), encoding="utf-8")
         tmp.replace(self.fichier)
 
-    def empreintes(self) -> list[dict[str, Any]]:
-        return [{k: e.get(k) for k in ("id", "cree_le", "parole_s")} for e in self._lire()]
+    def _du_proprietaire(self) -> list[dict[str, Any]]:
+        return [e for e in self._lire() if not e.get("profil")]
+
+    def empreintes(self, profil: str | None = None) -> list[dict[str, Any]]:
+        """Empreintes du propriétaire (ou d'un profil) : jamais le vecteur."""
+        return [
+            {k: e.get(k) for k in ("id", "cree_le", "parole_s")}
+            for e in self._lire()
+            if (e.get("profil") or None) == profil
+        ]
+
+    def profils_inscrits(self) -> dict[str, int]:
+        """Nombre d'empreintes par profil (pour l'interface)."""
+        compte: dict[str, int] = {}
+        for e in self._lire():
+            if e.get("profil"):
+                compte[str(e["profil"])] = compte.get(str(e["profil"]), 0) + 1
+        return compte
 
     def disponibilite(self) -> tuple[bool, str | None]:
         if self.empreinteur is None:
@@ -253,7 +274,7 @@ class ServiceProprietaire:
         ok, raison = self.empreinteur.disponible()
         if not ok:
             return False, raison
-        if not self._lire():
+        if not self._du_proprietaire():
             return False, "aucune empreinte de voix enregistrée"
         return True, None
 
@@ -269,8 +290,8 @@ class ServiceProprietaire:
             "ferme": bool(reglages["actif"]) and not ok,  # activée mais indisponible : 🟡🔴 à la voix refusés
         }
 
-    async def inscrire(self, resultat: Resultat) -> dict[str, Any]:
-        """Nouvelle empreinte depuis un enregistrement (3 s de parole au moins)."""
+    async def inscrire(self, resultat: Resultat, profil: str | None = None) -> dict[str, Any]:
+        """Nouvelle empreinte depuis un enregistrement (3 s de parole au moins), du propriétaire ou d'un profil."""
         if self.empreinteur is None or not self.empreinteur.disponible()[0]:
             raise ErreurAction("Téléchargez d'abord le modèle de reconnaissance du propriétaire")
         if resultat.duree_parole < PAROLE_INSCRIPTION:
@@ -279,8 +300,9 @@ class ServiceProprietaire:
             )
         async with self._verrou:
             empreintes = self._lire()
-            if len(empreintes) >= EMPREINTES_MAX:
-                raise ErreurAction(f"{EMPREINTES_MAX} empreintes au plus : retirez-en une d'abord")
+            maximum = EMPREINTES_PROFIL_MAX if profil else EMPREINTES_MAX
+            if sum(1 for e in empreintes if (e.get("profil") or None) == profil) >= maximum:
+                raise ErreurAction(f"{maximum} empreintes au plus : retirez-en une d'abord")
             extrait = parole_seule(resultat.echantillons, resultat.plages)
             vecteur = await asyncio.to_thread(self.empreinteur.empreinte, extrait)
             nouvelle = {
@@ -288,10 +310,20 @@ class ServiceProprietaire:
                 "cree_le": datetime.now(UTC).isoformat(timespec="seconds"),
                 "parole_s": round(resultat.duree_parole, 1),
                 "vecteur": [round(float(v), 6) for v in vecteur],
+                **({"profil": profil} if profil else {}),
             }
             empreintes.append(nouvelle)
             self._ecrire(empreintes)
         return {k: nouvelle[k] for k in ("id", "cree_le", "parole_s")}
+
+    async def retirer_profil(self, profil: str) -> int:
+        """Retire toutes les empreintes d'un profil (profil supprimé)."""
+        async with self._verrou:
+            empreintes = self._lire()
+            reste = [e for e in empreintes if e.get("profil") != profil]
+            if len(reste) != len(empreintes):
+                self._ecrire(reste)
+        return len(empreintes) - len(reste)
 
     async def retirer(self, ident: str) -> bool:
         async with self._verrou:
@@ -305,37 +337,58 @@ class ServiceProprietaire:
     # -- vérification ----------------------------------------------------------------------------------------
 
     async def verifier(self, resultat: Resultat) -> tuple[Verdict, float | None]:
+        verdict, score, _ = await self.identifier(resultat)
+        return verdict, score
+
+    async def identifier(self, resultat: Resultat) -> tuple[Verdict, float | None, str | None]:
+        """Verdict pour le propriétaire, score, et profil reconnu (une autre personne de la maison) s'il y en a un."""
         reglages = await self.charger()
         if not reglages["actif"]:
-            return "non_verifie", None
+            return "non_verifie", None, None
         ok, _ = self.disponibilite()
         if not ok or self.empreinteur is None or resultat.echantillons is None:
-            return "indisponible", None
+            return "indisponible", None, None
         if resultat.duree_parole < PAROLE_VERIFICATION:
-            return "trop_court", None
+            return "trop_court", None, None
         try:
             extrait = parole_seule(resultat.echantillons, resultat.plages)
             vecteur = await asyncio.to_thread(self.empreinteur.empreinte, extrait)
         except Exception:
             journal.exception("Empreinte de la voix impossible")
-            return "indisponible", None
-        score = max(cosinus(vecteur, e["vecteur"]) for e in self._lire())
-        return ("reconnu" if score >= float(reglages["seuil"]) else "inconnu"), round(score, 3)
+            return "indisponible", None, None
+        seuil = float(reglages["seuil"])
+        toutes = self._lire()
+        score = max(cosinus(vecteur, e["vecteur"]) for e in toutes if not e.get("profil"))
+        profils = [(cosinus(vecteur, e["vecteur"]), str(e["profil"])) for e in toutes if e.get("profil")]
+        meilleur = max(profils, default=None)
+        if meilleur is not None and meilleur[0] >= seuil and meilleur[0] > score:
+            return "inconnu", round(score, 3), meilleur[1]  # une autre personne de la maison : jamais le propriétaire
+        return ("reconnu" if score >= seuil else "inconnu"), round(score, 3), None
 
     async def observer(self, resultat: Resultat) -> None:
         """Après chaque transcription : la phrase est notée « venue de la voix », avec le verdict."""
         if not resultat.texte:
             return
-        verdict, score = await self.verifier(resultat)
+        verdict, score, profil = await self.identifier(resultat)
         maintenant = self.horloge()
         self._attestations = {k: a for k, a in self._attestations.items() if maintenant - a.instant < DUREE_ATTESTATION}
-        attestation = Attestation(verdict, score, maintenant)
+        attestation = Attestation(verdict, score, maintenant, profil)
         for texte in (resultat.texte, analyser_eveil(resultat.texte).commande):
             cle = normaliser(texte)
             if cle:
                 self._attestations[cle] = attestation
         if verdict not in ("reconnu", "non_verifie"):
             journal.info("Voix : verdict « %s » (score %s)", verdict, score)
+
+    def derniere_reconnue(self) -> Attestation | None:
+        """La dernière phrase reconnue comme celle du propriétaire, dans les 2 dernières minutes (actions 🔴 maison)."""
+        maintenant = self.horloge()
+        trouvees = [
+            a
+            for a in self._attestations.values()
+            if a.verdict == "reconnu" and a.profil is None and maintenant - a.instant < DUREE_ATTESTATION
+        ]
+        return max(trouvees, key=lambda a: a.instant) if trouvees else None
 
     def attestation(self, phrase: str) -> Attestation | None:
         """L'attestation d'une transcription récente qui correspond à la phrase (égale, ou l'une contient l'autre)."""

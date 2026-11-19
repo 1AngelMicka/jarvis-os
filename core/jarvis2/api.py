@@ -81,6 +81,8 @@ from .embeddings import EncodeurFastEmbed
 from .eveil import ServiceEveil
 from .fin_tour import JugeFinDeTour
 from .maison import GestionnaireMaison
+from .maison.satellites import ServiceSatellites
+from .maison.wyoming import ServeurWyoming
 from .matin import ServiceMeteo
 from .memoire import Expurgateur, ReglagesRecherche
 from .memoire_v2 import EtatBascule, basculer, modele_actif, modele_majoritaire
@@ -163,6 +165,8 @@ class Contexte:
     eveil: ServiceEveil = field(init=False)  # « Dis Jarvis » et conversation vocale de chaque appareil
     proprietaire: ServiceProprietaire = field(init=False)  # reconnaissance du propriétaire à la voix (lot K3)
     dictee: ServiceDictee = field(init=False)
+    satellites: ServiceSatellites = field(init=False)  # satellites vocaux, pièces, profils par personne (14-D18)
+    wyoming: ServeurWyoming = field(init=False)  # transcription et synthèse en Wyoming (désactivé par défaut)
     juge_fin_tour: JugeFinDeTour = field(init=False)
 
     def __post_init__(self) -> None:
@@ -206,10 +210,32 @@ class Contexte:
         self.push = ServicePush(self.pool, self.dossier_donnees)
         self.approbations.apres_demande = self.notifier_demande
         self.proprietaire = ServiceProprietaire(self.pool, self.dossier_donnees, self.dossier_modeles)
+        if self.maison is not None:  # actions 🔴 de Home Assistant : voix du propriétaire exigée
+            self.maison.proprietaire = self.proprietaire
         self.dictee = ServiceDictee(self.pool)
         self.juge_fin_tour = JugeFinDeTour(self.url_ollama, self.modele_fin_tour)
         if isinstance(self.transcripteur, TranscripteurRobuste):  # chaque phrase : verdict du propriétaire
             self.transcripteur.observateur = self.proprietaire.observer
+        self.satellites = ServiceSatellites(self.pool)
+        self.wyoming = ServeurWyoming(
+            self.pool,
+            self.satellites,
+            self.transcripteur,
+            self.synthese,
+            proprietaire=self.proprietaire,
+            repondre=self.repondre_satellite,
+        )
+
+    async def repondre_satellite(self, texte: str, satellite: dict[str, Any], personne: str | None) -> str:
+        """Phrase entendue par un satellite : réponse de JARVIS (texte), comme une conversation tapée. Les actions
+        🟡🔴 éventuelles restent des demandes à approuver ; la voix du propriétaire est vérifiée comme ailleurs."""
+        morceaux: list[str] = []
+        async for evenement in self.service.repondre(texte):
+            if evenement.type == "delta":
+                morceaux.append(str(evenement.donnees.get("texte", "")))
+            elif evenement.type == "erreur":
+                return "Désolé, je n'ai pas pu répondre."
+        return "".join(morceaux).strip()[:2000]
 
     async def notifier_demande(self, demande: Any) -> None:
         """Nouvelle demande 🟡🔴 : appel de décision poussé aux téléphones abonnés (en tâche de fond)."""
@@ -255,8 +281,16 @@ class DemandeDialogue(BaseModel):
 
 # Sans jeton : santé, état du jumelage, premier appareil (PC seulement), échange d'un code de jumelage
 CHEMINS_PUBLICS = frozenset(
-    {"/v1/sante", "/v1/auth/etat", "/v1/appareils/premier", "/v1/jumelage/echanger", "/v1/ateliers-autorisation"}
-)  # autorisation des ateliers : jeton propre à chaque exécution, PC seulement
+    {
+        "/v1/sante",
+        "/v1/auth/etat",
+        "/v1/appareils/premier",
+        "/v1/jumelage/echanger",
+        "/v1/ateliers-autorisation",
+        "/v1/maison/home-assistant/oauth/retour",
+    }
+)  # autorisation des ateliers : jeton propre à chaque exécution, PC seulement ; retour OAuth de Home Assistant :
+# navigation du navigateur (sans jeton), validé par le `state` à usage unique et le vérifieur PKCE
 # Écritures permises pendant l'arrêt d'urgence : ce qui sert à le lever ou à retirer un accès
 ECRITURES_EN_URGENCE = (
     "/v1/urgence/",
@@ -418,6 +452,12 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             await ctx.maison.charger()
         if ctx.pc is not None:
             await ctx.pc.charger()
+        await ctx.wyoming.charger()
+        if ctx.wyoming.reglages["actif"]:  # serveur Wyoming : seulement s'il a été activé par l'utilisateur
+            try:
+                await ctx.wyoming.appliquer()
+            except Exception as exc:
+                journal.warning("Wyoming : %s", exc)
         if ctx.urgence.actif:
             journal.warning("Arrêt d'urgence ACTIF (depuis %s) : écritures refusées", ctx.urgence.depuis)
         app.state.parametres = parametres
@@ -452,6 +492,7 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
             if ctx.pc is not None and contexte is None:  # l'Ollama démarré par JARVIS s'arrête avec lui
                 await ctx.pc.ollama.fermer()
             await ctx.eveil.fermer()
+            await ctx.wyoming.arreter()
             for tache in taches:
                 if not tache.done():
                     tache.cancel()
