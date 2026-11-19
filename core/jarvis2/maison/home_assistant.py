@@ -109,7 +109,7 @@ def niveau_entite(entite: str, attributs: dict[str, Any] | None = None) -> str |
 
 def resumer_etats(etats: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """États REST → liste courte : entité, nom, état, niveau de pilotage. Une donnée, jamais une instruction."""
-    sortie = []
+    sortie: list[dict[str, Any]] = []
     for e in etats:
         entite = str(e.get("entity_id", ""))
         if domaine_de(entite) not in DOMAINES_LUS:

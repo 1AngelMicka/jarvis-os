@@ -756,7 +756,7 @@ export interface ResultatCommande {
 // --- Connecteurs maison facultatifs (Hue, OBS) ---
 export interface OutilMaison {
   nom: string;
-  connecteur: "hue" | "obs";
+  connecteur: "hue" | "obs" | "home_assistant";
   niveau: "vert" | "jaune" | "rouge";
   description: string;
   parametres: Record<string, string>;
@@ -770,6 +770,58 @@ export interface ConnecteurMaison {
   adresse: string | null;
   secret_enregistre: boolean;
   outils: OutilMaison[];
+}
+
+// --- Home Assistant, Wyoming, satellites, pièces, profils (lot 14 · D 18) ---
+export interface CarteHomeAssistant {
+  id: "home_assistant";
+  nom: string;
+  description: string;
+  actif: boolean;
+  adresse: string | null;
+  mode: "mcp" | "rest";
+  oauth: boolean;
+  jeton_rest: boolean;
+  code_alarme: boolean;
+  pret: boolean;
+  outils: OutilMaison[];
+}
+
+export interface EtatWyoming {
+  actif: boolean;
+  hote: string;
+  port: number;
+  clients: string[];
+  en_ecoute: boolean;
+  port_reel: number | null;
+  satellites_connectes: string[];
+}
+
+export interface Satellite {
+  id: string;
+  nom: string;
+  piece: string;
+  volume_max: number;
+  actif: boolean;
+  cree_le: string | null;
+  vu_le: string | null;
+  personne: string | null;
+}
+
+export interface PieceMaison {
+  piece: string;
+  satellites: number;
+  vu_le: string | null;
+  personne: string | null;
+  occupee: boolean;
+}
+
+export interface ProfilVoix {
+  id: string;
+  nom: string;
+  volume_max: number;
+  cree_le: string | null;
+  empreintes: number;
 }
 
 // --- Bureau et téléphone (lot M) ---------------------------------------------------------------------------

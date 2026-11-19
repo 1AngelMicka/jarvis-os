@@ -114,7 +114,9 @@ class FauxHomeAssistant:
         if ident is None:  # notification
             return httpx.Response(202)
         if methode == "tools/list":
-            outils = [{"name": n, "inputSchema": {}} for n in ("GetLiveContext", "HassTurnOn", "HassTurnOff")]
+            outils: list[dict[str, Any]] = [
+                {"name": n, "inputSchema": {}} for n in ("GetLiveContext", "HassTurnOn", "HassTurnOff")
+            ]
             return httpx.Response(200, json={"jsonrpc": "2.0", "id": ident, "result": {"tools": outils}})
         if methode == "tools/call":
             nom, arguments = message["params"]["name"], message["params"].get("arguments", {})

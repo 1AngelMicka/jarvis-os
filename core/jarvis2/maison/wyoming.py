@@ -94,7 +94,8 @@ async def lire(lecteur: asyncio.StreamReader) -> Evenement | None:
         raise ErreurWyoming("En-tête illisible") from exc
     if not isinstance(entete, dict) or not isinstance(entete.get("type"), str):
         raise ErreurWyoming("En-tête sans type")
-    data = entete.get("data") if isinstance(entete.get("data"), dict) else {}
+    brut = entete.get("data")
+    data: dict[str, Any] = dict(brut) if isinstance(brut, dict) else {}
     longueur_donnees = int(entete.get("data_length") or 0)
     longueur_charge = int(entete.get("payload_length") or 0)
     if not 0 <= longueur_donnees <= DONNEES_MAX or not 0 <= longueur_charge <= CHARGE_MAX:

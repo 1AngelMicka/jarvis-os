@@ -317,7 +317,8 @@ async def test_profil_d_une_autre_personne_n_est_pas_le_proprietaire(maison: dic
     await p.inscrire(resultat(""))
     await p.inscrire(resultat("", niveau=0.3), profil="ado-1234")
     await p.observer(resultat("Jarvis, ouvre le portail", niveau=0.3))
-    assert p.attestation("ouvre le portail").profil == "ado-1234"  # type: ignore[union-attr]
+    attestation = p.attestation("ouvre le portail")
+    assert attestation is not None and attestation.profil == "ado-1234"
     assert (await action(client, "ha.portail", entite="cover.portail", operation="ouvrir")).status_code == 422
 
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { activerMaison, appairerHue, configurerObs, decouvrirHue, listerMaison, oublierMaison, testerMaison } from "../api";
 import type { ConnecteurMaison } from "../types";
+import { SectionHomeAssistant } from "./MaisonHA";
 
 const NIVEAUX = { vert: "🟢", jaune: "🟡", rouge: "🔴" } as const;
 
@@ -258,7 +259,8 @@ export function SectionMaison({ surChangement }: { surChangement: (message?: str
         Maison
       </h3>
       <p className="sec-texte">
-        Facultatifs, sur le réseau local. Lire l'état est libre ; chaque commande attend votre accord, et démarrer un direct demande votre clé d'accès.
+        Facultatifs, sur le réseau local, et le PC reste le cerveau. Lire l'état est libre ; chaque commande attend votre accord ; démarrer un
+        direct demande votre clé d'accès, et ouvrir une serrure, l'alarme ou le portail demande votre clé d'accès et votre voix.
       </p>
       <ul className="cartes-co">
         {liste.map((c) => (
@@ -271,6 +273,7 @@ export function SectionMaison({ surChangement }: { surChangement: (message?: str
             }}
           />
         ))}
+        <SectionHomeAssistant surChangement={surChangement} />
       </ul>
     </section>
   );
