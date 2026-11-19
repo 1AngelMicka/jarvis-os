@@ -16,6 +16,7 @@ défaut ; l'ouvrir au réseau est un choix explicite (JARVIS2_OUVERTURE_RESEAU).
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import logging
 import mimetypes
@@ -28,7 +29,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -513,6 +514,27 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
     app.include_router(routeur_matin)
 
     dossier = parametres.dossier_interface
-    if dossier.is_dir():
+    if (dossier / "index.html").is_file():
         app.mount("/", StaticFiles(directory=dossier, html=True), name="interface")
+    else:  # paquet construit sans interface (ou dépôt non compilé) : l'expliquer plutôt qu'un 404 muet
+
+        @app.get("/", include_in_schema=False)
+        async def interface_absente() -> HTMLResponse:
+            return HTMLResponse(PAGE_INTERFACE_ABSENTE.format(dossier=html.escape(str(dossier))), status_code=503)
+
     return app
+
+
+PAGE_INTERFACE_ABSENTE = """<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>JARVIS 2 — interface absente</title></head>
+<body><h1>JARVIS 2 fonctionne, mais son interface n'est pas installée</h1>
+<p>Interface compilée introuvable : <code>{dossier}</code></p>
+<ul>
+<li>Installez la roue jointe à une version publiée (elle contient l'interface) :
+<code>pipx install --python 3.13 jarvis2-x.y.z-py3-none-any.whl</code></li>
+<li>Depuis le dépôt : <code>cd interface ; npm install ; npm run build</code>, puis réinstallez
+(<code>pipx install --force --python 3.13 ./core</code>) ou relancez le Core.</li>
+</ul>
+<p>Diagnostic complet : <code>jarvis2 docteur</code>.</p>
+</body></html>
+"""
