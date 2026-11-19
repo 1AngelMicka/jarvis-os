@@ -59,7 +59,7 @@ Le détail de chaque point est dans [PLAN.md](PLAN.md) : phase 13 (lots), phase 
 | Ateliers en bac à sable réel (refus si indisponible) | aman (à l'inverse) | Phase 14 · B |
 | Brainstorm → spec → plan à cases → exécution ; missions en graphe | microsoft/JARVIS | Phase 14 · B |
 | Routeur par type de tâche (petit classifieur local) | — | Phase 14 · B |
-| Skills SKILL.md avec confiance, empreinte, confinement ; MCP persistant et outils choisis par sens | OpenJarvis, NeyorDEV (idée) | Phase 14 · B |
+| Skills SKILL.md avec confiance, empreinte, confinement ; MCP persistant et outils choisis par sens | OpenJarvis, NeyorDEV (idée) ; format agentskills.io | Phase 14 · B ✅ (réimplémenté, aucune ligne reprise) |
 | Commandes rapides sans LLM, éditables | Jarvis.sh (idée, sans eval) | Lot F |
 | « Toujours autoriser » pour 🟡 (jamais pour les clics), 🔴 jamais à distance sans clé | sosoj92 | Lot F |
 | Contrôle du PC (volume, luminosité, fenêtres, média), modes qui changent vraiment Windows, OCR d'abord | ASD | Lot J |
