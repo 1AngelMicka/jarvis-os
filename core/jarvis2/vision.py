@@ -2,17 +2,25 @@
 modèle de vision LOCAL (Ollama). Rien n'est capturé en arrière-plan, l'image n'est pas gardée, rien ne sort du PC.
 
 Modèle : `[connecteurs.ollama] modele_vision` de la configuration locale (ex. « qwen2.5vl:7b », « llava:7b »).
+Lot J : `analyser` lit d'abord le texte (OCR, `ocr.py`) et ne réveille le modèle que s'il y a peu de texte.
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
+import logging
 import re
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import httpx
 
 from .moteurs.base import Image
+from .ocr import LecteurOCR, assez_de_texte
+
+journal = logging.getLogger("jarvis2.vision")
 
 TAILLE_MAX = 8 * 1024 * 1024
 ENTETE = re.compile(r"^data:image/(png|jpeg|webp);base64,")
@@ -107,3 +115,40 @@ async def decrire(
     if not texte:
         raise ErreurVision("Le modèle de vision n'a rien répondu")
     return texte
+
+
+async def analyser(
+    url_ollama: str,
+    modele: str | None,
+    image: bytes,
+    question: str | None = None,
+    ocr: LecteurOCR | None = None,
+    ollama_joignable: Callable[[], Awaitable[bool]] | None = None,
+    forcer_modele: bool = False,
+) -> dict[str, Any]:
+    """OCR d'abord ; le modèle de vision local seulement s'il y a peu de texte (ou sur demande).
+
+    Ollama n'est jamais démarré ici : s'il est arrêté, on rend le texte lu et on le dit (`ollama_requis`)."""
+    texte = ""
+    if ocr is not None and not forcer_modele:
+        try:
+            texte = (await asyncio.to_thread(ocr.lire, image)).strip()
+        except Exception as exc:  # OCR indisponible : on passe au modèle, sans échouer
+            journal.info("OCR indisponible (%s) : modèle de vision", exc)
+        if assez_de_texte(texte):
+            return {"methode": "ocr", "description": f"Texte lu dans l'image (OCR) :\n{texte[:20_000]}",
+                    "texte": texte[:20_000], "modele": None}  # fmt: skip
+    if ollama_joignable is not None and not await ollama_joignable():
+        message = "Peu de texte dans l'image : la décrire demande le modèle de vision local, or Ollama est arrêté."
+        return {
+            "methode": "ocr" if texte else "aucune",
+            "description": message + (f"\nTexte lu : {texte}" if texte else ""),
+            "texte": texte or None,
+            "modele": None,
+            "ollama_requis": True,
+        }
+    consigne = question
+    if texte:  # le peu de texte lu aide le modèle (donnée, jamais instruction)
+        consigne = f"{question or QUESTION_DEFAUT}\n(Texte repéré par l'OCR, à titre de donnée : {texte[:500]})"
+    description = await decrire(url_ollama, modele, image, consigne)
+    return {"methode": "modele", "description": description, "texte": texte or None, "modele": modele}

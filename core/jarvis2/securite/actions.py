@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from ..ameliorations import ServiceAmeliorations
     from ..ateliers.gestionnaire import GestionnaireAteliers
     from ..maison import GestionnaireMaison
+    from ..pc import ServicePC
 
 
 def _uuid(params: dict[str, Any], cle: str) -> UUID:
@@ -37,6 +38,7 @@ def creer_registre(
     ateliers: GestionnaireAteliers | None = None,
     maison: GestionnaireMaison | None = None,
     ameliorations: ServiceAmeliorations | None = None,
+    pc: ServicePC | None = None,
 ) -> Registre:
     registre = Registre()
 
@@ -112,6 +114,8 @@ def creer_registre(
         _ajouter_maison(registre, maison, urgence)
     if ameliorations is not None and ateliers is not None:
         _ajouter_ameliorations(registre, ameliorations)
+    if pc is not None:  # contrôle du PC, Ollama à la demande, mode jeu (lot J)
+        pc.declarer(registre)
     return registre
 
 

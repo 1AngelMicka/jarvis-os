@@ -118,6 +118,7 @@ async def page_creation(request: Request, ident: UUID, v: int, j: str) -> HTMLRe
 class DemandeVision(BaseModel):
     image: str = Field(max_length=12_000_000)  # data URL
     question: str | None = Field(default=None, max_length=2000)
+    forcer_modele: bool = False  # passer l'OCR et décrire par le modèle de vision local
 
 
 @routeur.post("/vision/decrire", dependencies=[Depends(garde_ecran)])  # capture d'écran : refusée sans écran
@@ -126,11 +127,16 @@ async def decrire(request: Request, corps: DemandeVision) -> dict[str, Any]:
     c, a = _ctx(request), _appareil(request)
     try:
         image = vision.decoder(corps.image)
-        texte = await vision.decrire(c.url_ollama, c.modele_vision, image, corps.question)
+        joignable = c.pc.ollama.joignable if c.pc is not None else None
+        resultat = await vision.analyser(
+            c.url_ollama, c.modele_vision, image, corps.question, c.ocr, joignable, corps.forcer_modele
+        )
     except vision.ErreurVision as exc:
         raise HTTPException(422, str(exc)) from exc
-    await audit.journaliser(c.pool, acteur=a.acteur, action="vision.decrite", details={"octets": len(image)})
-    return {"description": texte, "modele": c.modele_vision}
+    await audit.journaliser(
+        c.pool, acteur=a.acteur, action="vision.decrite", details={"octets": len(image), "methode": resultat["methode"]}
+    )
+    return resultat  # OCR d'abord ; modèle de vision local seulement s'il y a peu de texte
 
 
 # --- Voix -----------------------------------------------------------------------------------------------------

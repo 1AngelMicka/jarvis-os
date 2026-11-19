@@ -762,3 +762,80 @@ export interface DemandeDetaillee {
   description: string;
   cles_acces: number;
 }
+
+// --- Ressources et contrôle du PC (lot J) ---
+export interface MesurePC {
+  horodatage: number;
+  cpu: number | null;
+  ram: number | null;
+  ram_utilisee_go: number | null;
+  ram_totale_go: number | null;
+  gpu: number | null;
+  vram: number | null;
+  vram_utilisee_go: number | null;
+  vram_totale_go: number | null;
+}
+
+export interface PointCourbePC {
+  t: number;
+  cpu: number | null;
+  ram: number | null;
+  gpu: number | null;
+  vram: number | null;
+}
+
+export interface ModeleCharge {
+  nom: string;
+  taille_go: number;
+  vram_go: number;
+  expire_le: string | null;
+}
+
+export interface EtatOllama {
+  installe: boolean;
+  joignable: boolean;
+  lance_par_jarvis: boolean;
+  modeles_charges: ModeleCharge[];
+  inactivite_min: number;
+  arret_dans_s: number | null;
+}
+
+export type ReglageJeu = "automatique" | "force" | "jamais";
+
+export interface EtatJeu {
+  reglage: ReglageJeu;
+  en_veille: boolean;
+  jeu: string | null;
+  detection: boolean;
+}
+
+export interface RessourcesPC {
+  actuel: MesurePC;
+  alertes: string[];
+  seuil_alerte: number;
+  courbe: PointCourbePC[];
+  ollama: EtatOllama;
+  jeu: EtatJeu;
+  controle: boolean;
+}
+
+export interface FenetrePC {
+  id: number;
+  titre: string;
+  programme: string;
+  active: boolean;
+  reduite: boolean;
+}
+
+export interface EtatControlePC {
+  volume: { niveau: number; muet: boolean } | null;
+  luminosite: number | null;
+  media: { application: string | null; titre: string | null; artiste: string | null; statut: string | null } | null;
+  fenetres: FenetrePC[] | null;
+  plan_alimentation: { actif: string; nom: string | null } | null;
+  notifications: boolean | null;
+  theme_sombre: boolean | null;
+  mode: string;
+  modes: { id: string; titre: string; description: string }[];
+  extinction_dans_s: number | null;
+}

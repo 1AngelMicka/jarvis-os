@@ -21,7 +21,9 @@ import type {
   FichierEnvoyable,
   LienVerifie,
   Partage,
+  EtatControlePC,
   Materiel,
+  RessourcesPC,
   DemandeAction,
   DemandeDialogue,
   DetailConversation,
@@ -207,6 +209,9 @@ export const accorderImages = (id: string, accorde: boolean) =>
   appeler<{ ok: boolean }>(`/v1/connecteurs/${encodeURIComponent(id)}/images`, { methode: "PUT", corps: { accorde } });
 export const lireFluxDonnees = () => unSeul("flux-donnees", () => appeler<CarteFlux>("/v1/donnees/flux"));
 export const lireMateriel = () => unSeul("materiel", () => appeler<Materiel>("/v1/materiel"));
+// Ressources et contrôle du PC (lot J) : lecture ici, toute action par /v1/actions (file d'approbations)
+export const lireRessourcesPC = () => unSeul("pc-ressources", () => appeler<RessourcesPC>("/v1/pc/ressources"));
+export const lireControlePC = () => unSeul("pc-etat", () => appeler<EtatControlePC>("/v1/pc/etat"));
 
 // --- Connecteurs maison facultatifs : réglages ici, commandes par /v1/actions (file d'approbations) ---
 export const listerMaison = () =>

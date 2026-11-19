@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
@@ -25,6 +25,8 @@ class ArretUrgence:
         self.depuis: datetime | None = None
         self.par: str | None = None
         self._taches: set[asyncio.Task[Any]] = set()
+        # Rappels à l'arrêt (ex. annuler une extinction du PC planifiée par JARVIS) : jamais bloquants
+        self.au_declenchement: list[Callable[[], Awaitable[None]]] = []
 
     async def charger(self, conn: Executant) -> None:
         valeur = await conn.fetchval("SELECT valeur FROM etat_systeme WHERE cle = 'arret_urgence'")
@@ -56,6 +58,11 @@ class ArretUrgence:
         for t in taches:
             t.cancel()
         await self._enregistrer(conn)
+        for rappel in self.au_declenchement:
+            try:
+                await rappel()
+            except Exception:
+                journal.exception("Arrêt d'urgence : un rappel a échoué")
         journal.warning("ARRÊT D'URGENCE par %s : %d réponse(s) interrompue(s)", par, len(taches))
         return len(taches)
 

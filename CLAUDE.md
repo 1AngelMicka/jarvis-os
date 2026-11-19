@@ -36,7 +36,7 @@
 6. Une source importée est toujours lue **en lecture seule**.
 7. Ne jamais contourner une double authentification, un CAPTCHA ou une détection de robots.
 8. **Claude Code** : JARVIS ne propose jamais de connexion Claude.ai, ne lit, ne stocke ni ne relaie aucun jeton d'abonnement, ne modifie jamais le binaire ; le moteur `claude_code` retire les clés d'API de l'environnement du sous-processus et refuse une réponse dont la source d'authentification n'est pas l'abonnement.
-9. Ollama n'est **jamais démarré automatiquement** : s'il est arrêté, il est signalé indisponible.
+9. Ollama n'est **jamais démarré automatiquement** : s'il est arrêté, il est signalé indisponible ; seule une demande explicite de l'utilisateur (action 🟡 `ollama.demarrer`, jamais « toujours autorisée ») le lance, et JARVIS n'arrête que l'Ollama qu'il a lancé.
 10. Les souvenirs `local_uniquement` ne partent jamais vers un moteur externe.
 
 ## Conventions
