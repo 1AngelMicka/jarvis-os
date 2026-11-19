@@ -142,6 +142,37 @@ async def test_base_en_panne_ou_xml_piege_ignores() -> None:
     assert await ArXiv(httpx.MockTransport(piege)).chercher("x") == []  # DOCTYPE refusé, mission non bloquée
 
 
+async def test_arxiv_en_anglais_et_429_retente_une_fois() -> None:
+    vus: list[str] = []
+
+    def arxiv(requete: httpx.Request) -> httpx.Response:
+        vus.append(requete.url.params["search_query"])
+        return httpx.Response(200, text=ATOM.format(piege=""))
+
+    assert (
+        await ArXiv(httpx.MockTransport(arxiv)).chercher("lumière bleue") == []
+    )  # requête française : rien n'est envoyé
+    assert await ArXiv(httpx.MockTransport(arxiv)).chercher("blue light and the circadian clock")
+    assert vus == ["all:blue AND all:light AND all:circadian AND all:clock"]
+
+    essais: list[int] = []
+
+    def sature(_: httpx.Request) -> httpx.Response:
+        essais.append(1)
+        if len(essais) == 1:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+        return httpx.Response(200, json={"resultList": {"result": [{"doi": "10.1/x", "title": "Ok"}]}})
+
+    assert [s.url for s in await EuropePMC(httpx.MockTransport(sature)).chercher("x")] == ["https://doi.org/10.1/x"]
+    essais.clear()
+
+    def bloque(_: httpx.Request) -> httpx.Response:
+        essais.append(1)
+        return httpx.Response(429, headers={"Retry-After": "32"})
+
+    assert await OpenAlex(httpx.MockTransport(bloque)).chercher("x") == [] and len(essais) == 1  # attente trop longue
+
+
 async def test_limite_de_debit_respectee() -> None:
     limiteur = Limiteur(0.05)
     debut = time.monotonic()

@@ -24,6 +24,32 @@ journal = logging.getLogger("jarvis2.sources_scientifiques")
 
 AGENT = "JARVIS2 (assistant personnel open source ; recherche documentaire)"
 TAILLE_EXTRAIT = 700
+ATTENTE_MAX_429 = 5.0  # « Retry-After » plus long : la base est sautée pour cette requête
+MOTS_VIDES_EN = frozenset(
+    [
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "into",
+        "over",
+        "under",
+        "about",
+        "that",
+        "this",
+        "what",
+        "which",
+        "how",
+        "why",
+        "are",
+        "was",
+        "were",
+        "its",
+    ]
+)
+_NON_ASCII = re.compile(r"[^\x00-\x7f]")
+_MOT_EN = re.compile(r"[A-Za-z][A-Za-z0-9-]{2,}")
 _ESPACES = re.compile(r"\s+")
 _BALISES = re.compile(r"<[^>]{0,200}>")  # balises HTML / JATS dans les résumés (texte brut gardé, jamais rendu)
 
@@ -31,6 +57,13 @@ _BALISES = re.compile(r"<[^>]{0,200}>")  # balises HTML / JATS dans les résumé
 def propre(texte: Any, taille: int = TAILLE_EXTRAIT) -> str:
     """Texte d'une API : balises retirées, espaces réduits, longueur bornée."""
     return _ESPACES.sub(" ", _BALISES.sub(" ", str(texte or ""))).strip()[:taille]
+
+
+def _secondes(valeur: str | None) -> float | None:
+    try:
+        return max(0.0, float(valeur)) if valeur is not None else None
+    except ValueError:
+        return None
 
 
 def _adresse(url: Any) -> str | None:
@@ -81,7 +114,13 @@ class Base:
     async def get(self, client: httpx.AsyncClient, url: str, params: dict[str, Any]) -> httpx.Response:
         await self.limiteur.attendre()
         reponse = await client.get(url, params=params)
-        if reponse.status_code == 429:  # trop d'appels : on n'insiste pas, la mission continue sans cette base
+        if reponse.status_code == 429:  # trop d'appels : une seule nouvelle tentative, si le service la permet vite
+            attente = _secondes(reponse.headers.get("retry-after"))
+            if attente is not None and attente <= ATTENTE_MAX_429:
+                await asyncio.sleep(attente)
+                await self.limiteur.attendre()
+                reponse = await client.get(url, params=params)
+        if reponse.status_code == 429:  # on n'insiste pas : la mission continue sans cette base
             raise httpx.HTTPStatusError("limite de débit atteinte", request=reponse.request, response=reponse)
         reponse.raise_for_status()
         return reponse
@@ -140,7 +179,13 @@ class ArXiv(Base):
     intervalle = 3.0  # consigne d'arXiv : un appel toutes les 3 secondes
 
     async def _chercher(self, client: httpx.AsyncClient, requete: str, nombre: int) -> list[Source]:
-        params = {"search_query": f"all:{requete}", "start": 0, "max_results": nombre}
+        # arXiv est en anglais et relie les mots par OU : seules les requêtes anglaises partent, tous mots exigés
+        if _NON_ASCII.search(requete):
+            return []
+        mots = [m for m in _MOT_EN.findall(requete) if m.lower() not in MOTS_VIDES_EN][:6]
+        if not mots:
+            return []
+        params = {"search_query": " AND ".join(f"all:{m}" for m in mots), "start": 0, "max_results": nombre}
         racine = _xml((await self.get(client, "https://export.arxiv.org/api/query", params)).text)
         ns = {"a": "http://www.w3.org/2005/Atom"}
         sources = []
