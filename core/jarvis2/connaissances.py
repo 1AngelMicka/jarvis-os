@@ -81,7 +81,7 @@ limites)", "sources": [1, 3]}}],
 Règles : « fiches » contient seulement les concepts nouveaux ou à compléter (une fiche reprise remplace \
 l'ancienne : écris-la en entier) ; 3 à 6 questions nouvelles au plus ; « sources » ne contient que des numéros de la \
 liste ci-dessus ; n'invente rien qui ne soit pas dans les rapports ; « niveau » (0 à 10) dit à quel point la base \
-couvre maintenant le domaine (0 : rien, 10 : couverture d'expert)."""
+couvre maintenant le domaine (0 : rien, 5 : bases d'un cours d'introduction, 10 : couverture d'expert)."""
 REVISION = """Domaine : « {nom} »{description}
 
 Base de connaissances actuelle :
@@ -96,15 +96,18 @@ Questions de contrôle (avec la réponse attendue) :
 {questions}
 </donnees>
 
-Fais la révision de ce domaine. Pour chaque question de contrôle (6 au plus ; s'il n'y en a pas, poses-en 4 \
-toi-même), dis si les fiches permettent d'y répondre correctement. Puis évalue la base. Réponds UNIQUEMENT par un \
-objet JSON :
+Fais la révision de ce domaine, comme un examinateur expert. Prends les questions de contrôle existantes (4 au \
+plus), puis pose 3 questions nouvelles sur des aspects importants du domaine que la base pourrait ne pas couvrir. \
+Pour chacune, dis si les fiches permettent d'y répondre correctement. Puis évalue la base. Réponds UNIQUEMENT par \
+un objet JSON :
 {{"questions": [{{"question": "…", "maitrise": true, "commentaire": "ce qui manque ou est faux"}}],
   "score": 0,
   "bilan": "deux ou trois phrases",
   "lacunes": ["concept ou question non couvert"],
   "missions": ["objectif d'une mission de recherche qui comblerait une lacune"]}}
-« score » de 0 à 10 (0 si la base est vide) ; 3 lacunes et 3 missions au plus."""
+« score » (0 à 10) mesure la couverture du domaine ENTIER, pas la réussite aux seules questions existantes : 0 si \
+la base est vide, 5 pour les bases d'un cours d'introduction, 10 pour une couverture d'expert. 3 lacunes et 3 \
+missions au plus."""
 
 
 # --- Outils --------------------------------------------------------------------------------------------------
