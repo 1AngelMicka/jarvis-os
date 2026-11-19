@@ -265,7 +265,8 @@ function Recommandations({ m }: { m: Materiel }) {
             {c.conseille ? (
               <>
                 {" "}
-                : <code>{c.conseille.modele}</code> ({c.conseille.taille}) sur {c.ou}
+                : <code>{c.conseille.modele}</code>
+                {c.conseille.taille !== c.conseille.modele && ` (${c.conseille.taille})`} sur {c.ou}
                 {c.maximum && c.maximum.modele !== c.conseille.modele && (
                   <>
                     {" "}

@@ -134,8 +134,8 @@ TABLE: tuple[Usage, ...] = (
         "Mémoire (embeddings)",
         "ram",
         (
-            Palier(2, "MiniLM multilingue (384 dim.)", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"),
-            Palier(8, "bge-m3 (1024 dim.)", "BAAI/bge-m3"),
+            Palier(2, "MiniLM, 384 dimensions", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"),
+            Palier(8, "multilingue, 1024 dimensions", "BAAI/bge-m3"),
         ),
         marge=False,  # taille fixe, chargé une fois sur le processeur
         note="Changer de modèle demande un ré-encodage de la mémoire (JARVIS2_MODELE_EMBEDDINGS).",
