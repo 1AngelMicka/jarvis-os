@@ -100,6 +100,8 @@ Coque Tauri, installeurs .exe / .dmg / .deb / .AppImage par GitHub Actions, sign
 **Terminé quand** : un installeur signé s'installe et se met à jour, la documentation permet une installation sans aide, l'utilisateur a validé la publication.
 Fait : coque Tauri 2 (`app/`) : lance le Core s'il ne tourne pas, icône de notification, raccourci global (Ctrl+Maj+J, sinon Ctrl+Alt+J), instance unique, aucune API native pour l'interface ; `publication.yml` construit la roue et les installeurs Windows, macOS, Linux en version BROUILLON, signatures transmises seulement si configurées ; dépôt public validé par l'utilisateur. Vérifié en vrai : installeur Windows installé en silence, fenêtre « JARVIS 2 » reliée au Core. **À l'utilisateur** : certificats de signature (Windows, Apple) et clé de mise à jour Tauri dans les secrets du dépôt ; publication d'une version (étiquette `v*`) ; essai macOS.
 
+Mise à jour (voir [MISES_A_JOUR.md](MISES_A_JOUR.md)) : `jarvis2 mettre-a-jour` (dernière version par l'API publique de GitHub, notes, puis réinstallation de la roue de la version par uv tool ou pipx **après accord** ; dépôt git : explication seule) ; indicateur « Nouvelle version » dans Réglages › Appareils › Version et mises à jour, vérifié au plus une fois par jour, désactivable (migration 033), visible dans « Où partent mes données » avec la vérification de l'application de bureau. Application de bureau : mises à jour signées (vérification au démarrage puis 1×/jour, installation seulement après « Installer et redémarrer »), désactivées tant qu'aucune clé publique n'est configurée. **À l'utilisateur** : générer la clé de mise à jour et la ranger dans les secrets du dépôt.
+
 ### 12. Bascule de l'installation personnelle (outils prêts ; décisions à l'utilisateur)
 Pour l'utilisateur qui vient de JARVIS v1 : sauvegarde hors site testée, rattrapage des souvenirs créés depuis l'import (`jarvis2 importer jarvis_v1`, rejouable), fonctionnement en parallèle, arrêt de JARVIS v1 **uniquement sur décision de l'utilisateur**.
 **Terminé quand** : une restauration depuis la sauvegarde hors site a été testée, le rattrapage ne laisse aucun écart, l'utilisateur a décidé de la suite.
@@ -158,6 +160,7 @@ Les meilleures idées des autres assistants personnels (voir [INSPIRATIONS.md](I
 3. Une seule table matériel → modèle ; RAM Windows lue sans wmic ; un palier sous le maximum pour garder de la marge ; cartes AMD (ROCm) prises en compte.
 4. Point d'entrée pipx `jarvis2` en plus des installeurs.
 5. Signature du code (programme gratuit pour l'open source ou service de signature) et mises à jour signées ; paquets winget et Homebrew.
+   Mises à jour signées : fait (application de bureau, clé fournie par l'utilisateur ; Core : `jarvis2 mettre-a-jour` et indicateur des Réglages, voir [MISES_A_JOUR.md](MISES_A_JOUR.md)). Signature du code : à l'utilisateur (certificats, secrets listés en tête de `publication.yml`). Paquets winget et Homebrew : à faire.
 
 **B. Agents sûrs**
 6. Barrière d'injection par tour : dès qu'un tour a lu du web, l'écran, un fichier externe ou une autre session, les outils qui agissent sont refusés jusqu'à la fin du tour.
