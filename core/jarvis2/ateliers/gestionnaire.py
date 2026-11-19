@@ -565,6 +565,29 @@ class GestionnaireAteliers:
 
     # --- Fusion et abandon -----------------------------------------------------------------------------------
 
+    async def empreinte_contenu(self, ident: UUID) -> str:
+        """Arbre git du contenu exact du worktree (fichiers non commités compris), lu par un index TEMPORAIRE :
+        rien n'est modifié. Figé dans la demande de fusion, revérifié à l'exécution (le contenu change : elle tombe)."""
+        import tempfile
+
+        atelier = await self.obtenir(ident)
+        if atelier is None:
+            raise ErreurAtelier("Atelier introuvable")
+        chemin = Path(atelier["chemin"])
+        with tempfile.TemporaryDirectory(prefix="jarvis2-empreinte-") as dossier:
+            env = {**os.environ, "GIT_INDEX_FILE": str(Path(dossier) / "index")}
+            sorties = []
+            for args in (("add", "-A"), ("write-tree",)):
+                proc = await asyncio.create_subprocess_exec(
+                    "git", *args, cwd=str(chemin), env=env,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                )  # fmt: skip
+                sortie, _ = await proc.communicate()
+                if proc.returncode:
+                    raise ErreurAtelier(f"Lecture de l'atelier impossible : {sortie.decode('utf-8', 'replace')[:300]}")
+                sorties.append(sortie.decode("utf-8", "replace").strip())
+        return sorties[-1]
+
     async def fusionner(self, conn: Executant, ident: UUID) -> dict[str, Any]:
         """Commite le worktree puis fusionne sa branche dans le projet (projet propre exigé, conflit = annulé)."""
         atelier = await self.obtenir(ident)

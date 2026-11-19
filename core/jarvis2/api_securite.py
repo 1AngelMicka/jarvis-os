@@ -87,6 +87,8 @@ class DemandeAction(BaseModel):
 class Decision(BaseModel):
     credential: dict[str, Any] | None = None
     toujours: bool = False  # « Toujours autoriser » cette action 🟡 (jamais 🔴, jamais un clic à l'écran)
+    # Empreinte du plan affichée par l'interface : obligatoire, elle lie l'approbation au plan exact vu à l'écran
+    empreinte: str = Field(min_length=64, max_length=64, pattern="^[0-9a-fA-F]{64}$")
 
 
 # --- Appareils et jumelage ---------------------------------------------------------------------------------
@@ -224,6 +226,8 @@ async def lister_actions(request: Request) -> dict[str, Any]:
                 "niveau": x.niveau,
                 "description": x.description,
                 "toujours_possible": x.peut_etre_toujours_autorisee,
+                "reversible": x.reversible,
+                "annulation": x.annulation,
             }
             for x in actions
         ]
@@ -282,7 +286,9 @@ async def approuver(request: Request, demande_id: UUID, corps: Decision) -> dict
             raise HTTPException(403, str(exc)) from exc
         methode = "cle_acces"
     try:
-        return await c.approbations.decider(demande_id, a, approuver=True, methode=methode, toujours=corps.toujours)
+        return await c.approbations.decider(
+            demande_id, a, approuver=True, methode=methode, toujours=corps.toujours, empreinte=corps.empreinte
+        )
     except ErreurAction as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -292,6 +298,34 @@ async def refuser(request: Request, demande_id: UUID) -> dict[str, Any]:
     c = ctx(request)
     try:
         return await c.approbations.decider(demande_id, appareil_courant(request), approuver=False, methode="clic")
+    except ErreurAction as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+# --- Pile d'annulation --------------------------------------------------------------------------------------
+
+
+@routeur.get("/annulations")
+async def lister_annulations(request: Request) -> dict[str, Any]:
+    """Dernières actions annulables (24 h), la plus récente d'abord."""
+    return {"annulations": await ctx(request).approbations.annulables()}
+
+
+@routeur.post("/annulations/derniere/annuler")
+async def annuler_derniere(request: Request) -> dict[str, Any]:
+    """« Annuler » sans préciser : la dernière action annulable (commande rapide « annule »)."""
+    c = ctx(request)
+    try:
+        return await c.approbations.annuler(None, appareil_courant(request))
+    except ErreurAction as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@routeur.post("/annulations/{ident}/annuler")
+async def annuler(request: Request, ident: UUID) -> dict[str, Any]:
+    c = ctx(request)
+    try:
+        return await c.approbations.annuler(ident, appareil_courant(request))
     except ErreurAction as exc:
         raise HTTPException(409, str(exc)) from exc
 

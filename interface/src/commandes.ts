@@ -16,6 +16,7 @@ export type IdCommande =
   | "installation"
   | "reglages"
   | "demandes"
+  | "annuler"
   | "securite"
   | "silence"
   | "image"
@@ -52,6 +53,7 @@ export const COMMANDES: readonly Commande[] = [
   { id: "reglages", nom: "Ouvrir les réglages", description: "Thème, voix, accueil du matin, IA, coûts, mémoire, sécurité", slash: "reglages", alias: ["parametres", "systeme", "options", "preferences"], argument: "réglage cherché", motsCles: ["vue", "configuration", "regler"] },
   { id: "installation", nom: "Diagnostic de l'installation", description: "Vérifications du premier lancement", slash: "installation", alias: ["diagnostic"], motsCles: ["vue", "accueil"] },
   { id: "demandes", nom: "Voir les demandes", description: "Actions en attente de votre accord", slash: "demandes", alias: ["approbations"], motsCles: ["accord", "file"] },
+  { id: "annuler", nom: "Annuler la dernière action", description: "Défait la dernière action réversible (24 h)", slash: "annuler", alias: ["undo", "defaire"], motsCles: ["annulation", "revenir", "corbeille"] },
   { id: "securite", nom: "Ouvrir la sécurité", description: "Appareils, clés d'accès, apparence", slash: "securite", alias: ["appareils"], motsCles: ["clés", "jumelage"] },
   { id: "silence", nom: "Couper la voix", description: "JARVIS arrête de parler", slash: "silence", alias: ["chut", "muet"], raccourci: "Ctrl+M", motsCles: ["voix", "parole", "son"] },
   { id: "image", nom: "Joindre une image", description: "Ou collez (Ctrl+V), ou glissez-la", slash: "image", alias: ["joindre", "photo"], motsCles: ["photo", "capture", "fichier"] },

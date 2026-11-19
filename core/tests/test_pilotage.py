@@ -221,7 +221,7 @@ async def test_regle_interdire_refuse_l_action_meme_approuvee(systeme: dict[str,
         "/v1/regles", json={"genre": "interdire", "motif": "projet secret", "libelle": "Ne touche pas au projet secret"}
     )
     assert r.status_code == 200, r.text
-    refus = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={})
+    refus = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"empreinte": demande["empreinte"]})
     assert refus.status_code == 409 and "règle de protection" in refus.json()["detail"]
     assert await pool.fetchval("SELECT archivee FROM conversations WHERE id = $1::uuid", conv) is False
     # Nouvelle demande : refusée tout de suite
@@ -260,7 +260,11 @@ async def test_retirer_une_regle_est_jaune(systeme: dict[str, Any], pool: Base) 
     assert rep["statut"] == "en_attente" and rep["demande"]["niveau"] == "jaune"
     assert rep["demande"]["toujours_possible"] is False  # affaiblir une protection se décide à chaque fois
     # La règle ne bloque pas son propre retrait
-    ok = (await client.post(f"/v1/demandes/{rep['demande']['id']}/approuver", json={})).json()
+    ok = (
+        await client.post(
+            f"/v1/demandes/{rep['demande']['id']}/approuver", json={"empreinte": rep["demande"]["empreinte"]}
+        )
+    ).json()
     assert ok["statut"] == "executee"
     assert await pool.fetchval("SELECT count(*) FROM regles_protection") == 0
 
@@ -276,7 +280,9 @@ async def test_regle_demander_impose_la_demande(systeme: dict[str, Any], pool: B
         )
     ).json()
     assert d["demande"]["toujours_possible"] is True
-    await client.post(f"/v1/demandes/{d['demande']['id']}/approuver", json={"toujours": True})
+    await client.post(
+        f"/v1/demandes/{d['demande']['id']}/approuver", json={"empreinte": d["demande"]["empreinte"], "toujours": True}
+    )
     # …puis une règle « demander » : elle passe avant l'autorisation permanente
     await client.post("/v1/regles", json={"genre": "demander", "motif": "notes"})
     conv2 = await creer_conversation(pool, "Notes")
@@ -311,7 +317,12 @@ async def test_toujours_autoriser_une_action_jaune(systeme: dict[str, Any], pool
             "/v1/actions", json={"action": "conversation.archiver", "parametres": {"conversation_id": c1}}
         )
     ).json()
-    ok = (await client.post(f"/v1/demandes/{d['demande']['id']}/approuver", json={"toujours": True})).json()
+    ok = (
+        await client.post(
+            f"/v1/demandes/{d['demande']['id']}/approuver",
+            json={"empreinte": d["demande"]["empreinte"], "toujours": True},
+        )
+    ).json()
     assert ok["statut"] == "executee"
     # La suivante s'exécute sans demande
     rep = (
@@ -353,7 +364,8 @@ async def test_toujours_autoriser_refuse_pour_rouge_et_non_autorisable(systeme: 
     await client.post("/v1/cles/enregistrement", json={"credential": cle.creer(options), "nom": "Clé"})
     defi = (await client.post(f"/v1/demandes/{d['demande']['id']}/options")).json()
     refus = await client.post(
-        f"/v1/demandes/{d['demande']['id']}/approuver", json={"credential": cle.signer(defi), "toujours": True}
+        f"/v1/demandes/{d['demande']['id']}/approuver",
+        json={"empreinte": d["demande"]["empreinte"], "credential": cle.signer(defi), "toujours": True},
     )
     assert refus.status_code == 409 and "Toujours autoriser" in refus.json()["detail"]
     assert await pool.fetchval("SELECT count(*) FROM autorisations_permanentes") == 0

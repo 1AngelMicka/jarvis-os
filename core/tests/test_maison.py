@@ -75,7 +75,9 @@ async def action(client: httpx.AsyncClient, nom_action: str, **parametres: Any) 
 async def approuver(client: httpx.AsyncClient, reponse: httpx.Response) -> httpx.Response:
     corps = reponse.json()
     assert corps["statut"] == "en_attente", corps
-    return await client.post(f"/v1/demandes/{corps['demande']['id']}/approuver", json={})
+    return await client.post(
+        f"/v1/demandes/{corps['demande']['id']}/approuver", json={"empreinte": corps["demande"]["empreinte"]}
+    )
 
 
 async def noms_actions(client: httpx.AsyncClient) -> set[str]:
@@ -241,11 +243,14 @@ async def test_obs_direct_rouge_exige_une_cle_d_acces(maison: dict[str, Any]) ->
     await configurer_obs(maison)
     demande = (await action(client, "obs.direct.demarrer")).json()["demande"]
     assert demande["niveau"] == "rouge"
-    clic = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={})
+    clic = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"empreinte": demande["empreinte"]})
     assert clic.status_code == 409 and "clé d'accès" in clic.json()["detail"] and obs.direct is False
     cle = await enregistrer_cle(client)
     defi = (await client.post(f"/v1/demandes/{demande['id']}/options")).json()
-    ok = await client.post(f"/v1/demandes/{demande['id']}/approuver", json={"credential": cle.signer(defi)})
+    ok = await client.post(
+        f"/v1/demandes/{demande['id']}/approuver",
+        json={"empreinte": demande["empreinte"], "credential": cle.signer(defi)},
+    )
     assert ok.status_code == 200 and obs.direct is True
     assert (await approuver(client, await action(client, "obs.direct.arreter"))).status_code == 200  # 🟡
     assert obs.direct is False
@@ -288,3 +293,21 @@ def test_outils_purs() -> None:
     question = requete_mdns()
     assert b"\x04_hue\x04_tcp\x05local\x00" in question and not reponse_hue(question)  # une question, pas une réponse
     assert reponse_hue(b"\x00\x00\x84\x00" + b"\x00" * 8 + b"\x04_hue\x04_tcp\x05local\x00")
+
+
+async def test_hue_et_obs_s_annulent(maison: dict[str, Any]) -> None:
+    """Pile d'annulation (point B 7) : la lampe revient à son état d'avant, OBS à sa scène d'avant."""
+    client, pont, obs = maison["client"], maison["pont"], maison["obs"]
+    await appairer_et_activer(maison)
+    pont.lumieres["1"]["state"].update(on=True, bri=200)
+    assert (await approuver(client, await action(client, "hue.luminosite", id="1", pourcent=10))).status_code == 200
+    assert pont.lumieres["1"]["state"]["bri"] != 200
+    assert (await client.post("/v1/annulations/derniere/annuler")).status_code == 200
+    assert pont.lumieres["1"]["state"]["on"] is True and pont.lumieres["1"]["state"]["bri"] == 200
+
+    await configurer_obs(maison)
+    assert (await approuver(client, await action(client, "obs.scene", scene="Écran"))).status_code == 200
+    pile = (await client.get("/v1/annulations")).json()["annulations"]
+    assert pile[0]["action"] == "obs.scene" and pile[0]["comment"] == "Revenir à la scène OBS d'avant"
+    assert (await client.post(f"/v1/annulations/{pile[0]['id']}/annuler")).status_code == 200
+    assert obs.scene == "Caméra"

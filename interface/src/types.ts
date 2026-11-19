@@ -120,6 +120,31 @@ export interface Demande {
   /** « Plus tard » : heure du rappel poussé au téléphone, et nombre de reports (3 au plus). */
   rappel_le?: string | null;
   reports?: number;
+  /** Empreinte SHA-256 du plan exact (renvoyée à l'approbation) et sa forme courte affichée (« 3fa2 9c01 »). */
+  empreinte?: string | null;
+  empreinte_courte?: string | null;
+  /** L'action se défait une fois exécutée (« Annuler »). */
+  reversible?: boolean;
+}
+
+/** Action réversible exécutée, encore annulable (pile d'annulation, 24 h). */
+export interface EntreeAnnulation {
+  id: string;
+  action: string;
+  resume: string;
+  /** Comment elle s'annule (texte affiché). */
+  comment: string;
+  demande_id: string | null;
+  acteur: string;
+  statut: string;
+  cree_le: string;
+  expire_le: string;
+}
+
+export interface ResultatAnnulation {
+  statut: "annulee";
+  annulation: EntreeAnnulation;
+  resultat: Record<string, unknown>;
 }
 
 export interface EtatUrgence {

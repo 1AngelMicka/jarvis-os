@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -78,6 +79,33 @@ async def ajouter(
 async def supprimer(base: Executant, ident: UUID) -> Regle | None:
     ligne = await base.fetchrow(f"DELETE FROM regles_protection WHERE id = $1 RETURNING {COLONNES}", ident)
     return _regle(ligne) if ligne else None
+
+
+async def remettre(base: Executant, avant: dict[str, Any]) -> Regle:
+    """Remet une règle retirée telle qu'elle était (annulation de l'action 🟡 `regle.supprimer`)."""
+    try:
+        ident = UUID(str(avant["id"]))
+        genre, motif, libelle = str(avant["genre"]), str(avant["motif"]), str(avant["libelle"])
+        cree_le = datetime.fromisoformat(str(avant["cree_le"]))
+    except (KeyError, ValueError) as exc:
+        raise ErreurMotif("Règle d'avant illisible : ajoutez-la de nouveau") from exc
+    if genre not in ("interdire", "demander"):
+        raise ErreurMotif("Règle d'avant illisible : ajoutez-la de nouveau")
+    compiler(motif)
+    ligne = await base.fetchrow(
+        "INSERT INTO regles_protection (id, genre, motif, libelle, origine, cree_par, cree_le)"
+        f" VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING RETURNING {COLONNES}",
+        ident,
+        genre,
+        motif,
+        libelle[:200],
+        "jarvis" if avant.get("origine") == "jarvis" else "utilisateur",
+        str(avant.get("cree_par") or "utilisateur"),
+        cree_le,
+    )
+    if ligne is None:
+        raise ErreurMotif("La règle est déjà en place")
+    return _regle(ligne)
 
 
 async def obtenir(base: Executant, ident: UUID) -> Regle | None:

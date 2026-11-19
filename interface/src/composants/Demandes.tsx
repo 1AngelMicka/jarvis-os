@@ -36,9 +36,13 @@ export function ListeDemandes({ demandes, nbCles, surChangement }: Props) {
     setErreurs((e) => ({ ...e, [d.id]: "" }));
     const appel = async () => {
       if (!accepter) return refuser(d.id);
+      // L'approbation porte l'empreinte du plan affiché : si la demande a changé depuis, le Core la fait tomber
+      const empreinte = d.empreinte;
+      if (!empreinte) throw new Error("Demande sans empreinte (antérieure à la mise à jour) : relancez l'action.");
       if (d.niveau === "jaune")
         return approuver(
           d.id,
+          empreinte,
           undefined,
           Boolean(d.toujours_possible && toujours[d.id]),
         );
@@ -53,7 +57,7 @@ export function ListeDemandes({ demandes, nbCles, surChangement }: Props) {
         );
       }
       const defi = await optionsApprobation(d.id);
-      return approuver(d.id, await signerDefi(defi));
+      return approuver(d.id, empreinte, await signerDefi(defi));
     };
     appel()
       .then((r) => {
@@ -70,7 +74,7 @@ export function ListeDemandes({ demandes, nbCles, surChangement }: Props) {
       .catch((e: unknown) => {
         const message = e instanceof Error ? e.message : "Échec.";
         // Demande close entre-temps (refusée, expirée, traitée ailleurs) : la file est rechargée, la carte disparaît
-        if (/déjà traitée|introuvable|expirée/i.test(message)) {
+        if (/déjà traitée|introuvable|expirée|approbation annulée|relancez/i.test(message)) {
           surChangement(message);
           return;
         }
@@ -112,7 +116,13 @@ export function ListeDemandes({ demandes, nbCles, surChangement }: Props) {
           <p className="demande-resume">{d.resume}</p>
           <p className="demande-meta">
             {d.action} · demandée par {d.demandeur.replace(/^appareil:/, "")}
+            {d.reversible ? " · annulable ensuite" : ""}
           </p>
+          {d.empreinte_courte && (
+            <p className="demande-empreinte" title="Empreinte du plan exact : si l'action ou ses paramètres changent, l'approbation tombe">
+              Empreinte du plan <code>{d.empreinte_courte}</code>
+            </p>
+          )}
           {d.niveau === "jaune" && d.toujours_possible && (
             <label className="demande-toujours">
               <input

@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from .db import Base, Executant
+from .db import Base, Connexion, Executant
 
 OUVERTS = ("propose", "a_faire", "en_cours", "en_attente_utilisateur", "bloque")
 STATUTS = (*OUVERTS, "termine", "abandonne")
@@ -258,30 +258,35 @@ async def abandonner(conn: Executant, ident: UUID, motif: str | None = None) -> 
 async def rouvrir(base: Base, ident: UUID) -> dict[str, Any]:
     """Remet un chantier clos en cours, sauf si un jumeau ouvert existe déjà (pas de doublon)."""
     async with base.acquire() as conn, conn.transaction():
-        await conn.verrouiller(VERROU)
-        actuel = await _exiger(conn, ident)
-        if actuel["statut"] in OUVERTS:
-            return actuel
-        if await jumeaux(conn, actuel["titre"], sauf=ident):
-            raise ErreurChantier("Un chantier ouvert du même sens existe déjà")
-        etapes = [dict(e) for e in actuel["etapes"]]
-        if etapes and all(e["fait"] for e in etapes):
-            etapes[-1]["fait"] = False  # rouvert : la dernière étape reste à refaire (pas « 0 % · 2/2 étapes »)
-        if etapes:
-            progression = progression_des_etapes(etapes)
-        else:
-            progression = 0 if actuel["progression"] >= 100 else actuel["progression"]
-        statut = "en_cours" if progression > 0 else "a_faire"
-        await conn.execute(
-            "UPDATE chantiers SET statut = $2, motif = NULL, termine_le = NULL, progression = $3, etapes = $4,"
-            " etape_courante = $5, maj_le = now() WHERE id = $1",
-            ident,
-            statut,
-            progression,
-            etapes,
-            _prochaine(etapes),
-        )
-        return await _exiger(conn, ident)
+        return await rouvrir_dans(conn, ident)
+
+
+async def rouvrir_dans(conn: Connexion, ident: UUID) -> dict[str, Any]:
+    """`rouvrir` dans une transaction déjà ouverte (annulation de l'action 🟡 `chantier.abandonner`)."""
+    await conn.verrouiller(VERROU)
+    actuel = await _exiger(conn, ident)
+    if actuel["statut"] in OUVERTS:
+        return actuel
+    if await jumeaux(conn, actuel["titre"], sauf=ident):
+        raise ErreurChantier("Un chantier ouvert du même sens existe déjà")
+    etapes = [dict(e) for e in actuel["etapes"]]
+    if etapes and all(e["fait"] for e in etapes):
+        etapes[-1]["fait"] = False  # rouvert : la dernière étape reste à refaire (pas « 0 % · 2/2 étapes »)
+    if etapes:
+        progression = progression_des_etapes(etapes)
+    else:
+        progression = 0 if actuel["progression"] >= 100 else actuel["progression"]
+    statut = "en_cours" if progression > 0 else "a_faire"
+    await conn.execute(
+        "UPDATE chantiers SET statut = $2, motif = NULL, termine_le = NULL, progression = $3, etapes = $4,"
+        " etape_courante = $5, maj_le = now() WHERE id = $1",
+        ident,
+        statut,
+        progression,
+        etapes,
+        _prochaine(etapes),
+    )
+    return await _exiger(conn, ident)
 
 
 async def supprimer(conn: Executant, ident: UUID) -> dict[str, Any]:

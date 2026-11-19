@@ -130,7 +130,11 @@ async def test_api_abandon_jaune_et_suppression_rouge(systeme: dict[str, Any], p
     ).json()
     assert rep["statut"] == "en_attente" and rep["demande"]["niveau"] == "jaune"
     assert (await chantiers.obtenir(pool, UUID(ident)) or {})["statut"] == "a_faire"  # rien sans accord
-    ok = (await client.post(f"/v1/demandes/{rep['demande']['id']}/approuver", json={})).json()
+    ok = (
+        await client.post(
+            f"/v1/demandes/{rep['demande']['id']}/approuver", json={"empreinte": rep["demande"]["empreinte"]}
+        )
+    ).json()
     assert ok["statut"] == "executee"
     assert (await chantiers.obtenir(pool, UUID(ident)) or {})["statut"] == "abandonne"
 
@@ -138,7 +142,9 @@ async def test_api_abandon_jaune_et_suppression_rouge(systeme: dict[str, Any], p
         await client.post("/v1/actions", json={"action": "chantier.supprimer", "parametres": {"chantier_id": ident}})
     ).json()
     assert rouge["statut"] == "en_attente" and rouge["demande"]["niveau"] == "rouge"
-    refus = await client.post(f"/v1/demandes/{rouge['demande']['id']}/approuver", json={})
+    refus = await client.post(
+        f"/v1/demandes/{rouge['demande']['id']}/approuver", json={"empreinte": rouge["demande"]["empreinte"]}
+    )
     assert refus.status_code == 409 and "clé d'accès" in refus.json()["detail"]  # un clic ne suffit pas
     assert await chantiers.obtenir(pool, UUID(ident)) is not None
 
