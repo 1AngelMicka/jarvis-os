@@ -12,13 +12,51 @@ import re
 
 import httpx
 
+from .moteurs.base import Image
+
 TAILLE_MAX = 8 * 1024 * 1024
 ENTETE = re.compile(r"^data:image/(png|jpeg|webp);base64,")
 QUESTION_DEFAUT = "Décris précisément ce que montre cette image, en français."
 
 
+# Images jointes au dialogue : compressées par le navigateur (1 Mo visé), GIF gardé tel quel jusqu'à 3 Mo
+TYPES_JOINTS = ("image/jpeg", "image/png", "image/webp", "image/gif")
+TAILLE_MAX_JOINTE = 3 * 1024 * 1024
+ENTETE_JOINTE = re.compile(r"^data:(image/(?:jpeg|png|webp|gif));base64,")
+
+
 class ErreurVision(RuntimeError):
     pass
+
+
+def type_reel(octets: bytes) -> str | None:
+    """Type d'après les premiers octets (on ne croit pas l'en-tête de la data URL sur parole)."""
+    if octets.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if octets.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if octets[:4] == b"RIFF" and octets[8:12] == b"WEBP":
+        return "image/webp"
+    if octets[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    return None
+
+
+def decoder_jointe(donnee: str) -> Image:
+    """Image jointe à un message (data URL JPEG, PNG, WebP ou GIF, 3 Mo au plus) → `Image` gardée en mémoire."""
+    entete = ENTETE_JOINTE.match(donnee)
+    if entete is None:
+        raise ErreurVision("Image jointe illisible : JPEG, PNG, WebP ou GIF attendu")
+    try:
+        octets = base64.b64decode(donnee[entete.end() :], validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ErreurVision("Image jointe illisible") from exc
+    if len(octets) > TAILLE_MAX_JOINTE:
+        raise ErreurVision("Image jointe trop lourde (3 Mo au plus)")
+    reel = type_reel(octets)
+    if reel is None:
+        raise ErreurVision("Le fichier joint n'est pas une image JPEG, PNG, WebP ou GIF")
+    return Image(reel, octets)
 
 
 def decoder(donnee: str) -> bytes:

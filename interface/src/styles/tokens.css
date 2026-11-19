@@ -157,6 +157,9 @@
   --h-onglets: 58px;
   --colonne-lecture: 880px;
   --cible: 44px;             /* cible tactile minimale */
+  --vignette: 64px;          /* miniature d'une image jointe (saisie) */
+  --vignette-fil: 112px;     /* miniature d'une image jointe (fil du dialogue) */
+  --largeur-palette: 640px;  /* palette de commandes, aide */
   --sa-haut: env(safe-area-inset-top, 0px);
   --sa-bas: env(safe-area-inset-bottom, 0px);
   --sa-gauche: env(safe-area-inset-left, 0px);

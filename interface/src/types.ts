@@ -14,6 +14,8 @@ export interface InfoMoteur {
   detail: string;
   modeles: InfoModele[];
   efforts: string[];
+  /** Sait lire les images jointes (selon le modèle pour Ollama et les compatibles OpenAI). */
+  vision?: boolean;
   effort_defaut: string | null;
   famille?: "cli" | "api" | "local";
   risque?: boolean;
@@ -139,6 +141,8 @@ export interface MetaMessage {
   masques?: Record<string, number>;
   prive?: boolean;
   conseil?: AvisExpert[];
+  /** Images jointes à un message de l'utilisateur : seulement leur type et leur poids (le Core ne les garde pas). */
+  images?: { type: string; octets: number }[];
 }
 
 export interface MessageStocke {
@@ -160,6 +164,8 @@ export interface DemandeDialogue {
   moteur?: string;
   modele?: string;
   effort?: string;
+  /** Images jointes, en data URL (5 au plus). */
+  images?: string[];
 }
 
 export type EvenementDialogue =

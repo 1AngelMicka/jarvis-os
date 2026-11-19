@@ -8,7 +8,11 @@ import { VueAgents } from "./composants/Agents";
 import { VueAteliers } from "./composants/Ateliers";
 import { VueConnecteurs } from "./composants/Connecteurs";
 import { ListeDemandes } from "./composants/Demandes";
-import { Console, Fil, type MessageAffiche } from "./composants/Dialogue";
+import { Console, EVENEMENT_JOINDRE, Fil, type MessageAffiche } from "./composants/Dialogue";
+import { Aide, type ModePalette, Palette } from "./composants/Palette";
+import { commande as infoCommande, commandeDuRaccourci, type IdCommande, themeDepuis, themeSuivant } from "./commandes";
+import type { ImageJointe } from "./images";
+import { choisirTheme, lireTheme, THEMES, type Theme } from "./theme";
 import { ListeConversations } from "./composants/Historique";
 import { VueMemoire } from "./composants/VueMemoire";
 import { EcranJumelage } from "./composants/Jumelage";
@@ -18,7 +22,7 @@ import { PanneauSecurite } from "./composants/Securite";
 import { CommandesVoix } from "./composants/Voix";
 import { SelecteurTheme } from "./composants/SelecteurTheme";
 import { ecrirePreferences, lirePreferences } from "./preferences";
-import { LecteurVocal } from "./voix";
+import { couperVoix, LecteurVocal } from "./voix";
 import type { Activite, AvisExpert, Etat, EvenementDialogue, InfoMoteur, MessageStocke, ReponseAction, ResumeConversation } from "./types";
 
 let compteur = 0;
@@ -83,6 +87,8 @@ function Hud() {
   const [activite, setActivite] = useState<Activite | null>(null);
   const [erreurActivite, setErreurActivite] = useState<string | null>(null);
   const [cible, setCible] = useState<CibleActivite | null>(null);
+  const [palette, setPalette] = useState<{ mode: ModePalette; requete: string } | null>(null);
+  const [aide, setAide] = useState(false);
   const controleur = useRef<AbortController | null>(null);
   const lecteur = useRef(new LecteurVocal()).current;
   const minuterieNotif = useRef<number | undefined>(undefined);
@@ -348,9 +354,10 @@ function Hud() {
       });
   };
 
-  const envoyer = (texte: string) => {
+  const envoyer = (texte: string, images: ImageJointe[] = []) => {
     const cleJarvis = nouvelleCle();
-    setMessages((ms) => [...ms, { cle: nouvelleCle(), role: "utilisateur", texte }]);
+    const affichees = images.map(({ id, nom, dataUrl, poids }) => ({ id, nom, dataUrl, poids }));
+    setMessages((ms) => [...ms, { cle: nouvelleCle(), role: "utilisateur", texte, ...(affichees.length ? { images: affichees } : {}) }]);
     setEnCours(true);
     setPremierMorceau(false);
     setAnnonce("");
@@ -413,6 +420,7 @@ function Hud() {
       moteur,
       ...(moteur !== "auto" && modeles[moteur] ? { modele: modeles[moteur] } : {}),
       ...(moteurInfo?.efforts.length && effort ? { effort } : {}),
+      ...(images.length ? { images: images.map((i) => i.dataUrl) } : {}),
     };
     const appel = conseil
       ? conseiller({ question: texte, ...(active ? { conversation_id: active } : {}) }, surEvenement, ctrl.signal)
@@ -438,6 +446,112 @@ function Hud() {
     lecteur.arreter();
     controleur.current?.abort();
   };
+
+  // --- Commandes : palette Ctrl+K, « / » dans la saisie, raccourcis ---
+  const changerTheme = (t: Theme) => {
+    choisirTheme(t);
+    notifier(`Thème : ${THEMES.find((x) => x.id === t)?.nom ?? t}.`);
+  };
+
+  const executer = (id: IdCommande, argument = "") => {
+    const vues: Partial<Record<IdCommande, typeof vue>> = {
+      memoire: "memoire",
+      connecteurs: "connecteurs",
+      agents: "agents",
+      ateliers: "ateliers",
+      dialogue: "dialogue",
+      installation: "accueil",
+    };
+    const versVue = vues[id];
+    if (versVue) {
+      setVue(versVue);
+      setLateralOuvert(false);
+      return;
+    }
+    switch (id) {
+      case "nouvelle":
+        nouvelle();
+        break;
+      case "historique":
+        setOnglet("conversations");
+        setLateralOuvert(true);
+        // Large écran : la colonne est déjà visible, le focus va à sa recherche
+        window.setTimeout(() => {
+          document.querySelector<HTMLElement>(".colonne-droite input")?.focus();
+        }, 0);
+        break;
+      case "chercher":
+        setPalette({ mode: "conversations", requete: argument });
+        break;
+      case "theme": {
+        const t = argument ? themeDepuis(argument) : themeSuivant(lireTheme());
+        if (t) changerTheme(t);
+        else notifier(`Thème inconnu : « ${argument} ». Thèmes : ${THEMES.map((x) => x.nom).join(", ")}.`);
+        break;
+      }
+      case "demandes":
+        montrerDemandes();
+        break;
+      case "securite":
+        setOnglet("securite");
+        setLateralOuvert(true);
+        break;
+      case "silence":
+        couperVoix(lecteur);
+        notifier("Voix coupée.");
+        break;
+      case "image":
+        setVue("dialogue");
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent(EVENEMENT_JOINDRE));
+        }, 0);
+        break;
+      case "resumer":
+        if (active) resumer();
+        else notifier("Aucune conversation ouverte à résumer.");
+        break;
+      case "urgence":
+        setPalette({ mode: "urgence", requete: "" });
+        break;
+      case "aide":
+        setAide(true);
+        break;
+      case "palette":
+        setPalette((pal) => (pal ? null : { mode: "tout", requete: "" }));
+        break;
+      default:
+        notifier(`${infoCommande(id).nom} : indisponible ici.`);
+    }
+  };
+  const executerRef = useRef(executer);
+  executerRef.current = executer;
+
+  // Depuis la palette : elle se ferme d'abord (le focus revient), puis la commande agit
+  const depuisPalette = (action: () => void) => {
+    setPalette(null);
+    window.setTimeout(action, 0);
+  };
+
+  useEffect(() => {
+    const surTouche = (e: KeyboardEvent) => {
+      const id = commandeDuRaccourci(e);
+      if (id) {
+        e.preventDefault();
+        executerRef.current(id);
+        return;
+      }
+      const cible = e.target as HTMLElement | null;
+      const saisie = cible?.closest("input, textarea, select, [contenteditable='true']");
+      if (e.key === "?" && !saisie && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector("dialog[open]")) {
+        e.preventDefault();
+        setAide(true);
+      }
+    };
+    window.addEventListener("keydown", surTouche);
+    return () => {
+      window.removeEventListener("keydown", surTouche);
+    };
+  }, []);
 
   const etatNoyau: EtatNoyau = alerte || urgence ? "alerte" : enCours ? (premierMorceau ? "parole" : "reflexion") : "repos";
   const moteurs = etat?.moteurs ?? [];
@@ -786,6 +900,7 @@ function Hud() {
                   }}
                   surEffort={setEffort}
                   surEnvoyer={envoyer}
+                  surCommande={executer}
                   surArreter={arreter}
                   extras={
                     <CommandesVoix
@@ -884,6 +999,42 @@ function Hud() {
       <p className="visuellement-cache" aria-live="polite">
         {annonce}
       </p>
+      {palette && (
+        <Palette
+          mode={palette.mode}
+          requeteInitiale={palette.requete}
+          conversations={conversations}
+          urgenceActive={urgence}
+          surFermer={() => {
+            setPalette(null);
+          }}
+          surCommande={(id) => {
+            depuisPalette(() => {
+              executer(id);
+            });
+          }}
+          surTheme={(t) => {
+            depuisPalette(() => {
+              changerTheme(t);
+            });
+          }}
+          surOuvrirConversation={(id) => {
+            depuisPalette(() => {
+              ouvrir(id);
+            });
+          }}
+          surUrgence={() => {
+            depuisPalette(declencherUrgence);
+          }}
+        />
+      )}
+      {aide && (
+        <Aide
+          surFermer={() => {
+            setAide(false);
+          }}
+        />
+      )}
     </div>
   );
 }

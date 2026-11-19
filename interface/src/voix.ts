@@ -58,6 +58,16 @@ export class LecteurVocal {
   }
 }
 
+/** Événement de fenêtre : la voix a été coupée ailleurs (Ctrl+M, « /silence », palette). */
+export const EVENEMENT_SILENCE = "jarvis2:silence";
+
+/** Coupe la lecture à voix haute tout de suite, et la désactive jusqu'à ce qu'on la rallume. */
+export function couperVoix(lecteur: LecteurVocal): void {
+  lecteur.actif = false;
+  lecteur.arreter();
+  window.dispatchEvent(new CustomEvent(EVENEMENT_SILENCE));
+}
+
 function typeAudio(): string {
   for (const t of ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm", "audio/mp4"]) {
     if (MediaRecorder.isTypeSupported(t)) return t;

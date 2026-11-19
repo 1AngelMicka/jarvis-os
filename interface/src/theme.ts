@@ -42,3 +42,12 @@ export function appliquerTheme(theme: Theme, memoriser = false): void {
     /* stockage indisponible : thème gardé pour cette page seulement */
   }
 }
+
+/** Événement de fenêtre : le thème a changé (les sélecteurs à l'écran suivent). */
+export const EVENEMENT_THEME = "jarvis2:theme";
+
+/** Choix de l'utilisateur (sélecteur, palette, « /theme ») : appliqué, mémorisé et annoncé. */
+export function choisirTheme(theme: Theme): void {
+  appliquerTheme(theme, true);
+  window.dispatchEvent(new CustomEvent(EVENEMENT_THEME, { detail: theme }));
+}

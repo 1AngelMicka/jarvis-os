@@ -32,7 +32,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__, memoire
+from . import __version__, memoire, vision
 from .agents.mcp import GestionnaireMCP
 from .agents.missions import ServiceMissions
 from .agents.recettes import Planificateur
@@ -131,7 +131,9 @@ class ModificationConversation(BaseModel):
 
 
 class DemandeDialogue(BaseModel):
-    message: str = Field(min_length=1, max_length=100_000)
+    message: str = Field(max_length=100_000)  # peut être vide s'il y a des images
+    # Images jointes en data URL (5 au plus, 3 Mo chacune une fois décodées) : jamais gardées en base
+    images: list[str] = Field(default_factory=list, max_length=5)
     conversation_id: UUID | None = None
     moteur: str | None = None
     modele: str | None = Field(default=None, max_length=200)
@@ -230,6 +232,7 @@ async def decrire_moteur(moteur: MoteurInstrumente) -> dict[str, Any]:
         "detail": sante.detail,
         "modeles": [{"id": m.id, "nom": m.nom, "defaut": m.defaut} for m in modeles],
         "efforts": list(moteur.interne.efforts),
+        "vision": moteur.interne.vision,
         "effort_defaut": getattr(moteur.interne, "effort", None),
     }
 
@@ -461,12 +464,18 @@ def creer_app(parametres: Parametres, contexte: Contexte | None = None) -> FastA
         if demande.conversation_id and await c.depot.obtenir(demande.conversation_id) is None:
             raise HTTPException(404, "Conversation introuvable")
         options = Options(modele=demande.modele or None, effort=demande.effort or None)
+        try:
+            images = [vision.decoder_jointe(i) for i in demande.images]
+        except vision.ErreurVision as exc:
+            raise HTTPException(422, str(exc)) from exc
+        if not demande.message.strip() and not images:
+            raise HTTPException(422, "Message vide")
 
         async def flux() -> AsyncIterator[bytes]:
             with c.urgence.suivre():  # l'arrêt d'urgence annule cette réponse (et tue la CLI) immédiatement
                 try:
                     async for ev in c.service.repondre(
-                        demande.message, demande.conversation_id, demande.moteur, options
+                        demande.message, demande.conversation_id, demande.moteur, options, images
                     ):
                         yield sse(ev.type, ev.donnees)
                 except (ErreurMoteur, ValueError, LookupError) as exc:

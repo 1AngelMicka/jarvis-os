@@ -20,20 +20,29 @@ URL = "https://api.anthropic.com/v1"
 VERSION = "2023-06-01"
 
 
-def preparer(messages: Sequence[Message]) -> tuple[str, list[dict[str, str]]]:
-    """Consignes système à part ; rôles alternés, en commençant par l'utilisateur (exigence de l'API)."""
+def preparer(messages: Sequence[Message]) -> tuple[str, list[dict[str, Any]]]:
+    """Consignes système à part ; rôles alternés, en commençant par l'utilisateur (exigence de l'API).
+    Un message avec images devient une liste de blocs : images d'abord, puis le texte (ordre conseillé)."""
     systeme = "\n\n".join(m.contenu for m in messages if m.role == "systeme")
-    suite: list[dict[str, str]] = []
+    suite: list[dict[str, Any]] = []
     for m in messages:
         if m.role == "systeme":
             continue
         role = "user" if m.role == "utilisateur" else "assistant"
+        blocs: list[dict[str, Any]] = [
+            {"type": "image", "source": {"type": "base64", "media_type": i.type_mime, "data": i.base64()}}
+            for i in m.images
+        ]
+        blocs.append({"type": "text", "text": m.contenu})
         if suite and suite[-1]["role"] == role:
-            suite[-1]["content"] += "\n\n" + m.contenu
+            suite[-1]["content"] += blocs
         else:
-            suite.append({"role": role, "content": m.contenu})
+            suite.append({"role": role, "content": blocs})
     while suite and suite[0]["role"] != "user":
         suite.pop(0)
+    for envoi in suite:  # sans image : texte simple, comme avant
+        if all(b["type"] == "text" for b in envoi["content"]):
+            envoi["content"] = "\n\n".join(b["text"] for b in envoi["content"])
     return systeme, suite
 
 
@@ -45,6 +54,7 @@ class MoteurAnthropic(Moteur):
     externe = True
     installation_url = "https://console.anthropic.com/settings/keys"
     conditions_url = "https://www.anthropic.com/legal/commercial-terms"
+    vision = True
 
     def __init__(
         self,
