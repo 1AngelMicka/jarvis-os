@@ -221,7 +221,7 @@ async def test_outil_mcp_appele_seulement_apres_activation_et_approbation(pool: 
     mcp = GestionnaireMCP([serveur])
     try:
         (liste,) = await mcp.lister(pool)
-        assert liste["disponible"] and [o["nom"] for o in liste["outils"]] == ["echo"]
+        assert liste["disponible"] and [o["nom"] for o in liste["outils"]] == ["echo", "planter"]
         assert liste["outils"][0]["actif"] is False  # inactif par défaut
         with pytest.raises(ErreurMCP, match="inactif"):
             await mcp.appeler(pool, "essai", "echo", {"texte": "x"})

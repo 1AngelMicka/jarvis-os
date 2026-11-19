@@ -191,6 +191,8 @@ class ServiceDialogue:
         self.pilotage: ServicePilotage | None = None  # bloc d'actions de JARVIS et règles de protection (lot F)
         # « Ce qui tourne » (ateliers, sessions Claude Code veillées, missions) : ajouté aux consignes à chaque échange
         self.ce_qui_tourne: Callable[[], Awaitable[str]] | None = None
+        # Outils du tour (MCP activés, skills approuvés) choisis par le sens, moins de 12 : ajoutés au pilotage
+        self.outils_tour: Callable[[str], Awaitable[str]] | None = None
 
     async def est_prive(self, texte: str | None) -> bool:
         """Sujet privé : il nomme un sujet privé de l'utilisateur, ou des souvenirs privés y répondent."""
@@ -230,6 +232,10 @@ class ServiceDialogue:
             except Exception:  # le pilotage ne doit jamais empêcher de répondre
                 journal.exception("Consignes de pilotage indisponibles")
                 extra = ""
+            if extra and self.outils_tour is not None:
+                outils = await self.outils_tour(texte)  # jamais bloquant : section vide en cas d'erreur
+                if outils:
+                    extra = "\n\n".join((extra, outils))
             if extra:
                 consignes = "\n\n".join((consignes, extra))
         return consignes, contexte
